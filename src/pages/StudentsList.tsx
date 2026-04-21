@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, FormEvent } from 'react';
 import { Search, Plus, Filter, ChevronRight, X, User as UserIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
+import { toast } from 'react-hot-toast';
 import { dbService } from '../services/db';
 import { auth } from '../lib/firebase';
 import type { Student } from '../types';
@@ -11,6 +12,13 @@ export default function StudentsList() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  
+  // Filter States
+  const [ageRange, setAgeRange] = useState({ min: '', max: '' });
+  const [minScore, setMinScore] = useState('');
+  const [sortBy, setSortBy] = useState<'name' | 'age' | 'totalScore'>('name');
+  
   const [newStudent, setNewStudent] = useState({ name: '', age: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -48,17 +56,46 @@ export default function StudentsList() {
       setIsModalOpen(false);
       setNewStudent({ name: '', age: '' });
       fetchStudents();
+      toast.success('Student enrolled successfully!');
     } catch (err) {
       console.error('Error adding student:', err);
-      alert('Failed to add student. Please try again.');
+      toast.error('Failed to add student. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const filteredStudents = useMemo(() => {
-    return students.filter(s => s.name.toLowerCase().includes(search.toLowerCase()));
-  }, [students, search]);
+  const processedStudents = useMemo(() => {
+    let result = [...students];
+
+    // Search Filter
+    if (search) {
+      result = result.filter(s => s.name.toLowerCase().includes(search.toLowerCase()));
+    }
+
+    // Age Filter
+    if (ageRange.min) {
+      result = result.filter(s => s.age >= parseInt(ageRange.min));
+    }
+    if (ageRange.max) {
+      result = result.filter(s => s.age <= parseInt(ageRange.max));
+    }
+
+    // Score Filter
+    if (minScore) {
+      result = result.filter(s => (s.totalScore || 0) >= parseInt(minScore));
+    }
+
+    // Sorting
+    result.sort((a, b) => {
+      if (sortBy === 'name') return a.name.localeCompare(b.name);
+      if (sortBy === 'age') return a.age - b.age;
+      if (sortBy === 'totalScore') return (b.totalScore || 0) - (a.totalScore || 0);
+      return 0;
+    });
+
+    return result;
+  }, [students, search, ageRange, minScore, sortBy]);
 
   return (
     <div className="p-8 space-y-8">
@@ -76,29 +113,109 @@ export default function StudentsList() {
         </button>
       </header>
 
-      <div className="flex gap-4">
-        <div className="flex-1 relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-          <input
-            type="text"
-            placeholder="Search by name..."
-            className="w-full pl-12 pr-4 py-3 bg-white border rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+      <div className="space-y-4">
+        <div className="flex gap-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type="text"
+              placeholder="Search by name..."
+              className="w-full pl-12 pr-4 py-3 bg-white border rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <button 
+            onClick={() => setShowFilters(!showFilters)}
+            className={`px-6 py-3 border rounded-xl transition-all flex items-center gap-2 font-medium ${
+              showFilters 
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-700' 
+                : 'bg-white text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <Filter className={`w-5 h-5 ${showFilters ? 'text-emerald-500' : ''}`} />
+            More Filters
+          </button>
         </div>
-        <button className="px-6 py-3 border bg-white rounded-xl text-gray-600 hover:bg-gray-50 transition-colors flex items-center gap-2">
-          <Filter className="w-5 h-5" />
-          More Filters
-        </button>
+
+        <AnimatePresence>
+          {showFilters && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="p-6 bg-white border rounded-2xl flex flex-wrap gap-8 shadow-sm">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Age Range</label>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="number"
+                      placeholder="Min"
+                      className="w-20 p-2 bg-gray-50 border rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+                      value={ageRange.min}
+                      onChange={(e) => setAgeRange({ ...ageRange, min: e.target.value })}
+                    />
+                    <span className="text-gray-300">-</span>
+                    <input 
+                      type="number"
+                      placeholder="Max"
+                      className="w-20 p-2 bg-gray-50 border rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+                      value={ageRange.max}
+                      onChange={(e) => setAgeRange({ ...ageRange, max: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Min. Total Score</label>
+                  <input 
+                    type="number"
+                    placeholder="e.g. 80"
+                    className="w-32 p-2 bg-gray-50 border rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+                    value={minScore}
+                    onChange={(e) => setMinScore(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Sort By</label>
+                  <select 
+                    className="p-2 bg-gray-50 border rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-medium"
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as any)}
+                  >
+                    <option value="name">Portion: Name (A-Z)</option>
+                    <option value="age">Portion: Age (Youngest)</option>
+                    <option value="totalScore">Portion: Rank (Highest Score)</option>
+                  </select>
+                </div>
+
+                <div className="flex items-end pb-1">
+                  <button 
+                    onClick={() => {
+                      setAgeRange({ min: '', max: '' });
+                      setMinScore('');
+                      setSortBy('name');
+                    }}
+                    className="text-xs font-bold text-red-400 hover:text-red-500 uppercase tracking-widest underline underline-offset-4"
+                  >
+                    Clear All
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <div className="bg-white border rounded-2xl shadow-sm overflow-hidden text-black">
         {loading ? (
-          <div className="p-12 text-center text-gray-500">Loading students...</div>
-        ) : filteredStudents.length === 0 ? (
-          <div className="p-12 text-center text-gray-500">
-            {search ? 'No students found matching your search.' : 'No students enrolled yet.'}
+          <div className="p-12 text-center text-gray-500 font-medium">Loading students...</div>
+        ) : processedStudents.length === 0 ? (
+          <div className="p-12 text-center text-gray-500 font-medium italic">
+            No students match your current filters.
           </div>
         ) : (
           <table className="w-full">
@@ -112,7 +229,7 @@ export default function StudentsList() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {filteredStudents.map((student, i) => (
+              {processedStudents.map((student, i) => (
                 <motion.tr
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}

@@ -6,30 +6,38 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area 
 } from 'recharts';
+import { toast } from 'react-hot-toast';
 import { dbService } from '../services/db';
 import { auth } from '../lib/firebase';
-import type { Student, Evaluation } from '../types';
+import type { Student, Evaluation, Attendance } from '../types';
 import EditStudentModal from '../components/EditStudentModal';
 import EditEvaluationModal from '../components/EditEvaluationModal';
+import StudentCalendar from '../components/StudentCalendar';
 
 export default function StudentProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [student, setStudent] = useState<Student | null>(null);
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
+  const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingEvaluation, setEditingEvaluation] = useState<Evaluation | null>(null);
 
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmDeleteStudent, setConfirmDeleteStudent] = useState(false);
+
   const fetchData = async () => {
     if (!id || !auth.currentUser) return;
     try {
-      const [studentData, evalData] = await Promise.all([
+      const [studentData, evalData, attData] = await Promise.all([
         dbService.getStudent(id),
-        dbService.getEvaluations(id, auth.currentUser!.uid)
+        dbService.getEvaluations(id, auth.currentUser!.uid),
+        dbService.getStudentAttendance(id, auth.currentUser!.uid)
       ]);
       setStudent(studentData);
       setEvaluations(evalData);
+      setAttendance(attData);
     } catch (err) {
       console.error('Error fetching data:', err);
     } finally {
@@ -46,8 +54,10 @@ export default function StudentProfile() {
     try {
       await dbService.updateStudent(id, data);
       await fetchData();
+      toast.success('Student profile updated!');
     } catch (err) {
       console.error('Error updating student:', err);
+      toast.error('Failed to update student profile.');
       throw err;
     }
   };
@@ -57,34 +67,62 @@ export default function StudentProfile() {
     try {
       await dbService.updateEvaluation(editingEvaluation.id, data, id, auth.currentUser.uid);
       await fetchData();
+      toast.success('Evaluation updated!');
     } catch (err) {
       console.error('Error updating evaluation:', err);
+      toast.error('Failed to update evaluation.');
       throw err;
     }
   };
 
   const handleDeleteEvaluation = async (evalId: string) => {
-    if (!id || !auth.currentUser) return;
-    if (!window.confirm('Are you sure you want to delete this evaluation? This will also update the student\'s score.')) return;
+    if (!id) return;
+    
+    if (confirmDeleteId !== evalId) {
+      setConfirmDeleteId(evalId);
+      toast('Click again to confirm evaluation delete', { icon: '🗑️' });
+      setTimeout(() => setConfirmDeleteId(null), 4000); // 4s for easier confirm
+      return;
+    }
+
+    if (!auth.currentUser) {
+      toast.error('Session expired. Please refresh.');
+      return;
+    }
     
     try {
       await dbService.deleteEvaluation(evalId, id, auth.currentUser.uid);
+      setConfirmDeleteId(null);
       await fetchData(); // Refresh data
+      toast.success('Evaluation deleted.');
     } catch (err) {
       console.error('Error deleting evaluation:', err);
-      alert('Failed to delete evaluation.');
+      toast.error('Failed to delete evaluation.');
     }
   };
 
   const handleDeleteStudent = async () => {
-    if (!id || !window.confirm('Are you sure you want to delete this student and ALL their data? This cannot be undone.')) return;
+    if (!id) return;
+
+    if (!confirmDeleteStudent) {
+      setConfirmDeleteStudent(true);
+      toast('Click again to confirm student delete', { icon: '⚠️' });
+      setTimeout(() => setConfirmDeleteStudent(false), 4000); // 4s for easier confirm
+      return;
+    }
+
+    if (!auth.currentUser) {
+      toast.error('Session expired. Please refresh.');
+      return;
+    }
     
     try {
-      await dbService.deleteStudent(id);
+      await dbService.deleteStudent(id, auth.currentUser.uid);
       navigate('/students');
+      toast.success('Student deleted.');
     } catch (err) {
       console.error('Error deleting student:', err);
-      alert('Failed to delete student.');
+      toast.error('Failed to delete student.');
     }
   };
 
@@ -114,10 +152,14 @@ export default function StudentProfile() {
           </button>
           <button 
             onClick={handleDeleteStudent}
-            className="flex items-center gap-2 text-red-500 hover:text-red-700 font-bold transition-all text-sm px-4 py-2 hover:bg-red-50 rounded-xl"
+            className={`flex items-center gap-2 font-bold transition-all text-sm px-4 py-2 rounded-xl border ${
+              confirmDeleteStudent 
+                ? "bg-red-600 text-white border-red-600 scale-105" 
+                : "text-red-500 hover:text-red-700 hover:bg-red-50 border-transparent"
+            }`}
           >
             <Trash2 className="w-4 h-4" />
-            Delete Student
+            {confirmDeleteStudent ? "Confirm Delete?" : "Delete Student"}
           </button>
         </div>
       </div>
@@ -133,7 +175,7 @@ export default function StudentProfile() {
           <div>
             <h2 className="text-4xl font-black text-gray-900">{student.name}</h2>
             <p className="text-gray-500 font-medium">
-              Joined {new Date(student.enrollmentDate).toLocaleDateString()} • {student.age} Years Old
+              Joined {student.enrollmentDate ? new Date(student.enrollmentDate).toLocaleDateString() : 'N/A'} • {student.age} Years Old
             </p>
           </div>
           
@@ -206,6 +248,14 @@ export default function StudentProfile() {
         </div>
       </div>
 
+      <div className="mt-8">
+        <h3 className="font-bold text-2xl flex items-center gap-2 text-gray-900 mb-6 px-2">
+          <Calendar className="w-8 h-8 text-emerald-600" />
+          Attendance & Evaluation Timeline
+        </h3>
+        <StudentCalendar attendance={attendance} evaluations={evaluations} />
+      </div>
+
       <div className="bg-white border rounded-3xl shadow-sm overflow-hidden text-black mt-8">
         <div className="p-6 bg-gray-50 flex justify-between items-center border-b">
           <h3 className="font-bold flex items-center gap-2 uppercase text-xs tracking-widest text-gray-500">
@@ -259,7 +309,7 @@ export default function StudentProfile() {
                         <p className="text-2xl font-black text-emerald-600">{evalItem.accuracyScore}%</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 relative z-20">
                       <button 
                         onClick={() => setEditingEvaluation(evalItem)}
                         className="p-3 text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-2xl transition-all border border-transparent hover:border-emerald-100"
@@ -269,10 +319,15 @@ export default function StudentProfile() {
                       </button>
                       <button 
                         onClick={() => handleDeleteEvaluation(evalItem.id)}
-                        className="p-3 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-2xl transition-all border border-transparent hover:border-red-100"
-                        title="Delete Record"
+                        className={`px-4 py-3 rounded-2xl transition-all border flex items-center gap-2 ${
+                          confirmDeleteId === evalItem.id
+                            ? "bg-red-600 text-white border-red-600 scale-105 shadow-lg animate-pulse"
+                            : "text-red-400 hover:text-red-600 hover:bg-red-50 border-transparent hover:border-red-100"
+                        }`}
+                        title={confirmDeleteId === evalItem.id ? "Click again to confirm" : "Delete Record"}
                       >
                         <Trash2 className="w-5 h-5" />
+                        {confirmDeleteId === evalItem.id && <span className="text-xs font-bold uppercase">Confirm?</span>}
                       </button>
                     </div>
                   </div>

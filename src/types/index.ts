@@ -21,7 +21,7 @@ export interface Attendance {
   studentId: string;
   teacherId: string;
   date: string;
-  status: 'present' | 'absent';
+  status: 'present' | 'absent' | 'excused';
 }
 
 export interface Memorization {
@@ -41,9 +41,9 @@ export interface Evaluation {
   studentId: string;
   teacherId: string;
   date: string;
-  surahName: string;
-  fromAyah: number;
-  toAyah: number;
+  surahName?: string;
+  fromAyah?: number;
+  toAyah?: number;
   hizbNumber: number;
   quantity: number; // as units of 1/8th
   mistakesCount: number;

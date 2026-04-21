@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
+import { toast } from 'react-hot-toast';
 import { Users, CheckCircle, Award, AlertCircle, TrendingUp } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
@@ -37,6 +38,7 @@ export default function Dashboard() {
   }, []);
 
   const calculateEngagement = (records: Attendance[]) => {
+    if (!records) return;
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const now = new Date();
     const last7Days = Array.from({ length: 7 }, (_, i) => {
@@ -57,8 +59,6 @@ export default function Dashboard() {
     const data = last7Days.map(day => {
       const allDayRecords = records.filter(r => r.date === day.dateStr);
       
-      // Use a Map to keep only the latest record for each student per day
-      // This handles cases where duplicate records might exist in the database
       const uniqueStudentRecords = new Map<string, Attendance>();
       allDayRecords.forEach(record => {
         uniqueStudentRecords.set(record.studentId, record);
@@ -70,24 +70,17 @@ export default function Dashboard() {
       
       const presentCount = dayRecords.filter(r => r.status === 'present').length;
       const rate = Math.round((presentCount / dayRecords.length) * 100);
-      return { name: day.label, rate, present: presentCount };
+      return { name: day.label, rate: isNaN(rate) ? 0 : rate, present: presentCount };
     });
 
     setAttendanceData(data);
   };
 
-  const avgAttendance = attendanceData.length > 0 
-    ? Math.round(attendanceData.reduce((acc, curr) => acc + curr.rate, 0) / attendanceData.filter(d => d.rate > 0 || recordsExistForDay(d.name)).length || 1)
-    : 0;
-
-  function recordsExistForDay(label: string) {
-    // This is a bit complex, let's just use a simpler average
-    return false;
-  }
-
-  const activeDays = attendanceData.filter(d => d.rate > 0).length;
-  const displayAvg = activeDays > 0 
-    ? Math.round(attendanceData.reduce((acc, curr) => acc + curr.rate, 0) / activeDays) + '%'
+  const activeDaysData = attendanceData.filter(d => d.present > 0 || students.length > 0);
+  const activeDaysWithRecords = activeDaysData.length;
+  
+  const displayAvg = activeDaysWithRecords > 0 
+    ? Math.round(attendanceData.reduce((acc, curr) => acc + curr.rate, 0) / attendanceData.length) + '%'
     : '0%';
 
   const avgAccuracy = performanceData.length > 0
@@ -115,10 +108,10 @@ export default function Dashboard() {
       setStudents(studentList);
       setPerformanceData(weeklyEval);
       calculateEngagement(weeklyAttendance);
-      alert('All scores have been synchronized!');
+      toast.success('All scores have been synchronized!');
     } catch (err) {
       console.error('Error syncing scores:', err);
-      alert('Failed to sync scores.');
+      toast.error('Failed to sync scores.');
     } finally {
       setLoading(false);
     }
@@ -229,7 +222,7 @@ export default function Dashboard() {
                       <td className="py-4 text-center text-gray-600">{student.age}</td>
                       <td className="py-4 text-right">
                         <span className="text-sm text-gray-500">
-                          {new Date(student.enrollmentDate).toLocaleDateString()}
+                          {student.enrollmentDate ? new Date(student.enrollmentDate).toLocaleDateString() : 'N/A'}
                         </span>
                       </td>
                     </tr>

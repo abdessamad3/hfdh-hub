@@ -33,14 +33,18 @@ export const dbService = {
     });
   },
 
-  async deleteStudent(id: string) {
+  async deleteStudent(id: string, teacherId: string) {
     // Delete student doc
     await deleteDoc(doc(db, 'students', id));
     
-    // Cleanup related data (batch delete would be better but let's keep it simple)
+    // Cleanup related data
     const collections = ['attendance', 'evaluations', 'memorizations', 'revisions'];
     for (const coll of collections) {
-      const q = query(collection(db, coll), where('studentId', '==', id));
+      const q = query(
+        collection(db, coll), 
+        where('studentId', '==', id),
+        where('teacherId', '==', teacherId)
+      );
       const snap = await getDocs(q);
       const promises = snap.docs.map(d => deleteDoc(doc(db, coll, d.id)));
       await Promise.all(promises);
@@ -53,13 +57,19 @@ export const dbService = {
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => {
       const data = doc.data();
+      // Safely handle Firestore Timestamp or string
+      const enrollmentDate = data.enrollmentDate?.toDate 
+        ? data.enrollmentDate.toDate().toISOString() 
+        : (data.enrollmentDate || new Date().toISOString());
+
       return { 
         id: doc.id, 
         attendanceRate: 0,
         memorizationProgress: 0,
         accuracy: 0,
         totalScore: 0,
-        ...data 
+        ...data,
+        enrollmentDate
       } as Student;
     });
   },
@@ -69,13 +79,20 @@ export const dbService = {
     const snap = await getDoc(docRef);
     if (!snap.exists()) throw new Error('Student not found');
     const data = snap.data();
+    
+    // Safely handle Firestore Timestamp or string
+    const enrollmentDate = data.enrollmentDate?.toDate 
+      ? data.enrollmentDate.toDate().toISOString() 
+      : (data.enrollmentDate || new Date().toISOString());
+
     return { 
       id: snap.id, 
       attendanceRate: 0,
       memorizationProgress: 0,
       accuracy: 0,
       totalScore: 0,
-      ...data 
+      ...data,
+      enrollmentDate
     } as Student;
   },
 
@@ -129,6 +146,17 @@ export const dbService = {
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Attendance));
   },
 
+  async getStudentAttendance(studentId: string, teacherId: string) {
+    const q = query(
+      collection(db, 'attendance'),
+      where('studentId', '==', studentId),
+      where('teacherId', '==', teacherId),
+      orderBy('date', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Attendance));
+  },
+
   async getWeeklyAttendanceByTeacher(teacherId: string) {
     // Last 7 days
     const now = new Date();
@@ -171,6 +199,21 @@ export const dbService = {
   },
 
   // Evaluations
+  async checkEvaluationExists(studentId: string, teacherId: string, hizbNumber: number, quantity: number, excludeId?: string) {
+    const q = query(
+      collection(db, 'evaluations'),
+      where('studentId', '==', studentId),
+      where('teacherId', '==', teacherId),
+      where('hizbNumber', '==', hizbNumber),
+      where('quantity', '==', quantity)
+    );
+    const snapshot = await getDocs(q);
+    if (excludeId) {
+      return snapshot.docs.some(doc => doc.id !== excludeId);
+    }
+    return !snapshot.empty;
+  },
+
   async addEvaluation(record: Omit<Evaluation, 'id'>) {
     const docRef = await addDoc(collection(db, 'evaluations'), {
       ...record,
@@ -199,8 +242,16 @@ export const dbService = {
   async updateStudentStats(studentId: string, teacherId: string) {
     try {
       const [attendanceSnap, evaluationSnap] = await Promise.all([
-        getDocs(query(collection(db, 'attendance'), where('studentId', '==', studentId))),
-        getDocs(query(collection(db, 'evaluations'), where('studentId', '==', studentId)))
+        getDocs(query(
+          collection(db, 'attendance'), 
+          where('studentId', '==', studentId),
+          where('teacherId', '==', teacherId)
+        )),
+        getDocs(query(
+          collection(db, 'evaluations'), 
+          where('studentId', '==', studentId),
+          where('teacherId', '==', teacherId)
+        ))
       ]);
 
       const attendanceRecords = attendanceSnap.docs.map(d => d.data() as Attendance);
@@ -220,12 +271,13 @@ export const dbService = {
         accuracy = Math.round(totalAccuracy / evaluationRecords.length);
       }
 
-      // Memorization Progress (Now derived from Evaluations that include Surah data)
+      // Memorization Progress (Calculated as total thamin units / 480)
       let memorizationProgress = 0;
-      const memoEnabledEvals = evaluationRecords.filter(e => e.surahName);
-      if (memoEnabledEvals.length > 0) {
-        // Heuristic: Each evaluation with surah data counts toward progress
-        memorizationProgress = Math.min(100, memoEnabledEvals.length * 5); 
+      if (evaluationRecords.length > 0) {
+        // We sum unique portions if possible, but for simplicity we sum total quantity reported
+        // as a measure of "covered" material. 480 units = 60 Hizbs * 8 portions each.
+        const totalUnits = evaluationRecords.reduce((acc, curr) => acc + (curr.quantity || 0), 0);
+        memorizationProgress = Math.min(100, Math.round((totalUnits / 480) * 100));
       }
 
       // Total Score (Weighted average: 20% Attendance, 20% Memo, 60% Accuracy)

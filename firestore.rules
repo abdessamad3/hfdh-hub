@@ -77,17 +77,19 @@ service cloud.firestore {
 
     // Evaluation Validation
     function isValidEvaluation(data) {
-      let requiredFields = ['studentId', 'teacherId', 'date', 'mistakesCount', 'accuracyScore', 'notes', 'surahName', 'fromAyah', 'toAyah', 'hizbNumber', 'quantity'];
+      let requiredFields = ['studentId', 'teacherId', 'date', 'mistakesCount', 'accuracyScore', 'notes'];
       return data.keys().hasAll(requiredFields) &&
              data.studentId is string &&
              data.teacherId == request.auth.uid &&
-             data.surahName is string &&
-             data.fromAyah is number && data.toAyah is number &&
-             data.hizbNumber is number && data.quantity is number &&
              data.date is string &&
              data.mistakesCount is number &&
              data.accuracyScore is number && data.accuracyScore >= 0 && data.accuracyScore <= 100 &&
-             data.notes is string;
+             data.notes is string &&
+             (data.get('hizbNumber', 0) is number) &&
+             (data.get('quantity', 0) is number) &&
+             (data.get('surahName', '') is string) &&
+             (data.get('fromAyah', 0) is number) &&
+             (data.get('toAyah', 0) is number);
     }
 
     match /evaluations/{evalId} {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, Check, X, Save } from 'lucide-react';
+import { Calendar as CalendarIcon, Check, X, Save, Clock } from 'lucide-react';
 import { motion } from 'motion/react';
+import { toast } from 'react-hot-toast';
 import { dbService } from '../services/db';
 import { auth } from '../lib/firebase';
 import type { Student } from '../types';
@@ -9,7 +10,7 @@ export default function AttendancePage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [date, setDate] = useState(new Date().toLocaleDateString('en-CA')); // YYYY-MM-DD in local time
-  const [attendance, setAttendance] = useState<Record<string, 'present' | 'absent'>>({});
+  const [attendance, setAttendance] = useState<Record<string, 'present' | 'absent' | 'excused'>>({});
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -55,10 +56,10 @@ export default function AttendancePage() {
     }
   };
 
-  const toggleAttendance = (id: string) => {
+  const setStatus = (id: string, status: 'present' | 'absent' | 'excused') => {
     setAttendance(prev => ({
       ...prev,
-      [id]: prev[id] === 'present' ? 'absent' : 'present'
+      [id]: status
     }));
   };
 
@@ -80,13 +81,13 @@ export default function AttendancePage() {
         studentId,
         teacherId: auth.currentUser!.uid,
         date,
-        status: status as 'present' | 'absent'
+        status: status as 'present' | 'absent' | 'excused'
       }));
       await dbService.saveAttendance(records);
-      alert('Attendance saved successfully!');
+      toast.success('Attendance saved successfully!');
     } catch (err) {
       console.error('Error saving attendance:', err);
-      alert('Failed to save attendance.');
+      toast.error('Failed to save attendance.');
     } finally {
       setSaving(false);
     }
@@ -145,35 +146,50 @@ export default function AttendancePage() {
               >
                 <div className="flex items-center gap-4">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${
-                    attendance[student.id] === 'present' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                    attendance[student.id] === 'present' 
+                      ? 'bg-emerald-100 text-emerald-700' 
+                      : attendance[student.id] === 'absent'
+                        ? 'bg-red-100 text-red-700'
+                        : 'bg-blue-100 text-blue-700'
                   }`}>
                     {student.name.charAt(0)}
                   </div>
                   <span className="font-semibold text-gray-900">{student.name}</span>
                 </div>
                 
-                <div className="flex bg-gray-100 rounded-xl p-1">
+                <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
                   <button
-                    onClick={() => toggleAttendance(student.id)}
-                    className={`flex items-center gap-2 px-6 py-2 rounded-lg font-bold transition-all ${
+                    onClick={() => setStatus(student.id, 'present')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all ${
                       attendance[student.id] === 'present' 
                         ? 'bg-white text-emerald-600 shadow-sm' 
                         : 'text-gray-400 hover:text-gray-600'
                     }`}
                   >
                     <Check className="w-4 h-4" />
-                    Present
+                    <span className="hidden sm:inline">Present</span>
                   </button>
                   <button
-                    onClick={() => toggleAttendance(student.id)}
-                    className={`flex items-center gap-2 px-6 py-2 rounded-lg font-bold transition-all ${
+                    onClick={() => setStatus(student.id, 'absent')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all ${
                       attendance[student.id] === 'absent' 
                         ? 'bg-white text-red-600 shadow-sm' 
                         : 'text-gray-400 hover:text-gray-600'
                     }`}
                   >
                     <X className="w-4 h-4" />
-                    Absent
+                    <span className="hidden sm:inline">Absent</span>
+                  </button>
+                  <button
+                    onClick={() => setStatus(student.id, 'excused')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all ${
+                      attendance[student.id] === 'excused' 
+                        ? 'bg-white text-blue-600 shadow-sm' 
+                        : 'text-gray-400 hover:text-gray-600'
+                    }`}
+                  >
+                    <Clock className="w-4 h-4" />
+                    <span className="hidden sm:inline">Excused</span>
                   </button>
                 </div>
               </motion.div>

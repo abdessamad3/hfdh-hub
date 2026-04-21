@@ -1,6 +1,7 @@
 import { useState, FormEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Save, BookOpen, AlertCircle, MessageCircle, Calendar } from 'lucide-react';
+import { dbService } from '../services/db';
 import type { Evaluation } from '../types';
 
 interface EditEvaluationModalProps {
@@ -26,17 +27,31 @@ export default function EditEvaluationModal({ evaluation, isOpen, onClose, onSav
     e.preventDefault();
     setLoading(true);
     try {
-      await onSave({
+      const hNumber = parseInt(hizbNumber) || 0;
+      const qUnit = parseInt(quantity) || 0;
+
+      // Check for duplicate
+      const exists = await dbService.checkEvaluationExists(evaluation.studentId, evaluation.teacherId, hNumber, qUnit, evaluation.id);
+      if (exists) {
+        alert(`An evaluation already exists for this Student, Hizb ${hNumber} and Quantity ${qUnit}/8.`);
+        setLoading(false);
+        return;
+      }
+
+      const updateData: any = {
         surahName,
-        hizbNumber: parseInt(hizbNumber) || 0,
-        quantity: parseInt(quantity) || 0,
-        fromAyah: parseInt(fromAyah) || 0,
-        toAyah: parseInt(toAyah) || 0,
+        hizbNumber: hNumber,
+        quantity: qUnit,
         mistakesCount: parseInt(mistakes) || 0,
         accuracyScore: parseInt(accuracy) || 0,
         notes,
         date
-      });
+      };
+
+      if (fromAyah) updateData.fromAyah = parseInt(fromAyah);
+      if (toAyah) updateData.toAyah = parseInt(toAyah);
+
+      await onSave(updateData);
       onClose();
     } catch (err) {
       console.error('Error updating evaluation:', err);
@@ -79,10 +94,9 @@ export default function EditEvaluationModal({ evaluation, isOpen, onClose, onSav
                 <div className="space-y-4 pt-4 border-t">
                     <h3 className="font-bold text-gray-400 uppercase text-[10px] tracking-widest">Progress Details</h3>
                     <div className="space-y-2">
-                        <label className="text-sm font-bold text-gray-700">Surah Name</label>
+                        <label className="text-sm font-bold text-gray-700">Surah Name (Optional)</label>
                         <input 
                             type="text"
-                            required
                             value={surahName}
                             onChange={(e) => setSurahName(e.target.value)}
                             className="w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
@@ -111,35 +125,34 @@ export default function EditEvaluationModal({ evaluation, isOpen, onClose, onSav
                             >
                                 <option value="1">1/8 (Thamin)</option>
                                 <option value="2">2/8 (Rubu')</option>
+                                <option value="3">3/8 (thalatha athman)</option>
                                 <option value="4">4/8 (Nisf)</option>
+                                <option value="5">5/8 (khamsat athman)</option>
                                 <option value="6">6/8 (Thalatha Rubu')</option>
+                                <option value="7">7/8 (Sabat athman)</option>
                                 <option value="8">8/8 (Full Hizb)</option>
                             </select>
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <label className="text-sm font-bold text-gray-700">From Ayah</label>
-                            <input 
-                                type="number"
-                                required
-                                min="1"
-                                value={fromAyah}
-                                onChange={(e) => setFromAyah(e.target.value)}
-                                className="w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-bold text-gray-700">To Ayah</label>
-                            <input 
-                                type="number"
-                                required
-                                min="1"
-                                value={toAyah}
-                                onChange={(e) => setToAyah(e.target.value)}
-                                className="w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
-                            />
-                        </div>
+                    <div className="space-y-2">
+                        <label className="text-sm font-bold text-gray-700">From Ayah (Optional)</label>
+                        <input 
+                            type="number"
+                            value={fromAyah}
+                            onChange={(e) => setFromAyah(e.target.value)}
+                            className="w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-sm font-bold text-gray-700">To Ayah (Optional)</label>
+                        <input 
+                            type="number"
+                            value={toAyah}
+                            onChange={(e) => setToAyah(e.target.value)}
+                            className="w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
+                        />
+                    </div>
                     </div>
                 </div>
 

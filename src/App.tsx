@@ -10,6 +10,7 @@ import AttendancePage from './pages/Attendance';
 import EvaluationEntry from './pages/EvaluationEntry';
 import RankingPage from './pages/RankingPage';
 import { BookOpen, LogIn, Chrome, AlertCircle } from 'lucide-react';
+import { Toaster } from 'react-hot-toast';
 
 function Layout({ children }: { children: ReactNode }) {
   return (
@@ -130,6 +131,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </Layout>
+      <Toaster position="bottom-right" />
     </Router>
   );
 }

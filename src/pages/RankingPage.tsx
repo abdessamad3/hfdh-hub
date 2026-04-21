@@ -14,7 +14,7 @@ export default function RankingPage() {
       if (!auth.currentUser) return;
       try {
         const data = await dbService.getStudents(auth.currentUser.uid);
-        const sorted = data.sort((a, b) => (b.stats?.totalScore || 0) - (a.stats?.totalScore || 0));
+        const sorted = data.sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0));
         setStudents(sorted);
       } catch (err) {
         console.error('Error fetching rankings:', err);
@@ -86,18 +86,18 @@ export default function RankingPage() {
                     <div className="flex gap-4 mt-1">
                       <p className="text-sm text-gray-500 flex items-center gap-1 font-medium">
                         <CheckCircle className="w-4 h-4 text-emerald-500" />
-                        {student.stats?.attendanceRate || 0}% Attendance
+                        {student.attendanceRate || 0}% Attendance
                       </p>
                       <p className="text-sm text-gray-500 flex items-center gap-1 font-medium">
                         <Star className="w-4 h-4 text-blue-500" />
-                        {student.stats?.memorizationProgress || 0} Juz Progress
+                        {student.memorizationProgress || 0}% Progress
                       </p>
                     </div>
                   </div>
                 </div>
 
                 <div className="text-right">
-                  <div className="text-3xl font-black text-emerald-600">{student.stats?.totalScore || 0}</div>
+                  <div className="text-3xl font-black text-emerald-600">{student.totalScore || 0}</div>
                   <div className="text-[10px] uppercase font-black text-emerald-400 tracking-widest mt-1">Overall Score</div>
                 </div>
               </motion.div>

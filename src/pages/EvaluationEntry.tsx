@@ -1,6 +1,7 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { Award, Save, Calendar, User, MessageCircle, AlertCircle, BookOpen } from 'lucide-react';
 import { motion } from 'motion/react';
+import { toast } from 'react-hot-toast';
 import { dbService } from '../services/db';
 import { auth } from '../lib/firebase';
 import type { Student } from '../types';
@@ -37,20 +38,34 @@ export default function EvaluationEntry() {
     if (!auth.currentUser) return;
     setLoading(true);
     try {
-      await dbService.addEvaluation({
+      const hNumber = parseInt(hizbNumber) || 0;
+      const qUnit = parseInt(quantity) || 0;
+
+      // Check for duplicate
+      const exists = await dbService.checkEvaluationExists(studentId, auth.currentUser.uid, hNumber, qUnit);
+      if (exists) {
+        toast.error(`An evaluation already exists for Student, Hizb ${hNumber} and Quantity ${quantity}/8.`);
+        setLoading(false);
+        return;
+      }
+
+      const evalData: any = {
         studentId,
         teacherId: auth.currentUser.uid,
         date,
-        surahName,
-        hizbNumber: parseInt(hizbNumber) || 0,
-        quantity: parseInt(quantity) || 0,
-        fromAyah: parseInt(fromAyah) || 0,
-        toAyah: parseInt(toAyah) || 0,
+        hizbNumber: hNumber,
+        quantity: qUnit,
         mistakesCount: parseInt(mistakes),
         accuracyScore: parseInt(accuracy),
         notes,
-      });
-      alert('Unified evaluation records saved!');
+      };
+
+      if (surahName) evalData.surahName = surahName;
+      if (fromAyah) evalData.fromAyah = parseInt(fromAyah);
+      if (toAyah) evalData.toAyah = parseInt(toAyah);
+
+      await dbService.addEvaluation(evalData);
+      toast.success('Evaluation saved successfully!');
       setSurahName('');
       setHizbNumber('');
       setQuantity('1');
@@ -61,7 +76,7 @@ export default function EvaluationEntry() {
       setNotes('');
     } catch (err) {
       console.error('Error saving evaluation:', err);
-      alert('Failed to save evaluation.');
+      toast.error('Failed to save evaluation.');
     } finally {
       setLoading(false);
     }
@@ -105,10 +120,9 @@ export default function EvaluationEntry() {
           <div className="space-y-4 pt-4 border-t">
             <h3 className="font-bold text-gray-400 uppercase text-xs tracking-widest">Progress Details</h3>
             <div className="space-y-2">
-              <label className="text-sm font-bold text-gray-700">Surah Name</label>
+              <label className="text-sm font-bold text-gray-700">Surah Name (Optional)</label>
               <input 
                 type="text"
-                required
                 placeholder="e.g. Al-Baqarah"
                 value={surahName}
                 onChange={(e) => setSurahName(e.target.value)}
@@ -141,30 +155,27 @@ export default function EvaluationEntry() {
                   <option value="2">2/8 (Rubu')</option>
                   <option value="3">3/8 (thalatha athman)</option>
                   <option value="4">4/8 (Nisf)</option>
-                  <option value="3">/8 (khamsat athman)</option>
+                  <option value="5">5/8 (khamsat athman)</option>
                   <option value="6">6/8 (Thalatha Rubu')</option>
+                  <option value="7">7/8 (Sabat athman)</option>
                   <option value="8">8/8 (Full Hizb)</option>
                 </select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700">From Ayah</label>
+                <label className="text-sm font-bold text-gray-700">From Ayah (Optional)</label>
                 <input 
                   type="number"
-                  required
-                  min="1"
                   value={fromAyah}
                   onChange={(e) => setFromAyah(e.target.value)}
                   className="w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700">To Ayah</label>
+                <label className="text-sm font-bold text-gray-700">To Ayah (Optional)</label>
                 <input 
                   type="number"
-                  required
-                  min="1"
                   value={toAyah}
                   onChange={(e) => setToAyah(e.target.value)}
                   className="w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500"
