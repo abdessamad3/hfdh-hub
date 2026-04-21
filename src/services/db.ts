@@ -3,6 +3,7 @@ import {
   addDoc, 
   updateDoc, 
   deleteDoc,
+  setDoc,
   doc, 
   getDocs, 
   getDoc, 
@@ -14,9 +15,33 @@ import {
   type DocumentData
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import type { Student, Attendance, Memorization, Evaluation, Revision } from '../types';
+import type { Student, Attendance, Memorization, Evaluation, Revision, UserProfile, UserRole, Kuttab } from '../types';
 
 export const dbService = {
+  // Kuttabs
+  async addKuttab(kuttab: Omit<Kuttab, 'id'>) {
+    return await addDoc(collection(db, 'kuttabs'), {
+      ...kuttab,
+      createdAt: serverTimestamp()
+    });
+  },
+
+  async getKuttabs(teacherId: string) {
+    const q = query(collection(db, 'kuttabs'), where('teacherId', '==', teacherId));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Kuttab));
+  },
+
+  async getAllKuttabs() {
+    const snapshot = await getDocs(collection(db, 'kuttabs'));
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Kuttab));
+  },
+
+  async deleteKuttab(id: string) {
+    await deleteDoc(doc(db, 'kuttabs', id));
+    return true;
+  },
+
   // Students
   async addStudent(student: Omit<Student, 'id'>) {
     return await addDoc(collection(db, 'students'), {
@@ -68,6 +93,22 @@ export const dbService = {
         memorizationProgress: 0,
         accuracy: 0,
         totalScore: 0,
+        ...data,
+        enrollmentDate
+      } as Student;
+    });
+  },
+
+  async getAllStudents() {
+    const snapshot = await getDocs(collection(db, 'students'));
+    return snapshot.docs.map(doc => {
+      const data = doc.data();
+      const enrollmentDate = data.enrollmentDate?.toDate 
+        ? data.enrollmentDate.toDate().toISOString() 
+        : (data.enrollmentDate || new Date().toISOString());
+
+      return { 
+        id: doc.id, 
         ...data,
         enrollmentDate
       } as Student;
@@ -336,5 +377,61 @@ export const dbService = {
       ...record,
       timestamp: serverTimestamp()
     });
+  },
+
+  // User Profiles & Roles
+  async upsertUserProfile(uid: string, data: Partial<UserProfile>) {
+    const userRef = doc(db, 'users', uid);
+    const snap = await getDoc(userRef);
+    
+    // Remove undefined values to prevent Firestore errors
+    const cleanData = Object.fromEntries(
+      Object.entries(data).filter(([_, v]) => v !== undefined)
+    );
+    
+    if (snap.exists()) {
+      await updateDoc(userRef, { ...cleanData, updatedAt: serverTimestamp() });
+      const existing = snap.data();
+      return { ...existing, ...cleanData, uid } as any as UserProfile;
+    } else {
+      // Default to teacher unless specified
+      const newUser = {
+        uid,
+        role: 'teacher' as UserRole,
+        createdAt: serverTimestamp(),
+        ...cleanData
+      };
+      await setDoc(userRef, newUser);
+      return newUser as any as UserProfile;
+    }
+  },
+
+  async getUserProfile(uid: string) {
+    const userRef = doc(db, 'users', uid);
+    const snap = await getDoc(userRef);
+    return snap.exists() ? (snap.data() as UserProfile) : null;
+  },
+
+  async getStudentByEmail(email: string) {
+    const q = query(collection(db, 'students'), where('email', '==', email.toLowerCase()));
+    const snap = await getDocs(q);
+    if (snap.empty) return null;
+    return { id: snap.docs[0].id, ...snap.docs[0].data() } as Student;
+  },
+
+  async getStudentDataForPortal(studentId: string, teacherId: string) {
+    const [studentSnap, attendanceSnap, evaluationSnap] = await Promise.all([
+      getDoc(doc(db, 'students', studentId)),
+      getDocs(query(collection(db, 'attendance'), where('studentId', '==', studentId), orderBy('date', 'desc'))),
+      getDocs(query(collection(db, 'evaluations'), where('studentId', '==', studentId), orderBy('date', 'desc')))
+    ]);
+
+    if (!studentSnap.exists()) return null;
+
+    return {
+      student: { id: studentSnap.id, ...studentSnap.data() } as Student,
+      attendance: attendanceSnap.docs.map(d => ({ id: d.id, ...d.data() } as Attendance)),
+      evaluations: evaluationSnap.docs.map(d => ({ id: d.id, ...d.data() } as Evaluation))
+    };
   }
 };

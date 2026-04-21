@@ -94,36 +94,36 @@ export default function AttendancePage() {
   };
 
   return (
-    <div className="p-8 max-w-4xl mx-auto space-y-8">
-      <header className="flex justify-between items-center text-black">
+    <div className="p-4 sm:p-8 max-w-4xl mx-auto space-y-8">
+      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-black">
         <div>
-          <h2 className="text-3xl font-bold text-gray-900">Daily Attendance</h2>
-          <p className="text-gray-500 mt-1">Mark attendance for {formatDisplayDate(date)}</p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Daily Attendance</h2>
+          <p className="text-gray-500 mt-1 text-sm sm:text-base">Mark attendance for {formatDisplayDate(date)}</p>
         </div>
-        <div className="flex items-center gap-3 bg-white border px-4 py-2 rounded-xl">
-          <CalendarIcon className="w-5 h-5 text-gray-400" />
+        <div className="w-full sm:w-auto flex items-center gap-3 bg-white border border-gray-100 px-4 py-2.5 rounded-xl shadow-sm">
+          <CalendarIcon className="w-5 h-5 text-emerald-500" />
           <input 
             type="date" 
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="outline-none bg-transparent font-medium"
+            className="flex-1 sm:flex-none outline-none bg-transparent font-bold text-gray-700"
           />
         </div>
       </header>
 
       <div className="bg-white border rounded-3xl shadow-sm overflow-hidden text-black">
-        <div className="p-6 border-bottom bg-gray-50/50 flex justify-between items-center">
-          <h3 className="font-bold">Student List</h3>
-          <div className="flex gap-2">
+        <div className="p-6 border-b bg-gray-50/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <h3 className="font-bold text-gray-700">Student List</h3>
+          <div className="flex w-full sm:w-auto gap-2">
             <button 
               onClick={() => setAttendance(Object.fromEntries(students.map(s => [s.id, 'present'])))}
-              className="text-xs font-bold text-emerald-600 hover:bg-emerald-50 px-3 py-1.5 rounded-lg transition-colors"
+              className="flex-1 sm:flex-none text-xs font-black text-emerald-600 hover:bg-emerald-50 px-4 py-2 border border-emerald-100 rounded-xl transition-colors uppercase tracking-widest"
             >
               All Present
             </button>
             <button 
               onClick={() => setAttendance(Object.fromEntries(students.map(s => [s.id, 'absent'])))}
-              className="text-xs font-bold text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors"
+              className="flex-1 sm:flex-none text-xs font-black text-red-600 hover:bg-red-50 px-4 py-2 border border-red-100 rounded-xl transition-colors uppercase tracking-widest"
             >
               All Absent
             </button>
@@ -131,21 +131,21 @@ export default function AttendancePage() {
         </div>
         
         {loading ? (
-          <div className="p-12 text-center text-gray-500">Loading students...</div>
+          <div className="p-12 text-center text-gray-500 font-medium">Loading students...</div>
         ) : students.length === 0 ? (
-          <div className="p-12 text-center text-gray-500">No students enrolled.</div>
+          <div className="p-12 text-center text-gray-500 font-medium italic">No students enrolled.</div>
         ) : (
-          <div className="divide-y">
+          <div className="divide-y divide-gray-50">
             {students.map((student, i) => (
               <motion.div 
                 key={student.id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
-                className="p-6 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                className="p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between hover:bg-gray-50 transition-colors gap-4"
               >
                 <div className="flex items-center gap-4">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${
+                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-sm ${
                     attendance[student.id] === 'present' 
                       ? 'bg-emerald-100 text-emerald-700' 
                       : attendance[student.id] === 'absent'
@@ -154,42 +154,42 @@ export default function AttendancePage() {
                   }`}>
                     {student.name.charAt(0)}
                   </div>
-                  <span className="font-semibold text-gray-900">{student.name}</span>
+                  <span className="font-bold text-gray-900">{student.name}</span>
                 </div>
                 
-                <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
+                <div className="flex w-full sm:w-auto bg-gray-100 rounded-2xl p-1 gap-1">
                   <button
                     onClick={() => setStatus(student.id, 'present')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all ${
+                    className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all text-xs sm:text-sm ${
                       attendance[student.id] === 'present' 
                         ? 'bg-white text-emerald-600 shadow-sm' 
                         : 'text-gray-400 hover:text-gray-600'
                     }`}
                   >
                     <Check className="w-4 h-4" />
-                    <span className="hidden sm:inline">Present</span>
+                    <span>Present</span>
                   </button>
                   <button
                     onClick={() => setStatus(student.id, 'absent')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all ${
+                    className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all text-xs sm:text-sm ${
                       attendance[student.id] === 'absent' 
                         ? 'bg-white text-red-600 shadow-sm' 
                         : 'text-gray-400 hover:text-gray-600'
                     }`}
                   >
                     <X className="w-4 h-4" />
-                    <span className="hidden sm:inline">Absent</span>
+                    <span>Absent</span>
                   </button>
                   <button
                     onClick={() => setStatus(student.id, 'excused')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all ${
+                    className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all text-xs sm:text-sm ${
                       attendance[student.id] === 'excused' 
                         ? 'bg-white text-blue-600 shadow-sm' 
                         : 'text-gray-400 hover:text-gray-600'
                     }`}
                   >
                     <Clock className="w-4 h-4" />
-                    <span className="hidden sm:inline">Excused</span>
+                    <span>Excused</span>
                   </button>
                 </div>
               </motion.div>
@@ -198,11 +198,11 @@ export default function AttendancePage() {
         )}
 
         {students.length > 0 && (
-          <div className="p-8 bg-emerald-50 border-t flex justify-end">
+          <div className="p-6 sm:p-8 bg-emerald-50 border-t flex justify-center sm:justify-end">
             <button
               onClick={handleSave}
               disabled={saving}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white px-10 py-3.5 rounded-2xl font-bold transition-all flex items-center gap-2 shadow-lg shadow-emerald-200 disabled:opacity-50"
+              className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-12 py-4 rounded-2xl font-black transition-all flex items-center justify-center gap-3 shadow-xl shadow-emerald-100 disabled:opacity-50 tracking-wide"
             >
               {saving ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />

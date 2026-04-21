@@ -1,7 +1,27 @@
+export type UserRole = 'teacher' | 'student';
+
+export interface UserProfile {
+  uid: string;
+  email: string;
+  role: UserRole;
+  studentId?: string; // Links to Student document if role is 'student'
+  displayName?: string;
+  photoURL?: string;
+}
+
+export interface Kuttab {
+  id: string;
+  name: string;
+  location?: string;
+  teacherId: string;
+}
+
 export interface Student {
   id: string;
   name: string;
   age: number;
+  email?: string; // For linking to student account
+  kuttabName?: string;
   enrollmentDate: string;
   teacherId: string;
   attendanceRate: number;

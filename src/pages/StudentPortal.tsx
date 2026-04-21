@@ -1,0 +1,231 @@
+import { useState, useEffect } from 'react';
+import { auth } from '../lib/firebase';
+import { dbService } from '../services/db';
+import { Student, Attendance, Evaluation } from '../types';
+import { 
+  BookOpen, 
+  CheckCircle, 
+  Award, 
+  TrendingUp, 
+  Calendar, 
+  Clock,
+  ChevronRight,
+  Star
+} from 'lucide-react';
+import { motion } from 'framer-motion';
+import { 
+  AreaChart, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+  BarChart,
+  Bar
+} from 'recharts';
+
+export default function StudentPortal() {
+  const [data, setData] = useState<{
+    student: Student;
+    attendance: Attendance[];
+    evaluations: Evaluation[];
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchPortalData = async () => {
+      if (!auth.currentUser?.email) return;
+      try {
+        // First find the student record linked to this email
+        const student = await dbService.getStudentByEmail(auth.currentUser.email);
+        if (student) {
+          const portalData = await dbService.getStudentDataForPortal(student.id, student.teacherId);
+          setData(portalData);
+        }
+      } catch (err) {
+        console.error('Error fetching portal data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPortalData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <div className="w-12 h-12 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" />
+        <p className="text-gray-500 font-medium animate-pulse">Loading your progress...</p>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="p-8 max-w-2xl mx-auto text-center space-y-6">
+        <div className="w-20 h-20 bg-amber-50 text-amber-500 rounded-3xl flex items-center justify-center mx-auto shadow-inner">
+          <Clock className="w-10 h-10" />
+        </div>
+        <h2 className="text-3xl font-black text-gray-900">Portal Pending</h2>
+        <p className="text-gray-600 leading-relaxed">
+          Your teacher hasn't linked your account yet. Please make sure your teacher has added your email (<strong>{auth.currentUser?.email}</strong>) to your student profile.
+        </p>
+      </div>
+    );
+  }
+
+  const { student, attendance, evaluations } = data;
+
+  const chartData = [...evaluations].reverse().map(e => ({
+    date: new Date(e.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+    score: e.accuracyScore
+  })).slice(-10);
+
+  const stats = [
+    { label: 'Attendance', value: `${student.attendanceRate}%`, icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { label: 'Memorization', value: `${student.memorizationProgress}%`, icon: BookOpen, color: 'text-blue-600', bg: 'bg-blue-50' },
+    { label: 'Accuracy', value: `${student.accuracy}%`, icon: Award, color: 'text-amber-600', bg: 'bg-amber-50' },
+    { label: 'Overall Rank', value: `#${student.totalScore}`, icon: Star, color: 'text-purple-600', bg: 'bg-purple-50' },
+  ];
+
+  return (
+    <div className="p-4 sm:p-8 space-y-8 max-w-6xl mx-auto text-black">
+      <header className="space-y-2">
+        <div className="flex items-center gap-3">
+           <div className="w-12 h-12 bg-emerald-600 text-white rounded-2xl flex items-center justify-center shadow-lg">
+             <TrendingUp className="w-6 h-6" />
+           </div>
+           <div>
+             <h2 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">Salaam, {student.name.split(' ')[0]}!</h2>
+             <p className="text-gray-500 font-medium">Welcome back to your Hifdh Portal</p>
+           </div>
+        </div>
+      </header>
+
+      {/* Quick Stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        {stats.map((stat, i) => (
+          <motion.div
+            key={stat.label}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.1 }}
+            className="p-4 sm:p-6 bg-white border rounded-3xl shadow-sm relative overflow-hidden group hover:shadow-xl hover:shadow-emerald-100/50 transition-all"
+          >
+            <div className={`w-10 h-10 sm:w-12 sm:h-12 ${stat.bg} ${stat.color} rounded-2xl flex items-center justify-center mb-4 transition-transform group-hover:scale-110`}>
+              <stat.icon className="w-5 h-5 sm:w-6 sm:h-6" />
+            </div>
+            <p className="text-xs sm:text-sm font-black text-gray-400 uppercase tracking-widest">{stat.label}</p>
+            <h4 className="text-xl sm:text-3xl font-black text-gray-900 mt-1">{stat.value}</h4>
+          </motion.div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Performance Chart */}
+        <div className="bg-white p-6 sm:p-8 border rounded-[32px] shadow-sm space-y-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-black text-gray-900">Accuracy Trend</h3>
+            <span className="px-3 py-1 bg-gray-50 text-gray-400 text-[10px] font-black uppercase tracking-widest rounded-full border">Last 10 sessions</span>
+          </div>
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} dy={10} />
+                <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#fff', border: 'none', borderRadius: '16px', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                  labelStyle={{ fontWeight: 'bold', color: '#111827' }}
+                />
+                <Area type="monotone" dataKey="score" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#colorScore)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Evaluation History */}
+        <div className="bg-white p-6 sm:p-8 border rounded-[32px] shadow-sm flex flex-col h-full">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-black text-gray-900">Recent Evaluations</h3>
+            <Award className="w-5 h-5 text-amber-500" />
+          </div>
+          <div className="space-y-4 flex-1 overflow-y-auto max-h-[350px] pr-2 scrollbar-thin">
+            {evaluations.length === 0 ? (
+              <p className="text-center py-12 text-gray-400 font-medium italic">No evaluations recorded yet.</p>
+            ) : evaluations.map((evalRecord, idx) => (
+              <div key={evalRecord.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-between group hover:bg-white hover:shadow-md transition-all">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-white border rounded-xl flex items-center justify-center font-bold text-amber-600 shadow-sm">
+                    {evalRecord.accuracyScore}
+                  </div>
+                  <div>
+                    <h5 className="font-bold text-gray-900 truncate max-w-[150px] sm:max-w-[200px]">
+                      {evalRecord.surahName ? `Surah ${evalRecord.surahName}` : `Hizb ${evalRecord.hizbNumber}`}
+                    </h5>
+                    <p className="text-[10px] text-gray-400 flex items-center gap-1 font-bold uppercase tracking-wider">
+                      <Calendar className="w-3 h-3" />
+                      {new Date(evalRecord.date).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-xs font-bold text-gray-500">{evalRecord.mistakesCount} Mistakes</div>
+                  <div className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-full mt-1 ${
+                    evalRecord.accuracyScore >= 90 ? 'bg-emerald-100 text-emerald-700' :
+                    evalRecord.accuracyScore >= 70 ? 'bg-amber-100 text-amber-700' :
+                    'bg-red-100 text-red-700'
+                  }`}>
+                    {evalRecord.accuracyScore >= 90 ? 'Excellent' : evalRecord.accuracyScore >= 70 ? 'Good' : 'Review'}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Attendance Log */}
+      <div className="bg-white p-6 sm:p-8 border rounded-[32px] shadow-sm">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h3 className="text-xl font-black text-gray-900">Attendance Mirror</h3>
+            <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Your daily logs</p>
+          </div>
+          <Calendar className="w-6 h-6 text-emerald-500" />
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4">
+          {[...attendance].slice(0, 7).map((record) => (
+            <div key={record.id} className="p-4 bg-gray-50 rounded-2xl border flex flex-col items-center gap-2 text-center">
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                {new Date(record.date).toLocaleDateString(undefined, { weekday: 'short' })}
+              </span>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                record.status === 'present' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-200' :
+                record.status === 'absent' ? 'bg-red-500 text-white shadow-lg shadow-red-200' :
+                'bg-blue-500 text-white shadow-lg shadow-blue-200'
+              }`}>
+                {record.status === 'present' ? <CheckCircle className="w-4 h-4" /> : record.status === 'absent' ? <Clock className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
+              </div>
+              <span className="text-xs font-bold text-gray-700">{new Date(record.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</span>
+              <span className={`text-[8px] font-black uppercase tracking-tighter ${
+                record.status === 'present' ? 'text-emerald-500' :
+                record.status === 'absent' ? 'text-red-500' :
+                'text-blue-500'
+              }`}>
+                {record.status}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

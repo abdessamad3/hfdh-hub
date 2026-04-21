@@ -1,7 +1,9 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useState, useEffect, ReactNode } from 'react';
-import { onAuthStateChanged, signInAnonymously, signInWithPopup, GoogleAuthProvider, User } from 'firebase/auth';
+import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, User } from 'firebase/auth';
 import { auth } from './lib/firebase';
+import { dbService } from './services/db';
+import { UserProfile } from './types';
 import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
 import StudentsList from './pages/StudentsList';
@@ -9,23 +11,53 @@ import StudentProfile from './pages/StudentProfile';
 import AttendancePage from './pages/Attendance';
 import EvaluationEntry from './pages/EvaluationEntry';
 import RankingPage from './pages/RankingPage';
-import { BookOpen, LogIn, Chrome, AlertCircle } from 'lucide-react';
+import StudentPortal from './pages/StudentPortal';
+import KuttabManagement from './pages/KuttabManagement';
+import { BookOpen, AlertCircle, Chrome, Menu } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 
-function Layout({ children }: { children: ReactNode }) {
+function Layout({ children, profile }: { children: ReactNode; profile: UserProfile | null }) {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
   return (
     <div className="flex bg-gray-50 min-h-screen">
-      <Sidebar />
-      <main className="flex-1 overflow-auto">
-        {children}
-      </main>
+      <Sidebar 
+        isOpen={isSidebarOpen} 
+        onClose={() => setIsSidebarOpen(false)} 
+        profile={profile}
+      />
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Mobile Header */}
+        <header className="lg:hidden bg-white border-b px-6 py-4 flex items-center justify-between sticky top-0 z-30 shadow-sm">
+          <div className="flex items-center gap-2 text-emerald-700 font-bold">
+            <BookOpen className="w-8 h-8" />
+            <span className="text-xl tracking-tight">Hifdh Hub</span>
+          </div>
+          <button 
+            onClick={() => setIsSidebarOpen(true)}
+            className="p-2 hover:bg-emerald-50 rounded-xl text-emerald-600 transition-colors"
+          >
+            <Menu className="w-8 h-8" />
+          </button>
+        </header>
+
+        <main className="flex-1 overflow-x-hidden">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }
 
-function Login() {
+function Login({ externalError }: { externalError?: string | null }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (externalError) {
+      setError(externalError);
+    }
+  }, [externalError]);
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -37,7 +69,7 @@ function Login() {
     } catch (err: any) {
       console.error('Login Error:', err);
       if (err.code === 'auth/admin-restricted-operation') {
-        setError('This operation is restricted. Please ensure Google Login is enabled in your Firebase Console and you are using a supported browser.');
+        setError('Google Login requires a supported browser. If on mobile, please try opening in a native browser or ensure Google Auth is active.');
       } else {
         setError(err.message || 'Failed to sign in with Google');
       }
@@ -54,7 +86,7 @@ function Login() {
             <BookOpen className="w-10 h-10" />
           </div>
           <h1 className="text-4xl font-black text-gray-900 tracking-tight">Hifdh Hub</h1>
-          <p className="text-gray-500">Teacher Dashboard Access</p>
+          <p className="text-gray-500 font-medium italic">Quranic Excellence Tracking</p>
         </div>
 
         {error && (
@@ -68,26 +100,27 @@ function Login() {
           <button
             onClick={handleGoogleLogin}
             disabled={loading}
-            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-2xl font-bold transition-all transform hover:scale-[1.01] active:scale-95 flex items-center justify-center gap-3 shadow-lg shadow-emerald-100 disabled:opacity-50"
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-2xl font-black transition-all transform hover:scale-[1.01] active:scale-95 flex items-center justify-center gap-3 shadow-xl shadow-emerald-100 disabled:opacity-50 tracking-wide"
           >
             {loading ? (
               <div className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin" />
             ) : (
               <>
                 <Chrome className="w-6 h-6" />
-                Sign in with Google
+                Continue with Google
               </>
             )}
           </button>
         </div>
 
         <div className="text-center space-y-3">
-          <div className="text-xs text-gray-400">
-            Secure, real-time Quran memorization tracking for teachers.
+          <div className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-loose">
+            One platform for both Teachers and Students.
           </div>
-          <div className="p-3 bg-blue-50 text-blue-700 rounded-xl text-[11px] leading-relaxed font-medium">
-            💡 **Tip:** If the popup is blocked or fails, click the **"Open in new tab"** button at the top right of this preview.
-          </div>
+          <p className="text-[11px] text-gray-500 bg-gray-50 p-3 rounded-xl border border-dashed">
+            <strong>Teachers:</strong> Manage your hifdh classes.<br/>
+            <strong>Students:</strong> Log in to see your daily progress.
+          </p>
         </div>
       </div>
     </div>
@@ -96,39 +129,95 @@ function Login() {
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  const ADMIN_EMAIL = 'abdessamadjibrane2@gmail.com';
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setLoading(false);
+    const unsubscribe = onAuthStateChanged(auth, async (u) => {
+      setAuthError(null);
+      if (u) {
+        try {
+          const email = (u.email || '').toLowerCase();
+          const studentDoc = await dbService.getStudentByEmail(email);
+          const isAdmin = email === ADMIN_EMAIL.toLowerCase();
+
+          if (!isAdmin && !studentDoc) {
+            setAuthError('Unauthorized access. Only enrolled students and admins can log in.');
+            await auth.signOut();
+            setUser(null);
+            setProfile(null);
+            setLoading(false);
+            return;
+          }
+
+          const initialRole = isAdmin ? 'teacher' : 'student';
+          
+          const userProfile = await dbService.upsertUserProfile(u.uid, {
+            email: email,
+            displayName: u.displayName || '',
+            photoURL: u.photoURL || '',
+            role: initialRole,
+            studentId: studentDoc?.id
+          });
+          setProfile(userProfile);
+          setUser(u);
+        } catch (err) {
+          console.error('Profile Load Error:', err);
+        }
+        setLoading(false);
+      } else {
+        setProfile(null);
+        setUser(null);
+        setLoading(false);
+      }
     });
     return () => unsubscribe();
   }, []);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="flex flex-col items-center gap-4">
+          <BookOpen className="w-12 h-12 text-emerald-600 animate-bounce" />
+          <div className="w-32 h-1 bg-gray-100 rounded-full overflow-hidden">
+            <div className="w-1/2 h-full bg-emerald-600 animate-progress origin-left" />
+          </div>
+        </div>
       </div>
     );
   }
 
-  if (!user) {
-    return <Login />;
+  if (!user || authError) {
+    return <Login externalError={authError} />;
   }
+
+  const isStudent = profile?.role === 'student';
 
   return (
     <Router>
-      <Layout>
+      <Layout profile={profile}>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/students" element={<StudentsList />} />
-          <Route path="/students/:id" element={<StudentProfile />} />
-          <Route path="/attendance" element={<AttendancePage />} />
-          <Route path="/evaluation" element={<EvaluationEntry />} />
-          <Route path="/ranking" element={<RankingPage />} />
-          <Route path="*" element={<Navigate to="/" />} />
+          {isStudent ? (
+            <>
+              <Route path="/" element={<StudentPortal />} />
+              <Route path="/ranking" element={<RankingPage />} />
+              <Route path="*" element={<Navigate to="/" />} />
+            </>
+          ) : (
+            <>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/kuttabs" element={<KuttabManagement />} />
+              <Route path="/students" element={<StudentsList />} />
+              <Route path="/students/:id" element={<StudentProfile />} />
+              <Route path="/attendance" element={<AttendancePage />} />
+              <Route path="/evaluation" element={<EvaluationEntry />} />
+              <Route path="/ranking" element={<RankingPage />} />
+              <Route path="*" element={<Navigate to="/" />} />
+            </>
+          )}
         </Routes>
       </Layout>
       <Toaster position="bottom-right" />

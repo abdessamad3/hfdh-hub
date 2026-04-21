@@ -7,10 +7,30 @@
       "properties": {
         "name": { "type": "string", "description": "Full name of the student" },
         "age": { "type": "number", "description": "Age of the student" },
+        "email": { "type": "string", "description": "Student's email for login access" },
+        "kuttabName": { "type": "string", "description": "Name of the Kuttab/School" },
         "enrollmentDate": { "type": "string", "format": "date-time", "description": "When the student joined" },
-        "teacherId": { "type": "string", "description": "ID of the assigned teacher" }
+        "teacherId": { "type": "string", "description": "ID of the assigned teacher" },
+        "totalScore": { "type": "number" },
+        "attendanceRate": { "type": "number" },
+        "memorizationProgress": { "type": "number" },
+        "accuracy": { "type": "number" }
       },
       "required": ["name", "age", "enrollmentDate", "teacherId"]
+    },
+    "User": {
+      "title": "User",
+      "description": "App user profile (teacher or student)",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["teacher", "student"] },
+        "studentId": { "type": "string", "description": "Links to Student document for student users" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" }
+      },
+      "required": ["uid", "email", "role"]
     },
     "Attendance": {
       "title": "Attendance",
@@ -64,13 +84,26 @@
         "qualityScore": { "type": "number" }
       },
       "required": ["studentId", "surahName", "date", "qualityScore"]
+    },
+    "Kuttab": {
+      "title": "Kuttab",
+      "description": "A learning institution (Kuttab/School)",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Unique name of the Kuttab" },
+        "location": { "type": "string", "description": "Physical location or address" },
+        "teacherId": { "type": "string", "description": "Admin/Teacher who created this" }
+      },
+      "required": ["name", "teacherId"]
     }
   },
   "firestore": {
+    "/users/{uid}": { "schema": "User", "description": "User profiles and roles" },
     "/students/{studentId}": { "schema": "Student", "description": "Collection of students" },
     "/attendance/{attendanceId}": { "schema": "Attendance", "description": "Attendance logs" },
     "/memorizations/{memId}": { "schema": "Memorization", "description": "Memorization records" },
     "/evaluations/{evalId}": { "schema": "Evaluation", "description": "Evaluation sessions" },
-    "/revisions/{revId}": { "schema": "Revision", "description": "Revision history" }
+    "/revisions/{revId}": { "schema": "Revision", "description": "Revision history" },
+    "/kuttabs/{kuttabId}": { "schema": "Kuttab", "description": "List of learning institutions" }
   }
 }

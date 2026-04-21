@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Calendar, BookOpen, Award, ChevronLeft, TrendingUp, AlertCircle, Trash2, Edit2 } from 'lucide-react';
+import { Calendar, BookOpen, Award, ChevronLeft, TrendingUp, AlertCircle, Trash2, Edit2, Mail, Home } from 'lucide-react';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area 
@@ -172,11 +172,30 @@ export default function StudentProfile() {
         </div>
 
         <div className="space-y-4 flex-1 z-10">
-          <div>
+          <div className="text-black">
             <h2 className="text-4xl font-black text-gray-900">{student.name}</h2>
-            <p className="text-gray-500 font-medium">
-              Joined {student.enrollmentDate ? new Date(student.enrollmentDate).toLocaleDateString() : 'N/A'} • {student.age} Years Old
-            </p>
+            <div className="flex flex-wrap items-center gap-3 mt-1 cursor-default">
+              <p className="text-gray-500 font-medium">
+                {student.age} y/o • Joined {student.enrollmentDate ? new Date(student.enrollmentDate).toLocaleDateString() : 'N/A'}
+              </p>
+              {student.email ? (
+                <span className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-black uppercase tracking-wider border border-emerald-100/50">
+                  <Mail className="w-3 h-3" />
+                  {student.email}
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-600 rounded-lg text-[10px] font-black uppercase tracking-wider border border-amber-100/50">
+                  <AlertCircle className="w-3 h-3" />
+                  No email linked
+                </span>
+              )}
+              {student.kuttabName && (
+                <span className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-black uppercase tracking-wider border border-blue-100/50">
+                  <Home className="w-3 h-3" />
+                  Kuttab: {student.kuttabName}
+                </span>
+              )}
+            </div>
           </div>
           
           <div className="flex flex-wrap gap-4 pt-2">

@@ -118,19 +118,19 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="p-8 space-y-8">
-      <header className="flex justify-between items-start">
+    <div className="p-4 sm:p-8 space-y-8">
+      <header className="flex flex-col sm:flex-row justify-between items-start gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-gray-900">Program Overview (7 days)</h2>
-          <p className="text-gray-500 mt-1">Real-time tracking of student progress and analytics</p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Program Overview</h2>
+          <p className="text-gray-500 mt-1">Real-time student analytics (Last 7 days)</p>
         </div>
         <button 
           onClick={syncAllStudents}
           disabled={loading}
-          className="px-4 py-2 bg-white border text-gray-600 rounded-xl hover:bg-gray-50 font-medium transition-all shadow-sm flex items-center gap-2 disabled:opacity-50"
+          className="w-full sm:w-auto px-6 py-2.5 bg-white border border-gray-100 text-gray-600 rounded-xl hover:bg-gray-50 font-bold transition-all shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
         >
-          <TrendingUp className="w-4 h-4 text-emerald-500" />
-          Refresh All Scores
+          <TrendingUp className="w-5 h-5 text-emerald-500" />
+          Sync All
         </button>
       </header>
 

@@ -1,7 +1,9 @@
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Save, User, Hash } from 'lucide-react';
-import type { Student } from '../types';
+import { X, Save, User, Hash, Mail, Home, Building } from 'lucide-react';
+import { dbService } from '../services/db';
+import { auth } from '../lib/firebase';
+import type { Student, Kuttab } from '../types';
 
 interface EditStudentModalProps {
   student: Student;
@@ -13,17 +15,30 @@ interface EditStudentModalProps {
 export default function EditStudentModal({ student, isOpen, onClose, onSave }: EditStudentModalProps) {
   const [name, setName] = useState(student.name);
   const [age, setAge] = useState((student.age ?? '').toString());
+  const [email, setEmail] = useState(student.email || '');
+  const [kuttabName, setKuttabName] = useState(student.kuttabName || '');
+  const [kuttabs, setKuttabs] = useState<Kuttab[]>([]);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && auth.currentUser) {
+      dbService.getKuttabs(auth.currentUser.uid).then(setKuttabs);
+    }
+  }, [isOpen]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await onSave({ name, age: parseInt(age) });
+      await onSave({ 
+        name, 
+        age: parseInt(age), 
+        email: email.toLowerCase(),
+        kuttabName 
+      });
       onClose();
     } catch (err) {
       console.error('Error updating student:', err);
-      alert('Failed to update student.');
     } finally {
       setLoading(false);
     }
@@ -47,8 +62,8 @@ export default function EditStudentModal({ student, isOpen, onClose, onSave }: E
             className="bg-white rounded-3xl w-full max-w-md p-8 relative z-10 shadow-2xl overflow-hidden"
           >
             <div className="absolute top-0 right-0 p-4">
-              <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                <X className="w-6 h-6 text-gray-400" />
+              <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors text-black">
+                <X className="w-6 h-6" />
               </button>
             </div>
 
@@ -85,6 +100,38 @@ export default function EditStudentModal({ student, isOpen, onClose, onSave }: E
                     onChange={(e) => setAge(e.target.value)}
                     className="w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-black font-medium"
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-700 flex items-center gap-2 text-black">
+                    <Mail className="w-4 h-4" />
+                    Student Email
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="e.g. student@example.com"
+                    className="w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-black font-medium"
+                  />
+                  <p className="text-[10px] text-gray-400 font-bold px-1 uppercase tracking-wider">Required for student portal access</p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-700 flex items-center gap-2 text-black">
+                    <Building className="w-4 h-4" />
+                    Assigned Kuttab
+                  </label>
+                  <select
+                    value={kuttabName}
+                    onChange={(e) => setKuttabName(e.target.value)}
+                    className="w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-black font-medium"
+                  >
+                    <option value="">None / Independent</option>
+                    {kuttabs.map(k => (
+                      <option key={k.id} value={k.name}>{k.name}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <button
