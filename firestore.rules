@@ -1,0 +1,123 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isTeacher() {
+      return isSignedIn(); // For now, any signed in user is a teacher. 
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isOwner(data) {
+      return isSignedIn() && data.teacherId == request.auth.uid;
+    }
+
+    function isValidStudent(data) {
+      let requiredFields = ['name', 'age', 'teacherId'];
+      return data.keys().hasAll(requiredFields) &&
+             data.name is string && data.name.size() > 0 &&
+             data.teacherId == request.auth.uid;
+    }
+
+    match /students/{studentId} {
+      allow read: if isOwner(resource.data);
+      allow create: if isSignedIn() && isValidStudent(request.resource.data);
+      allow update: if isOwner(resource.data) &&
+                      isValidStudent(request.resource.data) &&
+                      request.resource.data.teacherId == resource.data.teacherId;
+      allow delete: if isOwner(resource.data);
+    }
+
+    // Attendance Validation
+    function isValidAttendance(data) {
+      let requiredFields = ['studentId', 'teacherId', 'date', 'status', 'timestamp'];
+      return data.keys().hasAll(requiredFields) &&
+             data.studentId is string &&
+             data.teacherId == request.auth.uid &&
+             data.date is string &&
+             data.status in ['present', 'absent'];
+    }
+
+    match /attendance/{attendanceId} {
+      allow read: if isOwner(resource.data);
+      allow create: if isSignedIn() && isValidAttendance(request.resource.data);
+      allow update: if isOwner(resource.data) && isValidAttendance(request.resource.data);
+      allow delete: if isOwner(resource.data);
+    }
+
+    // Memorization Validation
+    function isValidMemorization(data) {
+      let requiredFields = ['studentId', 'teacherId', 'surahName', 'fromAyah', 'toAyah', 'date', 'timestamp'];
+      return data.keys().hasAll(requiredFields) &&
+             data.studentId is string &&
+             data.teacherId == request.auth.uid &&
+             data.surahName is string &&
+             data.fromAyah is number && data.toAyah is number &&
+             data.date is string &&
+             (data.hizbNumber == null || data.hizbNumber is number) &&
+             (data.quantity == null || data.quantity is number);
+    }
+
+    match /memorizations/{memId} {
+      allow read: if isOwner(resource.data);
+      allow create: if isSignedIn() && isValidMemorization(request.resource.data);
+      allow update: if isOwner(resource.data) && isValidMemorization(request.resource.data);
+      allow delete: if isOwner(resource.data);
+    }
+
+    // Evaluation Validation
+    function isValidEvaluation(data) {
+      let requiredFields = ['studentId', 'teacherId', 'date', 'mistakesCount', 'accuracyScore', 'notes', 'surahName', 'fromAyah', 'toAyah', 'hizbNumber', 'quantity'];
+      return data.keys().hasAll(requiredFields) &&
+             data.studentId is string &&
+             data.teacherId == request.auth.uid &&
+             data.surahName is string &&
+             data.fromAyah is number && data.toAyah is number &&
+             data.hizbNumber is number && data.quantity is number &&
+             data.date is string &&
+             data.mistakesCount is number &&
+             data.accuracyScore is number && data.accuracyScore >= 0 && data.accuracyScore <= 100 &&
+             data.notes is string;
+    }
+
+    match /evaluations/{evalId} {
+      allow read: if isOwner(resource.data);
+      allow create: if isSignedIn() && isValidEvaluation(request.resource.data) && 
+                      request.resource.data.timestamp == request.time;
+      allow update: if isOwner(resource.data) &&
+                      isValidEvaluation(request.resource.data) &&
+                      request.resource.data.updatedAt == request.time &&
+                      request.resource.data.teacherId == resource.data.teacherId &&
+                      request.resource.data.studentId == resource.data.studentId;
+      allow delete: if isOwner(resource.data);
+    }
+
+    // Revision Validation
+    function isValidRevision(data) {
+      let requiredFields = ['studentId', 'teacherId', 'surahName', 'date', 'qualityScore', 'timestamp'];
+      return data.keys().hasAll(requiredFields) &&
+             data.studentId is string &&
+             data.teacherId == request.auth.uid &&
+             data.surahName is string &&
+             data.date is string &&
+             data.qualityScore is number;
+    }
+
+    match /revisions/{revId} {
+      allow read: if isSignedIn() && resource.data.teacherId == request.auth.uid;
+      allow create: if isSignedIn() && isValidRevision(request.resource.data);
+      allow update: if isSignedIn() && isValidRevision(request.resource.data);
+      allow delete: if isSignedIn() && resource.data.teacherId == request.auth.uid;
+    }
+  }
+}
