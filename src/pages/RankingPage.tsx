@@ -1,29 +1,51 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Award, TrendingUp, Medal, Star, CheckCircle, Filter, X, Home } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Award, TrendingUp, Medal, Star, CheckCircle, Filter, X, Home, BookOpen } from 'lucide-react';
 import { dbService } from '../services/db';
 import { auth } from '../lib/firebase';
-import type { Student, Kuttab } from '../types';
+import type { Student, Kuttab, UserProfile } from '../types';
+import { useTranslation } from 'react-i18next';
 
-export default function RankingPage() {
+import { formatQuranProgress } from '../lib/quranUtils';
+
+interface RankingPageProps {
+  profile: UserProfile | null;
+}
+
+export default function RankingPage({ profile }: RankingPageProps) {
+  const { t } = useTranslation();
   const [students, setStudents] = useState<Student[]>([]);
   const [kuttabs, setKuttabs] = useState<Kuttab[]>([]);
   const [selectedKuttab, setSelectedKuttab] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<'score' | 'hizbs'>('score');
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
 
+  const isAdmin = profile?.role === 'admin' || auth.currentUser?.email === 'abdessamadjibrane2@gmail.com';
+
   useEffect(() => {
     const fetchData = async () => {
-      if (!auth.currentUser) return;
+      if (!auth.currentUser || !profile) return;
       try {
         const [studentData, kuttabData] = await Promise.all([
           dbService.getAllStudents(),
           dbService.getAllKuttabs()
         ]);
         
-        const sorted = studentData.sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0));
+        let finalKuttabs = [...kuttabData];
+        // Ensure the profile's kuttab is in the list just in case (though getAllKuttabs should have it)
+        if (profile.kuttabName && !finalKuttabs.some(k => k.name === profile.kuttabName)) {
+           const k = await dbService.getKuttabByName(profile.kuttabName);
+           if (k) finalKuttabs.push(k);
+        }
+
+        const sorted = studentData.sort((a, b) => {
+          if (sortBy === 'hizbs') return (b.totalHizbs || 0) - (a.totalHizbs || 0);
+          return (b.totalScore || 0) - (a.totalScore || 0);
+        });
         setStudents(sorted);
-        setKuttabs(kuttabData);
+        setKuttabs(finalKuttabs);
       } catch (err) {
         console.error('Error fetching rankings:', err);
       } finally {
@@ -31,23 +53,69 @@ export default function RankingPage() {
       }
     };
     fetchData();
-  }, []);
+  }, [profile, isAdmin, sortBy]);
 
   const filteredStudents = useMemo(() => {
-    if (selectedKuttab === 'all') return students;
-    return students.filter(s => s.kuttabName === selectedKuttab);
+    let result = [...students];
+    if (selectedKuttab !== 'all') {
+      result = result.filter(s => s.kuttabName === selectedKuttab);
+    }
+    return result.slice(0, 15); // Show more on leaderboard
   }, [students, selectedKuttab]);
+
+  const distributionData = useMemo(() => {
+    const counts: Record<number, number> = {};
+    for (let i = 1; i <= 60; i++) counts[i] = 0;
+    
+    const relevantStudents = selectedKuttab === 'all' 
+      ? students 
+      : students.filter(s => s.kuttabName === selectedKuttab);
+
+    relevantStudents.forEach(s => {
+      const h = Math.floor(s.totalHizbs || 0);
+      if (h >= 1 && h <= 60) counts[h]++;
+      else if (h > 60) counts[60]++;
+    });
+    return counts;
+  }, [students, selectedKuttab]);
+
+  const distributionStats = useMemo(() => {
+    const vals = Object.values(distributionData);
+    const total = vals.reduce((a: number, b: number) => a + b, 0);
+    const completed = distributionData[60] || 0;
+    const half = Object.entries(distributionData)
+      .filter(([lvl]) => parseInt(lvl) >= 30)
+      .reduce((acc: number, entry: [string, number]) => acc + entry[1], 0);
+      
+    return { total, completed, half };
+  }, [distributionData]);
 
   return (
     <div className="p-4 sm:p-8 space-y-8 max-w-5xl mx-auto">
       <header className="text-center space-y-4">
         <div className="inline-flex items-center gap-2 px-4 py-2 bg-amber-50 text-amber-700 rounded-full text-xs sm:text-sm font-bold border border-amber-100">
           <Star className="w-4 h-4 fill-amber-700" />
-          Top Performers
+          {t('top_performers')}
         </div>
-        <h2 className="text-3xl sm:text-4xl font-black text-gray-900">Student Leaderboard</h2>
+        <h2 className="text-3xl sm:text-4xl font-black text-gray-900">{t('leaderboard')}</h2>
+        
+        <div className="flex justify-center gap-2 mt-4">
+          <button 
+            onClick={() => setSortBy('score')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${sortBy === 'score' ? 'bg-emerald-600 text-white shadow-lg' : 'bg-white text-gray-500 border border-gray-100'}`}
+          >
+            {t('sort_rank')}
+          </button>
+          <button 
+            onClick={() => setSortBy('hizbs')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${sortBy === 'hizbs' ? 'bg-emerald-600 text-white shadow-lg' : 'bg-white text-gray-500 border border-gray-100'}`}
+          >
+            {t('total_hizbs')}
+          </button>
+        </div>
+
         <p className="text-gray-500 max-w-lg mx-auto font-medium text-sm sm:text-base">
-          Celebrating excellence in memorization, attendance, and accuracy across all programs.
+          {sortBy === 'hizbs' ? t('ranking_by_hizbs') : t('overall_lead')}
         </p>
 
         <div className="pt-4 flex justify-center">
@@ -60,7 +128,7 @@ export default function RankingPage() {
             }`}
           >
             <Filter className="w-4 h-4" />
-            {selectedKuttab === 'all' ? 'Filter by Kuttab' : `Kuttab: ${selectedKuttab}`}
+            {selectedKuttab === 'all' ? t('filter_by_kuttab') : `${t('kuttab')}: ${selectedKuttab}`}
             {(selectedKuttab !== 'all' || showFilters) && (
               <X 
                 className="w-4 h-4 ml-2 hover:bg-white/20 rounded-full" 
@@ -93,7 +161,7 @@ export default function RankingPage() {
                     : 'bg-white text-gray-400 border-gray-100 hover:border-emerald-100'
                 }`}
               >
-                All Regions
+                {t('all_regions')}
               </button>
               {kuttabs.map((k) => (
                 <button
@@ -126,10 +194,10 @@ export default function RankingPage() {
               </div>
               <div>
                 <h3 className="text-lg sm:text-2xl font-bold">
-                  {selectedKuttab === 'all' ? 'Universal Rankings' : `${selectedKuttab} Standings`}
+                  {selectedKuttab === 'all' ? t('universal_rankings') : t('standings', { name: selectedKuttab })}
                 </h3>
                 <p className="text-sm sm:text-base text-emerald-100">
-                  {filteredStudents.length} Students Qualified
+                  {t('qualified_students', { count: filteredStudents.length })}
                 </p>
               </div>
             </div>
@@ -138,10 +206,10 @@ export default function RankingPage() {
         </div>
 
         {loading ? (
-          <div className="p-12 sm:p-20 text-center text-gray-500">Calculating rankings...</div>
+          <div className="p-12 sm:p-20 text-center text-gray-500">{t('calculating_rankings')}</div>
         ) : filteredStudents.length === 0 ? (
           <div className="p-16 sm:p-24 text-center">
-            <p className="text-gray-400 font-medium italic">No performance records found for this selection.</p>
+            <p className="text-gray-400 font-medium italic">{t('no_ranking_data')}</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-100">
@@ -162,19 +230,34 @@ export default function RankingPage() {
                   }`}>
                     {i + 1}
                   </div>
-                  <div className="min-w-0">
-                    <h4 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-3 truncate">
-                      {student.name}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-3 truncate">
+                      {profile?.role !== 'student' ? (
+                        <Link 
+                          to={`/students/${student.id}`}
+                          className="text-lg sm:text-xl font-bold text-gray-900 hover:text-emerald-600 transition-colors"
+                        >
+                          {student.name}
+                        </Link>
+                      ) : (
+                        <h4 className="text-lg sm:text-xl font-bold text-gray-900">
+                          {student.name}
+                        </h4>
+                      )}
                       {i === 0 && <Award className="w-5 h-5 text-amber-500 shrink-0" />}
-                    </h4>
+                    </div>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
                       <p className="text-xs sm:text-sm text-gray-500 flex items-center gap-1 font-medium italic">
                         <Home className="w-3.5 h-3.5" />
-                        {student.kuttabName || 'Independent'}
+                        {student.kuttabName || t('independent')}
                       </p>
                       <p className="text-xs sm:text-sm text-gray-500 flex items-center gap-1 font-medium">
                         <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
-                        {student.attendanceRate || 0}% Att.
+                        {student.attendanceRate || 0}% {t('attendance')}
+                      </p>
+                      <p className="text-xs sm:text-sm text-gray-500 flex items-center gap-1 font-bold text-emerald-700">
+                        <BookOpen className="w-3.5 h-3.5" />
+                        {(student.totalHizbs || 0).toFixed(2)} {t('hizbs')}
                       </p>
                     </div>
                   </div>
@@ -182,13 +265,59 @@ export default function RankingPage() {
 
                 <div className="text-left sm:text-right w-full sm:w-auto pt-4 sm:pt-0 border-t sm:border-0 border-gray-50 flex sm:block items-center justify-between">
                   <div className="text-2xl sm:text-3xl font-black text-emerald-600 leading-none">{student.totalScore || 0}</div>
-                  <div className="text-[10px] uppercase font-black text-emerald-400 tracking-widest mt-1">Overall Score</div>
+                  <div className="text-[10px] uppercase font-black text-emerald-400 tracking-widest mt-1">{t('overall_score')}</div>
                 </div>
               </motion.div>
             ))}
           </div>
         )}
       </div>
+
+      {distributionStats.total > 0 && (
+        <div className="space-y-6">
+          <div className="flex flex-col items-center text-center space-y-2 px-4">
+            <h3 className="text-2xl font-black text-gray-900">{t('memorization_distribution')}</h3>
+            <p className="text-gray-500 font-medium text-sm max-w-lg">{t('memorization_distribution_desc')}</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-white p-6 border rounded-[32px] shadow-sm text-center space-y-1">
+              <div className="text-3xl font-black text-emerald-600">{distributionStats.completed}</div>
+              <div className="text-[10px] uppercase font-black text-gray-400 tracking-widest">{t('completed_quran')}</div>
+            </div>
+            <div className="bg-white p-6 border rounded-[32px] shadow-sm text-center space-y-1">
+              <div className="text-3xl font-black text-blue-600">{distributionStats.half}</div>
+              <div className="text-[10px] uppercase font-black text-gray-400 tracking-widest">{t('half_quran')}</div>
+            </div>
+            <div className="bg-white p-6 border rounded-[32px] shadow-sm text-center space-y-1">
+              <div className="text-3xl font-black text-purple-600">{distributionStats.total}</div>
+              <div className="text-[10px] uppercase font-black text-gray-400 tracking-widest">{t('active_learners')}</div>
+            </div>
+          </div>
+
+          <div className="bg-white border rounded-[40px] shadow-sm overflow-hidden p-8 sm:p-12">
+            <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-10 gap-3 sm:gap-4">
+              {Array.from({ length: 60 }, (_, i) => i + 1)
+                .filter(lvl => (distributionData[lvl] || 0) > 0)
+                .map((lvl) => {
+                  const count = distributionData[lvl] || 0;
+                  return (
+                    <div 
+                      key={lvl} 
+                      className="p-3 sm:p-4 rounded-3xl border flex flex-col items-center justify-center gap-1 transition-all group hover:scale-105 bg-emerald-50 border-emerald-100 text-emerald-700 shadow-sm shadow-emerald-50"
+                    >
+                      <span className="text-[10px] font-black uppercase tracking-tighter opacity-60">H{lvl}</span>
+                      <div className="text-xl sm:text-2xl font-black line-height-none">{count}</div>
+                      <span className="text-[8px] font-bold uppercase opacity-60 tracking-wider">
+                        {count === 1 ? t('students_count_one') : t('students_count_other', { count })}
+                      </span>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

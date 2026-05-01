@@ -1,13 +1,21 @@
 import { useState, useMemo, useEffect, FormEvent } from 'react';
-import { Search, Plus, Filter, ChevronRight, X, User as UserIcon, Building } from 'lucide-react';
+import { Search, Plus, Filter, ChevronRight, X, User as UserIcon, Building, Edit2, Trash2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'react-hot-toast';
 import { dbService } from '../services/db';
 import { auth } from '../lib/firebase';
-import type { Student, Kuttab } from '../types';
+import type { Student, Kuttab, UserProfile } from '../types';
+import EditStudentModal from '../components/EditStudentModal';
+import { useTranslation } from 'react-i18next';
+import { formatQuranProgress } from '../lib/quranUtils';
 
-export default function StudentsList() {
+interface StudentsListProps {
+  profile: UserProfile | null;
+}
+
+export default function StudentsList({ profile }: StudentsListProps) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [students, setStudents] = useState<Student[]>([]);
   const [kuttabs, setKuttabs] = useState<Kuttab[]>([]);
@@ -21,28 +29,50 @@ export default function StudentsList() {
   const [minScore, setMinScore] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'age' | 'totalScore'>('name');
   
-  const [newStudent, setNewStudent] = useState({ name: '', age: '', email: '', kuttabName: '' });
+  const [newStudent, setNewStudent] = useState({ name: '', age: '', email: '', kuttabName: profile?.kuttabName || '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  
+  const isAdmin = profile?.role === 'admin';
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (!auth.currentUser || !profile) return;
+    
+    setLoading(true);
+    const isAdmin = profile.role === 'admin';
 
-  const fetchData = async () => {
-    if (!auth.currentUser) return;
-    try {
-      const [studentData, kuttabData] = await Promise.all([
-        dbService.getStudents(auth.currentUser.uid),
-        dbService.getKuttabs(auth.currentUser.uid)
-      ]);
-      setStudents(studentData);
-      setKuttabs(kuttabData);
-    } catch (err) {
-      console.error('Error fetching data:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const fetchKuttabs = async () => {
+      try {
+        const kuttabData = isAdmin 
+          ? await dbService.getAllKuttabs() 
+          : await dbService.getKuttabs(auth.currentUser.uid);
+        
+        let finalKuttabs = [...kuttabData];
+        if (!isAdmin && profile.kuttabName && !finalKuttabs.some(k => k.name === profile.kuttabName)) {
+          const k = await dbService.getKuttabByName(profile.kuttabName);
+          if (k) finalKuttabs.push(k);
+        }
+        setKuttabs(finalKuttabs);
+      } catch (err) {
+        console.error('Error fetching kuttabs:', err);
+      }
+    };
+
+    fetchKuttabs();
+
+    const unsubscribe = dbService.subscribeStudents(
+      auth.currentUser.uid,
+      profile.kuttabName,
+      isAdmin,
+      (studentList) => {
+        setStudents(studentList);
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [profile]);
 
   const handleAddStudent = async (e: FormEvent) => {
     e.preventDefault();
@@ -53,23 +83,55 @@ export default function StudentsList() {
         name: newStudent.name,
         age: parseInt(newStudent.age),
         email: newStudent.email.toLowerCase(),
-        kuttabName: newStudent.kuttabName,
+        kuttabName: isAdmin ? newStudent.kuttabName : (profile?.kuttabName || ''),
         enrollmentDate: new Date().toISOString(),
         teacherId: auth.currentUser.uid,
         attendanceRate: 0,
         memorizationProgress: 0,
+        totalHizbs: 0,
         accuracy: 0,
         totalScore: 0
       });
       setIsModalOpen(false);
-      setNewStudent({ name: '', age: '', email: '', kuttabName: '' });
-      fetchData();
-      toast.success('Student enrolled successfully!');
+      setNewStudent({ name: '', age: '', email: '', kuttabName: profile?.kuttabName || '' });
+      toast.success(t('student_enrolled_success'));
     } catch (err) {
       console.error('Error adding student:', err);
-      toast.error('Failed to add student. Please try again.');
+      toast.error(t('failed_to_add_student'));
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleUpdateStudent = async (data: Partial<Student>) => {
+    if (!editingStudent) return;
+    try {
+      await dbService.updateStudent(editingStudent.id, data);
+      toast.success(t('student_updated_success'));
+    } catch (err) {
+      console.error('Error updating student:', err);
+      toast.error(t('failed_to_update_student'));
+      throw err;
+    }
+  };
+
+  const handleDeleteStudent = async (id: string) => {
+    if (confirmDeleteId !== id) {
+      setConfirmDeleteId(id);
+      toast(t('click_again_to_confirm'), { icon: '🗑️' });
+      setTimeout(() => setConfirmDeleteId(null), 3000);
+      return;
+    }
+
+    if (!auth.currentUser) return;
+    try {
+      await dbService.deleteStudent(id);
+      toast.success(t('student_deleted'));
+    } catch (err) {
+      console.error('Error deleting student:', err);
+      toast.error(t('failed_to_delete_student'));
+    } finally {
+      setConfirmDeleteId(null);
     }
   };
 
@@ -109,15 +171,15 @@ export default function StudentsList() {
     <div className="p-4 sm:p-8 space-y-8">
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">Students Directory</h2>
-          <p className="text-gray-500 mt-1">Manage and track individual progress</p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">{t('students_directory')}</h2>
+          <p className="text-gray-500 mt-1">{t('manage_track_progress')}</p>
         </div>
         <button 
           onClick={() => setIsModalOpen(true)}
           className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-200"
         >
           <Plus className="w-5 h-5" />
-          Add New Student
+          {t('add_new_student')}
         </button>
       </header>
 
@@ -127,7 +189,7 @@ export default function StudentsList() {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
               type="text"
-              placeholder="Search by name..."
+              placeholder={t('search_by_name')}
               className="w-full pl-12 pr-4 py-3 bg-white border rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -142,7 +204,7 @@ export default function StudentsList() {
             }`}
           >
             <Filter className={`w-5 h-5 ${showFilters ? 'text-emerald-500' : ''}`} />
-            More Filters
+            {t('more_filters')}
           </button>
         </div>
 
@@ -156,7 +218,7 @@ export default function StudentsList() {
             >
               <div className="p-6 bg-white border rounded-2xl flex flex-col sm:flex-row flex-wrap gap-6 sm:gap-8 shadow-sm">
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Age Range</label>
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t('age_range')}</label>
                   <div className="flex items-center gap-2">
                     <input 
                       type="number"
@@ -177,7 +239,7 @@ export default function StudentsList() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Min. Total Score</label>
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t('min_total_score')}</label>
                   <input 
                     type="number"
                     placeholder="e.g. 80"
@@ -188,15 +250,15 @@ export default function StudentsList() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Sort By</label>
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t('sort_by')}</label>
                   <select 
                     className="w-full sm:w-auto p-2 bg-gray-50 border rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-medium"
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value as any)}
                   >
-                    <option value="name">Name (A-Z)</option>
-                    <option value="age">Age (Youngest)</option>
-                    <option value="totalScore">Rank (Highest Score)</option>
+                    <option value="name">{t('sort_name')}</option>
+                    <option value="age">{t('sort_age')}</option>
+                    <option value="totalScore">{t('sort_rank')}</option>
                   </select>
                 </div>
 
@@ -209,7 +271,7 @@ export default function StudentsList() {
                     }}
                     className="text-xs font-bold text-red-400 hover:text-red-500 uppercase tracking-widest underline underline-offset-4"
                   >
-                    Clear All
+                    {t('clear_all')}
                   </button>
                 </div>
               </div>
@@ -220,22 +282,22 @@ export default function StudentsList() {
 
       <div className="bg-white border rounded-2xl shadow-sm border-gray-100 text-black">
         {loading ? (
-          <div className="p-12 text-center text-gray-500 font-medium">Loading students...</div>
+          <div className="p-12 text-center text-gray-500 font-medium">{t('loading_students')}</div>
         ) : processedStudents.length === 0 ? (
           <div className="p-12 text-center text-gray-500 font-medium italic">
-            No students match your current filters.
+            {t('no_students_match')}
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[600px]">
+            <table className="w-full min-w-[800px] table-fixed">
               <thead>
                 <tr className="text-left text-xs uppercase text-gray-400 tracking-wider bg-gray-50">
-                  <th className="px-6 py-4 font-black">Name</th>
-                  <th className="px-6 py-4 font-black">Age</th>
-                  <th className="px-6 py-4 font-black">Kuttab</th>
-                  <th className="px-6 py-4 font-black">Memorization</th>
-                  <th className="px-6 py-4 font-black">Overall Score</th>
-                  <th className="px-6 py-4"></th>
+                  <th className="px-6 py-4 font-black w-1/4">{t('name')}</th>
+                  <th className="px-6 py-4 font-black w-24">{t('age')}</th>
+                  <th className="px-6 py-4 font-black">{t('kuttab')}</th>
+                  <th className="px-6 py-4 font-black w-40">{t('total_hizbs')}</th>
+                  <th className="px-6 py-4 font-black w-32">{t('overall_score')}</th>
+                  <th className="px-6 py-4 text-right w-32">{t('actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -245,34 +307,60 @@ export default function StudentsList() {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.05 }}
                   key={student.id}
-                  className="group hover:bg-emerald-50/50 transition-colors cursor-pointer"
+                  className="group hover:bg-emerald-50/50 transition-colors"
                 >
-                  <td className="px-6 py-4">
+                  <td onClick={() => navigate(`/students/${student.id}`)} className="px-6 py-4 cursor-pointer">
                     <div className="font-semibold text-gray-900">{student.name}</div>
                   </td>
-                  <td className="px-6 py-4 text-gray-600">{student.age} y/o</td>
-                  <td className="px-6 py-4">
+                  <td onClick={() => navigate(`/students/${student.id}`)} className="px-6 py-4 text-gray-600 cursor-pointer">{t('years_old', { age: student.age })}</td>
+                  <td onClick={() => navigate(`/students/${student.id}`)} className="px-6 py-4 cursor-pointer">
                     <span className="font-medium text-gray-500 italic">
                       {student.kuttabName || '—'}
                     </span>
                   </td>
-                  <td className="px-6 py-4">
-                    <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium">
-                      Tracking active
+                  <td onClick={() => navigate(`/students/${student.id}`)} className="px-6 py-4 cursor-pointer">
+                    <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-lg text-sm font-bold">
+                      {(student.totalHizbs || 0).toFixed(2)} {t('hizbs')}
                     </span>
                   </td>
-                  <td className="px-6 py-4">
+                  <td onClick={() => navigate(`/students/${student.id}`)} className="px-6 py-4 cursor-pointer">
                     <span className="font-bold px-3 py-1 rounded-full text-sm bg-emerald-50 text-emerald-700">
                       {student.totalScore}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <Link 
-                      to={`/students/${student.id}`}
-                      className="p-2 hover:bg-emerald-100 rounded-lg text-emerald-600 transition-colors inline-block"
-                    >
-                      <ChevronRight className="w-5 h-5" />
-                    </Link>
+                    <div className="flex items-center justify-end gap-1">
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingStudent(student);
+                        }}
+                        className="p-2 text-gray-700 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-all border border-transparent hover:border-emerald-100"
+                        title={t('edit')}
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteStudent(student.id);
+                        }}
+                        className={`p-2 rounded-lg transition-all border border-transparent ${
+                          confirmDeleteId === student.id
+                            ? 'bg-red-600 text-white shadow-lg animate-pulse scale-110'
+                            : 'text-gray-700 hover:text-red-700 hover:bg-red-50 hover:border-red-100'
+                        }`}
+                        title={t('delete')}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                      <Link 
+                        to={`/students/${student.id}`}
+                        className="p-2 hover:bg-emerald-100 rounded-lg text-emerald-600 transition-colors inline-block"
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </Link>
+                    </div>
                   </td>
                 </motion.tr>
               ))}
@@ -282,6 +370,16 @@ export default function StudentsList() {
         )}
       </div>
 
+      {editingStudent && (
+        <EditStudentModal
+          student={editingStudent}
+          isOpen={!!editingStudent}
+          onClose={() => setEditingStudent(null)}
+          onSave={handleUpdateStudent}
+          profile={profile}
+        />
+      )}
+
       {/* Add Student Modal */}
       <AnimatePresence>
         {isModalOpen && (
@@ -290,7 +388,7 @@ export default function StudentsList() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden relative text-black"
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-y-auto max-h-[90vh] relative text-black"
             >
               <button 
                 onClick={() => setIsModalOpen(false)}
@@ -303,12 +401,12 @@ export default function StudentsList() {
                 <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mb-6">
                   <UserIcon className="w-6 h-6" />
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-2">New Student</h3>
-                <p className="text-gray-500 mb-8">Enter student details to add them to your program.</p>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">{t('new_student')}</h3>
+                <p className="text-gray-500 mb-8">{t('enter_student_details')}</p>
 
                 <form onSubmit={handleAddStudent} className="space-y-6">
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-700">Full Name</label>
+                    <label className="text-sm font-bold text-gray-700">{t('full_name')}</label>
                     <input
                       required
                       type="text"
@@ -319,7 +417,7 @@ export default function StudentsList() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-700">Age</label>
+                    <label className="text-sm font-bold text-gray-700">{t('age')}</label>
                     <input
                       required
                       type="number"
@@ -332,7 +430,7 @@ export default function StudentsList() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-700">Student Email (Optional)</label>
+                    <label className="text-sm font-bold text-gray-700">{t('student_email')}</label>
                     <input
                       type="email"
                       className="w-full p-4 bg-gray-50 border rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none"
@@ -340,36 +438,38 @@ export default function StudentsList() {
                       value={newStudent.email}
                       onChange={(e) => setNewStudent({ ...newStudent, email: e.target.value })}
                     />
-                    <p className="text-[10px] text-gray-400">Required for portal access</p>
+                    <p className="text-[10px] text-gray-400">{t('required_for_portal')}</p>
                   </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center ml-1 uppercase tracking-wider">
-                      <label className="text-[10px] font-black text-gray-400">Assigned Kuttab</label>
-                      <button 
-                        type="button"
-                        onClick={() => navigate('/kuttabs')}
-                        className="text-[10px] font-black text-emerald-600 hover:underline"
+                  {isAdmin && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center ml-1 uppercase tracking-wider">
+                        <label className="text-[10px] font-black text-gray-400">{t('assigned_kuttab')}</label>
+                        <button 
+                          type="button"
+                          onClick={() => navigate('/kuttabs')}
+                          className="text-[10px] font-black text-emerald-600 hover:underline"
+                        >
+                          {t('manage')}
+                        </button>
+                      </div>
+                      <select
+                        className="w-full p-4 bg-gray-50 border rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none shadow-sm text-black font-medium"
+                        value={newStudent.kuttabName}
+                        onChange={(e) => setNewStudent({ ...newStudent, kuttabName: e.target.value })}
                       >
-                        + Manage
-                      </button>
+                        <option value="">{t('none_independent')}</option>
+                        {kuttabs.map(k => (
+                          <option key={k.id} value={k.name}>{k.name}</option>
+                        ))}
+                      </select>
                     </div>
-                    <select
-                      className="w-full p-4 bg-gray-50 border rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none shadow-sm text-black font-medium"
-                      value={newStudent.kuttabName}
-                      onChange={(e) => setNewStudent({ ...newStudent, kuttabName: e.target.value })}
-                    >
-                      <option value="">None / Independent</option>
-                      {kuttabs.map(k => (
-                        <option key={k.id} value={k.name}>{k.name}</option>
-                      ))}
-                    </select>
-                  </div>
+                  )}
                   <button
                     disabled={isSubmitting}
                     type="submit"
                     className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-2xl font-bold transition-all shadow-lg shadow-emerald-100 disabled:opacity-50"
                   >
-                    {isSubmitting ? 'Adding...' : 'Enroll Student'}
+                    {isSubmitting ? t('adding') : t('enroll_student')}
                   </button>
                 </form>
               </div>

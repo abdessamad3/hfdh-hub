@@ -1,8 +1,10 @@
 import { useState, FormEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Save, BookOpen, AlertCircle, MessageCircle, Calendar } from 'lucide-react';
+import { X, Save, AlertCircle, MessageCircle, Calendar } from 'lucide-react';
 import { dbService } from '../services/db';
 import type { Evaluation } from '../types';
+import { useTranslation } from 'react-i18next';
+import { toast } from 'react-hot-toast';
 
 interface EditEvaluationModalProps {
   evaluation: Evaluation;
@@ -12,9 +14,20 @@ interface EditEvaluationModalProps {
 }
 
 export default function EditEvaluationModal({ evaluation, isOpen, onClose, onSave }: EditEvaluationModalProps) {
+  const { t } = useTranslation();
   const [surahName, setSurahName] = useState(evaluation.surahName || '');
   const [hizbNumber, setHizbNumber] = useState((evaluation.hizbNumber ?? '').toString());
-  const [quantity, setQuantity] = useState((evaluation.quantity ?? 1).toString());
+  // Map identifier or fall back to numerical mapping
+  const getInitialQuantity = () => {
+    if (evaluation.quantityIdentifier) return evaluation.quantityIdentifier;
+    const q = evaluation.quantity ?? 1;
+    if (q === 1) return 't1';
+    if (q === 2) return 'r1';
+    if (q === 4) return 'n1';
+    if (q === 8) return 'h1';
+    return 't1';
+  };
+  const [quantity, setQuantity] = useState(getInitialQuantity());
   const [fromAyah, setFromAyah] = useState((evaluation.fromAyah ?? 0).toString());
   const [toAyah, setToAyah] = useState((evaluation.toAyah ?? 0).toString());
   const [mistakes, setMistakes] = useState((evaluation.mistakesCount ?? 0).toString());
@@ -28,20 +41,38 @@ export default function EditEvaluationModal({ evaluation, isOpen, onClose, onSav
     setLoading(true);
     try {
       const hNumber = parseInt(hizbNumber) || 0;
-      const qUnit = parseInt(quantity) || 0;
+      
+      // Check for duplicates/overlaps
+      const isDuplicate = await dbService.checkOverlappingEvaluation(
+        evaluation.studentId,
+        hNumber,
+        quantity,
+        evaluation.id
+      );
 
-      // Check for duplicate
-      const exists = await dbService.checkEvaluationExists(evaluation.studentId, evaluation.teacherId, hNumber, qUnit, evaluation.id);
-      if (exists) {
-        alert(`An evaluation already exists for this Student, Hizb ${hNumber} and Quantity ${qUnit}/8.`);
+      if (isDuplicate) {
+        toast.error(t('thumun_already_evaluated'));
         setLoading(false);
         return;
+      }
+
+      // Map selection string to numerical units
+      let qUnit = 0;
+      if (quantity.startsWith('t')) {
+        qUnit = parseInt(quantity.substring(1));
+      } else if (quantity.startsWith('r')) {
+        qUnit = parseInt(quantity.substring(1)) * 2;
+      } else if (quantity.startsWith('n')) {
+        qUnit = parseInt(quantity.substring(1)) * 4;
+      } else if (quantity === 'h1') {
+        qUnit = 8;
       }
 
       const updateData: any = {
         surahName,
         hizbNumber: hNumber,
         quantity: qUnit,
+        quantityIdentifier: quantity,
         mistakesCount: parseInt(mistakes) || 0,
         accuracyScore: parseInt(accuracy) || 0,
         notes,
@@ -55,7 +86,7 @@ export default function EditEvaluationModal({ evaluation, isOpen, onClose, onSav
       onClose();
     } catch (err) {
       console.error('Error updating evaluation:', err);
-      alert('Failed to update evaluation.');
+      alert(t('failed_to_update_evaluation'));
     } finally {
       setLoading(false);
     }
@@ -76,25 +107,25 @@ export default function EditEvaluationModal({ evaluation, isOpen, onClose, onSav
             initial={{ scale: 0.95, opacity: 0, y: 20 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.95, opacity: 0, y: 20 }}
-            className="bg-white rounded-3xl w-full max-w-lg p-8 relative z-10 shadow-2xl overflow-y-auto max-h-[90vh]"
+            className="bg-white rounded-3xl w-full max-w-lg p-8 relative z-10 shadow-2xl overflow-y-auto max-h-[90vh] text-black"
           >
             <div className="absolute top-0 right-0 p-4 sticky z-20">
-              <button onClick={onClose} className="p-2 bg-white/80 backdrop-blur-sm hover:bg-gray-100 rounded-full transition-colors shadow-sm">
-                <X className="w-6 h-6 text-gray-400" />
+              <button onClick={onClose} className="p-2 bg-white/80 backdrop-blur-sm hover:bg-gray-100 rounded-full transition-colors shadow-sm text-gray-400">
+                <X className="w-6 h-6" />
               </button>
             </div>
 
             <div className="space-y-6">
               <div>
-                <h3 className="text-2xl font-black text-gray-900 tracking-tight">Edit Record</h3>
-                <p className="text-gray-500 font-medium font-sans">Correct memorization or assessment details</p>
+                <h3 className="text-2xl font-black text-gray-900 tracking-tight">{t('edit_record_title')}</h3>
+                <p className="text-gray-500 font-medium font-sans">{t('edit_record_subtitle')}</p>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-6 text-black font-sans">
                 <div className="space-y-4 pt-4 border-t">
-                    <h3 className="font-bold text-gray-400 uppercase text-[10px] tracking-widest">Progress Details</h3>
+                    <h3 className="font-bold text-gray-400 uppercase text-[10px] tracking-widest">{t('progress_details')}</h3>
                     <div className="space-y-2">
-                        <label className="text-sm font-bold text-gray-700">Surah Name (Optional)</label>
+                        <label className="text-sm font-bold text-gray-700">{t('surah_name_optional')}</label>
                         <input 
                             type="text"
                             value={surahName}
@@ -104,7 +135,7 @@ export default function EditEvaluationModal({ evaluation, isOpen, onClose, onSav
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <label className="text-sm font-bold text-gray-700">Hizb</label>
+                            <label className="text-sm font-bold text-gray-700">{t('hizb')}</label>
                             <input 
                                 type="number"
                                 required
@@ -116,27 +147,27 @@ export default function EditEvaluationModal({ evaluation, isOpen, onClose, onSav
                             />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-sm font-bold text-gray-700">Quantity</label>
+                            <label className="text-sm font-bold text-gray-700">{t('quantity')}</label>
                             <select 
                                 required
                                 value={quantity}
                                 onChange={(e) => setQuantity(e.target.value)}
-                                className="w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
+                                className="w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-black"
                             >
-                                <option value="1">1/8 (Thamin)</option>
-                                <option value="2">2/8 (Rubu')</option>
-                                <option value="3">3/8 (thalatha athman)</option>
-                                <option value="4">4/8 (Nisf)</option>
-                                <option value="5">5/8 (khamsat athman)</option>
-                                <option value="6">6/8 (Thalatha Rubu')</option>
-                                <option value="7">7/8 (Sabat athman)</option>
-                                <option value="8">8/8 (Full Hizb)</option>
+                                 <option value="t1">{t('thumun_1')}</option>
+                                 <option value="t2">{t('thumun_2')}</option>
+                                 <option value="t3">{t('thumun_3')}</option>
+                                 <option value="t4">{t('thumun_4')}</option>
+                                 <option value="t5">{t('thumun_5')}</option>
+                                 <option value="t6">{t('thumun_6')}</option>
+                                 <option value="t7">{t('thumun_7')}</option>
+                                 <option value="t8">{t('thumun_8')}</option>
                             </select>
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                        <label className="text-sm font-bold text-gray-700">From Ayah (Optional)</label>
+                        <label className="text-sm font-bold text-gray-700">{t('from_ayah_optional')}</label>
                         <input 
                             type="number"
                             value={fromAyah}
@@ -145,7 +176,7 @@ export default function EditEvaluationModal({ evaluation, isOpen, onClose, onSav
                         />
                     </div>
                     <div className="space-y-2">
-                        <label className="text-sm font-bold text-gray-700">To Ayah (Optional)</label>
+                        <label className="text-sm font-bold text-gray-700">{t('to_ayah_optional')}</label>
                         <input 
                             type="number"
                             value={toAyah}
@@ -157,12 +188,12 @@ export default function EditEvaluationModal({ evaluation, isOpen, onClose, onSav
                 </div>
 
                 <div className="space-y-4 pt-4 border-t">
-                    <h3 className="font-bold text-gray-400 uppercase text-[10px] tracking-widest">Assessment</h3>
+                    <h3 className="font-bold text-gray-400 uppercase text-[10px] tracking-widest">{t('performance_assessment')}</h3>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
                                 <AlertCircle className="w-4 h-4 text-red-500" />
-                                Mistakes
+                                {t('mistakes')}
                             </label>
                             <input 
                                 type="number"
@@ -174,7 +205,7 @@ export default function EditEvaluationModal({ evaluation, isOpen, onClose, onSav
                             />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-sm font-bold text-gray-700">Accuracy (%)</label>
+                            <label className="text-sm font-bold text-gray-700">{t('accuracy')} (%)</label>
                             <input 
                                 type="number"
                                 required
@@ -190,9 +221,9 @@ export default function EditEvaluationModal({ evaluation, isOpen, onClose, onSav
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t">
                     <div className="space-y-2">
-                        <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                        <label className="text-sm font-bold text-gray-700 flex items-center gap-2 text-black">
                             <Calendar className="w-4 h-4 text-gray-400" />
-                            Date
+                            {t('session_date')}
                         </label>
                         <input 
                             type="date"
@@ -205,9 +236,9 @@ export default function EditEvaluationModal({ evaluation, isOpen, onClose, onSav
                 </div>
 
                 <div className="space-y-2 pt-4 border-t">
-                    <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                    <label className="text-sm font-bold text-gray-700 flex items-center gap-2 text-black">
                         <MessageCircle className="w-4 h-4 text-gray-400" />
-                        Notes
+                        {t('teacher_notes')}
                     </label>
                     <textarea 
                         value={notes}
@@ -226,7 +257,7 @@ export default function EditEvaluationModal({ evaluation, isOpen, onClose, onSav
                   ) : (
                     <>
                       <Save className="w-5 h-5" />
-                      Update Record
+                      {t('update_record')}
                     </>
                   )}
                 </button>

@@ -12,15 +12,29 @@ import AttendancePage from './pages/Attendance';
 import EvaluationEntry from './pages/EvaluationEntry';
 import RankingPage from './pages/RankingPage';
 import StudentPortal from './pages/StudentPortal';
+import RevisionEntry from './pages/RevisionEntry';
+import NextRevisionTask from './pages/NextRevisionTask';
 import KuttabManagement from './pages/KuttabManagement';
-import { BookOpen, AlertCircle, Chrome, Menu } from 'lucide-react';
+import TeachersList from './pages/TeachersList';
+import TeacherProfile from './pages/TeacherProfile';
+import LoginHistory from './pages/LoginHistory';
+import AdminSearchBar from './components/AdminSearchBar';
+import { BookOpen, AlertCircle, Chrome, Menu, Globe } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
 
 function Layout({ children, profile }: { children: ReactNode; profile: UserProfile | null }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const { i18n, t } = useTranslation();
+
+  useEffect(() => {
+    const dir = i18n.language === 'ar' ? 'rtl' : 'ltr';
+    document.documentElement.dir = dir;
+    document.documentElement.lang = i18n.language;
+  }, [i18n.language]);
 
   return (
-    <div className="flex bg-gray-50 min-h-screen">
+    <div className={`flex bg-gray-50 min-h-screen ${i18n.language === 'ar' ? 'font-arabic' : ''}`}>
       <Sidebar 
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)} 
@@ -31,7 +45,7 @@ function Layout({ children, profile }: { children: ReactNode; profile: UserProfi
         <header className="lg:hidden bg-white border-b px-6 py-4 flex items-center justify-between sticky top-0 z-30 shadow-sm">
           <div className="flex items-center gap-2 text-emerald-700 font-bold">
             <BookOpen className="w-8 h-8" />
-            <span className="text-xl tracking-tight">Hifdh Hub</span>
+            <span className="text-xl tracking-tight">{t('app_name')}</span>
           </div>
           <button 
             onClick={() => setIsSidebarOpen(true)}
@@ -40,6 +54,13 @@ function Layout({ children, profile }: { children: ReactNode; profile: UserProfi
             <Menu className="w-8 h-8" />
           </button>
         </header>
+        
+        {/* Admin Search Bar - Desktop & Mobile */}
+        {profile?.role === 'admin' && (
+          <div className="bg-white border-b px-4 py-3 sticky top-0 lg:static z-20 shadow-sm lg:shadow-none">
+            <AdminSearchBar profile={profile} />
+          </div>
+        )}
 
         <main className="flex-1 overflow-x-hidden">
           {children}
@@ -52,12 +73,13 @@ function Layout({ children, profile }: { children: ReactNode; profile: UserProfi
 function Login({ externalError }: { externalError?: string | null }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { t, i18n } = useTranslation();
 
   useEffect(() => {
     if (externalError) {
-      setError(externalError);
+      setError(t('unauthorized_access'));
     }
-  }, [externalError]);
+  }, [externalError, t]);
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -85,8 +107,23 @@ function Login({ externalError }: { externalError?: string | null }) {
           <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
             <BookOpen className="w-10 h-10" />
           </div>
-          <h1 className="text-4xl font-black text-gray-900 tracking-tight">Hifdh Hub</h1>
-          <p className="text-gray-500 font-medium italic">Quranic Excellence Tracking</p>
+          <h1 className="text-4xl font-black text-gray-900 tracking-tight">{t('app_name')}</h1>
+          <p className="text-gray-500 font-medium italic">{t('quranic_excellence')}</p>
+        </div>
+
+        <div className="flex justify-center gap-2 mb-4">
+          <button 
+            onClick={() => i18n.changeLanguage('en')}
+            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${i18n.language === 'en' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-500'}`}
+          >
+            EN
+          </button>
+          <button 
+            onClick={() => i18n.changeLanguage('ar')}
+            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${i18n.language === 'ar' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-500'}`}
+          >
+            عربي
+          </button>
         </div>
 
         {error && (
@@ -107,7 +144,7 @@ function Login({ externalError }: { externalError?: string | null }) {
             ) : (
               <>
                 <Chrome className="w-6 h-6" />
-                Continue with Google
+                {t('continue_with_google')}
               </>
             )}
           </button>
@@ -115,12 +152,12 @@ function Login({ externalError }: { externalError?: string | null }) {
 
         <div className="text-center space-y-3">
           <div className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-loose">
-            One platform for both Teachers and Students.
+            {t('one_platform')}
           </div>
-          <p className="text-[11px] text-gray-500 bg-gray-50 p-3 rounded-xl border border-dashed">
-            <strong>Teachers:</strong> Manage your hifdh classes.<br/>
-            <strong>Students:</strong> Log in to see your daily progress.
-          </p>
+          <div className="text-[11px] text-gray-500 bg-gray-50 p-3 rounded-xl border border-dashed">
+            <p><strong>{t('teachers')}:</strong> {t('teachers_instruction')}</p>
+            <p><strong>{t('students')}:</strong> {t('students_instruction')}</p>
+          </div>
         </div>
       </div>
     </div>
@@ -141,11 +178,15 @@ export default function App() {
       if (u) {
         try {
           const email = (u.email || '').toLowerCase();
-          const studentDoc = await dbService.getStudentByEmail(email);
+          const [studentDoc, teacherDoc] = await Promise.all([
+            dbService.getStudentByEmail(email),
+            dbService.getUserByEmail(email)
+          ]);
+          
           const isAdmin = email === ADMIN_EMAIL.toLowerCase();
 
-          if (!isAdmin && !studentDoc) {
-            setAuthError('Unauthorized access. Only enrolled students and admins can log in.');
+          if (!isAdmin && !studentDoc && !teacherDoc) {
+            setAuthError('Unauthorized access. Only authorized teachers and enrolled students can log in.');
             await auth.signOut();
             setUser(null);
             setProfile(null);
@@ -153,17 +194,20 @@ export default function App() {
             return;
           }
 
-          const initialRole = isAdmin ? 'teacher' : 'student';
+          const initialRole = isAdmin ? 'admin' : (teacherDoc?.role || 'student');
           
           const userProfile = await dbService.upsertUserProfile(u.uid, {
             email: email,
-            displayName: u.displayName || '',
-            photoURL: u.photoURL || '',
+            displayName: u.displayName || teacherDoc?.displayName || '',
+            photoURL: u.photoURL || teacherDoc?.photoURL || '',
             role: initialRole,
             studentId: studentDoc?.id
           });
           setProfile(userProfile);
           setUser(u);
+          
+          // Log sign in
+          await dbService.logSignIn(u.uid, email, u.displayName || teacherDoc?.displayName || '');
         } catch (err) {
           console.error('Profile Load Error:', err);
         }
@@ -203,18 +247,27 @@ export default function App() {
           {isStudent ? (
             <>
               <Route path="/" element={<StudentPortal />} />
-              <Route path="/ranking" element={<RankingPage />} />
+              <Route path="/ranking" element={<RankingPage profile={profile} />} />
               <Route path="*" element={<Navigate to="/" />} />
             </>
           ) : (
             <>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/kuttabs" element={<KuttabManagement />} />
-              <Route path="/students" element={<StudentsList />} />
-              <Route path="/students/:id" element={<StudentProfile />} />
-              <Route path="/attendance" element={<AttendancePage />} />
-              <Route path="/evaluation" element={<EvaluationEntry />} />
-              <Route path="/ranking" element={<RankingPage />} />
+              <Route path="/" element={<Dashboard profile={profile} />} />
+              {profile?.role === 'admin' && (
+                <>
+                  <Route path="/kuttabs" element={<KuttabManagement profile={profile} />} />
+                  <Route path="/teachers" element={<TeachersList profile={profile} />} />
+                  <Route path="/teachers/:id" element={<TeacherProfile profile={profile} />} />
+                  <Route path="/login-history" element={<LoginHistory profile={profile} />} />
+                </>
+              )}
+              <Route path="/students" element={<StudentsList profile={profile} />} />
+              <Route path="/students/:id" element={<StudentProfile profile={profile} />} />
+              <Route path="/attendance" element={<AttendancePage profile={profile} />} />
+              <Route path="/evaluation" element={<EvaluationEntry profile={profile} />} />
+              <Route path="/revision" element={<RevisionEntry profile={profile} />} />
+              <Route path="/next-revision" element={<NextRevisionTask profile={profile} />} />
+              <Route path="/ranking" element={<RankingPage profile={profile} />} />
               <Route path="*" element={<Navigate to="/" />} />
             </>
           )}

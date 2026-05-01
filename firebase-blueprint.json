@@ -14,7 +14,8 @@
         "totalScore": { "type": "number" },
         "attendanceRate": { "type": "number" },
         "memorizationProgress": { "type": "number" },
-        "accuracy": { "type": "number" }
+        "accuracy": { "type": "number" },
+        "kuttabResponsibleId": { "type": "string", "description": "UID of the teacher responsible for the student's kuttab" }
       },
       "required": ["name", "age", "enrollmentDate", "teacherId"]
     },
@@ -25,7 +26,7 @@
       "properties": {
         "uid": { "type": "string" },
         "email": { "type": "string" },
-        "role": { "type": "string", "enum": ["teacher", "student"] },
+        "role": { "type": "string", "enum": ["admin", "teacher", "student"] },
         "studentId": { "type": "string", "description": "Links to Student document for student users" },
         "displayName": { "type": "string" },
         "photoURL": { "type": "string" }
@@ -38,6 +39,7 @@
       "type": "object",
       "properties": {
         "studentId": { "type": "string" },
+        "studentEmail": { "type": "string" },
         "date": { "type": "string", "format": "date-time" },
         "status": { "type": "string", "enum": ["present", "absent"] }
       },
@@ -49,6 +51,7 @@
       "type": "object",
       "properties": {
         "studentId": { "type": "string" },
+        "studentEmail": { "type": "string" },
         "surahName": { "type": "string" },
         "fromAyah": { "type": "number" },
         "toAyah": { "type": "number" },
@@ -62,6 +65,7 @@
       "type": "object",
       "properties": {
         "studentId": { "type": "string" },
+        "studentEmail": { "type": "string" },
         "teacherId": { "type": "string" },
         "surahName": { "type": "string" },
         "fromAyah": { "type": "number" },
@@ -79,6 +83,7 @@
       "type": "object",
       "properties": {
         "studentId": { "type": "string" },
+        "studentEmail": { "type": "string" },
         "surahName": { "type": "string" },
         "date": { "type": "string", "format": "date-time" },
         "qualityScore": { "type": "number" }
@@ -95,6 +100,19 @@
         "teacherId": { "type": "string", "description": "Admin/Teacher who created this" }
       },
       "required": ["name", "teacherId"]
+    },
+    "LoginHistory": {
+      "title": "Login History",
+      "description": "Record of user login attempts",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "userAgent": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "email", "timestamp"]
     }
   },
   "firestore": {
@@ -104,6 +122,7 @@
     "/memorizations/{memId}": { "schema": "Memorization", "description": "Memorization records" },
     "/evaluations/{evalId}": { "schema": "Evaluation", "description": "Evaluation sessions" },
     "/revisions/{revId}": { "schema": "Revision", "description": "Revision history" },
-    "/kuttabs/{kuttabId}": { "schema": "Kuttab", "description": "List of learning institutions" }
+    "/kuttabs/{kuttabId}": { "schema": "Kuttab", "description": "List of learning institutions" },
+    "/login_history/{id}": { "schema": "LoginHistory", "description": "Log of user sessions" }
   }
 }

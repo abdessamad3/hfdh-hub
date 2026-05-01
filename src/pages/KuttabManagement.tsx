@@ -1,26 +1,38 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Trash2, Home, MapPin, X, Building } from 'lucide-react';
+import { Plus, Trash2, Home, MapPin, X, Building, Edit2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { dbService } from '../services/db';
 import { auth } from '../lib/firebase';
-import type { Kuttab } from '../types';
+import type { Kuttab, UserProfile } from '../types';
+import { useTranslation } from 'react-i18next';
 
-export default function KuttabManagement() {
+interface KuttabManagementProps {
+  profile: UserProfile | null;
+}
+
+export default function KuttabManagement({ profile }: KuttabManagementProps) {
+  const { t } = useTranslation();
   const [kuttabs, setKuttabs] = useState<Kuttab[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingKuttab, setEditingKuttab] = useState<Kuttab | null>(null);
   const [newKuttab, setNewKuttab] = useState({ name: '', location: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const isAdmin = profile?.role === 'admin';
 
   useEffect(() => {
     fetchKuttabs();
-  }, []);
+  }, [profile]);
 
   const fetchKuttabs = async () => {
-    if (!auth.currentUser) return;
+    if (!auth.currentUser || !profile) return;
     try {
-      const data = await dbService.getKuttabs(auth.currentUser.uid);
+      const data = isAdmin 
+        ? await dbService.getAllKuttabs()
+        : await dbService.getKuttabs(auth.currentUser.uid);
       setKuttabs(data);
     } catch (err) {
       console.error('Error fetching kuttabs:', err);
@@ -29,44 +41,71 @@ export default function KuttabManagement() {
     }
   };
 
-  const handleAddKuttab = async (e: FormEvent) => {
+  const handleOpenEdit = (kuttab: Kuttab) => {
+    setEditingKuttab(kuttab);
+    setNewKuttab({ name: kuttab.name, location: kuttab.location || '' });
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingKuttab(null);
+    setNewKuttab({ name: '', location: '' });
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!auth.currentUser) return;
     
-    // Check if name already exists
-    if (kuttabs.some(k => k.name.toLowerCase() === newKuttab.name.toLowerCase())) {
-      toast.error('A Kuttab with this name already exists.');
+    // Check if name already exists (excluding current one if editing)
+    if (kuttabs.some(k => k.name.toLowerCase() === newKuttab.name.toLowerCase() && k.id !== editingKuttab?.id)) {
+      toast.error(t('kuttab_exists_error'));
       return;
     }
 
     setIsSubmitting(true);
     try {
-      await dbService.addKuttab({
-        name: newKuttab.name,
-        location: newKuttab.location,
-        teacherId: auth.currentUser.uid
-      });
-      setIsModalOpen(false);
-      setNewKuttab({ name: '', location: '' });
+      if (editingKuttab) {
+        await dbService.updateKuttab(editingKuttab.id, {
+          name: newKuttab.name,
+          location: newKuttab.location
+        });
+        toast.success(t('kuttab_updated_success'));
+      } else {
+        await dbService.addKuttab({
+          name: newKuttab.name,
+          location: newKuttab.location,
+          teacherId: auth.currentUser.uid
+        });
+        toast.success(t('kuttab_added_success'));
+      }
+      handleCloseModal();
       fetchKuttabs();
-      toast.success('Kuttab added successfully!');
     } catch (err) {
-      console.error('Error adding kuttab:', err);
-      toast.error('Failed to add kuttab.');
+      console.error('Error saving kuttab:', err);
+      toast.error(t('sync_failed'));
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDeleteKuttab = async (id: string, name: string) => {
-    if (!window.confirm(`Are you sure you want to delete "${name}"?`)) return;
+  const handleDeleteKuttab = async (id: string) => {
+    if (confirmDeleteId !== id) {
+      setConfirmDeleteId(id);
+      toast(t('click_again_to_confirm'), { icon: '🗑️' });
+      setTimeout(() => setConfirmDeleteId(null), 3000);
+      return;
+    }
+
     try {
       await dbService.deleteKuttab(id);
       fetchKuttabs();
-      toast.success('Kuttab removed.');
+      toast.success(t('kuttab_removed'));
     } catch (err) {
       console.error('Error deleting kuttab:', err);
-      toast.error('Failed to remove kuttab.');
+      toast.error(t('failed_to_remove_kuttab'));
+    } finally {
+      setConfirmDeleteId(null);
     }
   };
 
@@ -74,29 +113,31 @@ export default function KuttabManagement() {
     <div className="p-4 sm:p-8 space-y-8 max-w-4xl mx-auto">
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">Kuttabs Management</h2>
-          <p className="text-gray-500 mt-1">Manage learning institutions for student classification</p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">{t('kuttabs_management')}</h2>
+          <p className="text-gray-500 mt-1">{t('kuttabs_subtitle')}</p>
         </div>
-        <motion.button 
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => setIsModalOpen(true)}
-          className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-200"
-        >
-          <Plus className="w-5 h-5" />
-          Add New Kuttab
-        </motion.button>
+        {isAdmin && (
+          <motion.button 
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setIsModalOpen(true)}
+            className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-200"
+          >
+            <Plus className="w-5 h-5" />
+            {t('add_new_kuttab')}
+          </motion.button>
+        )}
       </header>
 
       <div className="bg-white border rounded-3xl shadow-sm overflow-hidden text-black">
         {loading ? (
-          <div className="p-12 text-center text-gray-400 font-medium">Loading Kuttabs...</div>
+          <div className="p-12 text-center text-gray-400 font-medium">{t('loading')}</div>
         ) : kuttabs.length === 0 ? (
           <div className="p-16 text-center space-y-4">
             <div className="w-16 h-16 bg-gray-50 text-gray-300 rounded-full flex items-center justify-center mx-auto">
               <Building className="w-8 h-8" />
             </div>
-            <div className="text-gray-500 font-medium italic">No Kuttabs added yet. Start by adding one!</div>
+            <div className="text-gray-500 font-medium italic">{t('no_kuttabs_yet')}</div>
           </div>
         ) : (
           <div className="divide-y divide-gray-50">
@@ -122,12 +163,30 @@ export default function KuttabManagement() {
                     )}
                   </div>
                 </div>
-                <button
-                  onClick={() => handleDeleteKuttab(kuttab.id, kuttab.name)}
-                  className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                >
-                  <Trash2 className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  {(isAdmin || kuttab.teacherId === auth.currentUser?.uid) && (
+                    <>
+                      <button
+                        onClick={() => handleOpenEdit(kuttab)}
+                        className="p-2 text-gray-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-lg transition-all"
+                        title={t('edit_kuttab')}
+                      >
+                        <Edit2 className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteKuttab(kuttab.id)}
+                        className={`p-2 rounded-lg transition-all ${
+                          confirmDeleteId === kuttab.id
+                            ? 'bg-red-600 text-white shadow-lg animate-pulse scale-110'
+                            : 'text-gray-400 hover:text-red-500 hover:bg-red-50'
+                        }`}
+                        title={t('delete')}
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </>
+                  )}
+                </div>
               </motion.div>
             ))}
           </div>
@@ -142,10 +201,10 @@ export default function KuttabManagement() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden relative text-black"
+              className="bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-y-auto max-h-[90vh] relative text-black"
             >
               <button 
-                onClick={() => setIsModalOpen(false)}
+                onClick={handleCloseModal}
                 className="absolute top-6 right-6 p-2 hover:bg-gray-100 rounded-xl transition-colors text-gray-400"
               >
                 <X className="w-5 h-5" />
@@ -155,12 +214,18 @@ export default function KuttabManagement() {
                 <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mb-6">
                   <Building className="w-6 h-6" />
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-2">New Kuttab</h3>
-                <p className="text-gray-500 mb-8">Register a new learning institution to organize your students.</p>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                  {editingKuttab ? t('edit_kuttab') : t('new_kuttab')}
+                </h3>
+                <p className="text-gray-500 mb-8">
+                  {editingKuttab 
+                    ? t('edit_kuttab_subtitle') 
+                    : t('new_kuttab_subtitle')}
+                </p>
 
-                <form onSubmit={handleAddKuttab} className="space-y-6">
+                <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-700 ml-1">Kuttab Name</label>
+                    <label className="text-sm font-bold text-gray-700 ml-1">{t('kuttab_name')}</label>
                     <input
                       required
                       type="text"
@@ -171,7 +236,7 @@ export default function KuttabManagement() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-700 ml-1">Location (Optional)</label>
+                    <label className="text-sm font-bold text-gray-700 ml-1">{t('location_optional')}</label>
                     <input
                       type="text"
                       className="w-full p-4 bg-gray-50 border rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all placeholder:text-gray-300"
@@ -185,7 +250,7 @@ export default function KuttabManagement() {
                     type="submit"
                     className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-2xl font-bold transition-all shadow-lg shadow-emerald-100 disabled:opacity-50"
                   >
-                    {isSubmitting ? 'Processing...' : 'Register Kuttab'}
+                    {isSubmitting ? t('processing') : editingKuttab ? t('update_kuttab') : t('register_kuttab')}
                   </button>
                 </form>
               </div>

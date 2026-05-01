@@ -1,18 +1,21 @@
 import { useState, FormEvent, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Save, User, Hash, Mail, Home, Building } from 'lucide-react';
+import { X, Save, User, Hash, Mail, Building } from 'lucide-react';
 import { dbService } from '../services/db';
 import { auth } from '../lib/firebase';
-import type { Student, Kuttab } from '../types';
+import type { Student, Kuttab, UserProfile } from '../types';
+import { useTranslation } from 'react-i18next';
 
 interface EditStudentModalProps {
   student: Student;
   isOpen: boolean;
   onClose: () => void;
   onSave: (data: Partial<Student>) => Promise<void>;
+  profile: UserProfile | null;
 }
 
-export default function EditStudentModal({ student, isOpen, onClose, onSave }: EditStudentModalProps) {
+export default function EditStudentModal({ student, isOpen, onClose, onSave, profile }: EditStudentModalProps) {
+  const { t } = useTranslation();
   const [name, setName] = useState(student.name);
   const [age, setAge] = useState((student.age ?? '').toString());
   const [email, setEmail] = useState(student.email || '');
@@ -20,11 +23,17 @@ export default function EditStudentModal({ student, isOpen, onClose, onSave }: E
   const [kuttabs, setKuttabs] = useState<Kuttab[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const isAdmin = profile?.role === 'admin';
+
   useEffect(() => {
     if (isOpen && auth.currentUser) {
-      dbService.getKuttabs(auth.currentUser.uid).then(setKuttabs);
+      if (isAdmin) {
+        dbService.getAllKuttabs().then(setKuttabs);
+      } else {
+        dbService.getKuttabs(auth.currentUser.uid).then(setKuttabs);
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, isAdmin]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -34,7 +43,7 @@ export default function EditStudentModal({ student, isOpen, onClose, onSave }: E
         name, 
         age: parseInt(age), 
         email: email.toLowerCase(),
-        kuttabName 
+        kuttabName: isAdmin ? kuttabName : (student.kuttabName || profile?.kuttabName || '')
       });
       onClose();
     } catch (err) {
@@ -59,7 +68,7 @@ export default function EditStudentModal({ student, isOpen, onClose, onSave }: E
             initial={{ scale: 0.95, opacity: 0, y: 20 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.95, opacity: 0, y: 20 }}
-            className="bg-white rounded-3xl w-full max-w-md p-8 relative z-10 shadow-2xl overflow-hidden"
+            className="bg-white rounded-3xl w-full max-w-md p-8 relative z-10 shadow-2xl overflow-y-auto max-h-[90vh] text-black"
           >
             <div className="absolute top-0 right-0 p-4">
               <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors text-black">
@@ -69,15 +78,15 @@ export default function EditStudentModal({ student, isOpen, onClose, onSave }: E
 
             <div className="space-y-6">
               <div>
-                <h3 className="text-2xl font-black text-gray-900 tracking-tight">Edit Student</h3>
-                <p className="text-gray-500 font-medium">Update basic information</p>
+                <h3 className="text-2xl font-black text-gray-900 tracking-tight">{t('edit_student_title')}</h3>
+                <p className="text-gray-500 font-medium">{t('edit_student_subtitle')}</p>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
                     <User className="w-4 h-4" />
-                    Student Name
+                    {t('student_name')}
                   </label>
                   <input
                     type="text"
@@ -91,7 +100,7 @@ export default function EditStudentModal({ student, isOpen, onClose, onSave }: E
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-gray-700 flex items-center gap-2 text-black">
                     <Hash className="w-4 h-4" />
-                    Age
+                    {t('age')}
                   </label>
                   <input
                     type="number"
@@ -105,7 +114,7 @@ export default function EditStudentModal({ student, isOpen, onClose, onSave }: E
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-gray-700 flex items-center gap-2 text-black">
                     <Mail className="w-4 h-4" />
-                    Student Email
+                    {t('student_email')}
                   </label>
                   <input
                     type="email"
@@ -114,25 +123,27 @@ export default function EditStudentModal({ student, isOpen, onClose, onSave }: E
                     placeholder="e.g. student@example.com"
                     className="w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-black font-medium"
                   />
-                  <p className="text-[10px] text-gray-400 font-bold px-1 uppercase tracking-wider">Required for student portal access</p>
+                  <p className="text-[10px] text-gray-400 font-bold px-1 uppercase tracking-wider">{t('required_for_portal')}</p>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700 flex items-center gap-2 text-black">
-                    <Building className="w-4 h-4" />
-                    Assigned Kuttab
-                  </label>
-                  <select
-                    value={kuttabName}
-                    onChange={(e) => setKuttabName(e.target.value)}
-                    className="w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-black font-medium"
-                  >
-                    <option value="">None / Independent</option>
-                    {kuttabs.map(k => (
-                      <option key={k.id} value={k.name}>{k.name}</option>
-                    ))}
-                  </select>
-                </div>
+                {isAdmin && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-gray-700 flex items-center gap-2 text-black">
+                      <Building className="w-4 h-4" />
+                      {t('assigned_kuttab')}
+                    </label>
+                    <select
+                      value={kuttabName}
+                      onChange={(e) => setKuttabName(e.target.value)}
+                      className="w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-black font-medium"
+                    >
+                      <option value="">{t('none_independent')}</option>
+                      {kuttabs.map(k => (
+                        <option key={k.id} value={k.name}>{k.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 <button
                   type="submit"
@@ -144,7 +155,7 @@ export default function EditStudentModal({ student, isOpen, onClose, onSave }: E
                   ) : (
                     <>
                       <Save className="w-5 h-5" />
-                      Save Changes
+                      {t('save_changes')}
                     </>
                   )}
                 </button>
