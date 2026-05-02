@@ -120,7 +120,7 @@ export default function Sidebar({ isOpen, onClose, profile }: SidebarProps) {
             </div>
           </div>
           <Link 
-            to={isStudent ? '/' : (profile?.uid ? `/teachers/${profile.uid}` : '#')}
+            to={isStudent ? `/students/${profile?.studentId}` : (profile?.uid ? `/teachers/${profile.uid}` : '#')}
             className="px-4 py-3 bg-white border border-gray-100 rounded-2xl shadow-sm block hover:border-emerald-200 transition-all group"
           >
             <p className="text-[9px] uppercase font-black text-emerald-500 tracking-widest mb-1 group-hover:text-emerald-600 transition-colors">

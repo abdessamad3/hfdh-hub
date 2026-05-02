@@ -63,7 +63,7 @@ export default function NextRevisionTask({ profile }: NextRevisionTaskProps) {
         setNextRevisions(data);
         setFetching(false);
         // Automatically check for overdue tasks whenever the list updates
-        dbService.checkAndCleanupOverdueTasks(auth.currentUser!.uid, isAdmin);
+        dbService.checkAndCleanupOverdueTasks(auth.currentUser!.uid, isAdmin, profile.kuttabName);
       }
     );
 

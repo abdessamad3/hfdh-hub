@@ -1,238 +1,149 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // ---------------------------------------------------------
-    // PHASE 3: Primitive Definition & Global Helpers
-    // ---------------------------------------------------------
-    
+    // Helpers
     function isSignedIn() {
       return request.auth != null;
     }
 
-    function isVerified() {
-      return isSignedIn() && request.auth.token.email_verified == true;
-    }
-
-    function incoming() {
-      return request.resource.data;
-    }
-
-    function existing() {
-      return resource.data;
-    }
-
-    function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
-    }
-
-    // Auth tokens don't have roles; we look them up in the 'users' collection
     function getUserData() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    function getRole() {
-      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) 
-        ? getUserData().get('role', 'none') 
-        : 'none';
+    function hasProfile() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
     function isAdmin() {
       return isSignedIn() && (
-        request.auth.token.email == 'abdessamadjibrane2@gmail.com' ||
-        request.auth.token.email == 'rachid.houlla@gmail.com' ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+        request.auth.token.email.lower() == 'abdessamadjibrane2@gmail.com' ||
+        request.auth.token.email.lower() == 'rachid.houlla@gmail.com' ||
+        request.auth.token.email.lower() == 'locatortradi@gmail.com' ||
+        (hasProfile() && getUserData().get('role', 'none') == 'admin')
       );
     }
 
     function isTeacher() {
-      // Admin is a super-teacher
       return isSignedIn() && (
         isAdmin() || 
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher')
+        (hasProfile() && getUserData().get('role', 'none') == 'teacher')
       );
     }
 
-    function isStudent() {
-      return isSignedIn() && getRole() == 'student';
-    }
-
-    // Relational helper: is this user the owner/subject of the data?
-    function isOwner(email) {
-      return isSignedIn() && request.auth.token.email == email;
-    }
-
-    // ---------------------------------------------------------
-    // PHASE 0: Default Deny
-    // ---------------------------------------------------------
+    // Default deny
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // ---------------------------------------------------------
-    // PHASE 4: Entity Match Blocks
-    // ---------------------------------------------------------
-
     // User Profiles
-    // isValidUser is implicit in the update block
     match /users/{uid} {
       allow get: if isSignedIn() && (isAdmin() || request.auth.uid == uid || resource.data.email == request.auth.token.email);
       allow list: if isSignedIn() && (isAdmin() || resource.data.email == request.auth.token.email);
-      allow create: if isSignedIn() && (isAdmin() || request.auth.uid == uid || incoming().email == request.auth.token.email);
-      allow update: if isSignedIn() && (
-        isAdmin() || (
-          (request.auth.uid == uid || resource.data.email == request.auth.token.email) && 
-          incoming().updatedAt == request.time
-        )
-      );
-      allow delete: if isAdmin() || (isSignedIn() && resource.data.email == request.auth.token.email);
+      allow create: if isSignedIn() && (isAdmin() || request.auth.uid == uid || request.resource.data.email == request.auth.token.email);
+      allow update: if isSignedIn() && (isAdmin() || request.auth.uid == uid);
+      allow delete: if isAdmin();
     }
 
     // Kuttabs
-    function isValidKuttab(data) {
-      return data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
-             data.teacherId is string && isValidId(data.teacherId);
-    }
-
     match /kuttabs/{kuttabId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn(); // Publicly listable for discovery/lookup
-      allow create: if isAdmin() && isValidKuttab(incoming()) && incoming().createdAt == request.time;
-      allow update: if isAdmin() && isValidKuttab(incoming()) && incoming().updatedAt == request.time;
+      allow read: if isSignedIn();
+      allow create, update: if isAdmin() || isTeacher();
       allow delete: if isAdmin();
     }
 
     // Login History
-    function isValidLoginHistory(data) {
-      return data.userId is string && data.userId == request.auth.uid &&
-             data.email is string && data.email.size() <= 255 &&
-             data.displayName is string &&
-             data.userAgent is string && data.userAgent.size() <= 1000;
+    match /login_history/{id} {
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read, list: if isAdmin();
     }
 
-    match /login_history/{id} {
-      allow read, list: if isAdmin();
-      allow create: if isSignedIn() && isValidLoginHistory(incoming()) && incoming().timestamp == request.time;
-      allow update, delete: if false;
+    // Relational Helpers for data access
+    function canAccessStudent(data) {
+      let email = request.auth.token.email.lower();
+      let uid = request.auth.uid;
+      return isAdmin() || 
+             data.teacherId == uid || 
+             data.kuttabResponsibleId == uid || 
+             data.get('email', '').lower() == email ||
+             (isTeacher() && hasProfile() && data.get('kuttabName', '') != '' && data.kuttabName == getUserData().get('kuttabName', ''));
+    }
+
+    function canAccessSubData(data) {
+      let email = request.auth.token.email.lower();
+      let uid = request.auth.uid;
+      return isAdmin() || 
+             data.teacherId == uid || 
+             data.kuttabResponsibleId == uid || 
+             data.get('studentEmail', '').lower() == email ||
+             (isTeacher() && hasProfile() && data.get('kuttabName', '') != '' && data.kuttabName == getUserData().get('kuttabName', ''));
     }
 
     // Students
-    function isValidStudent(data) {
-      return data.get('name', '') is string && data.get('name', '').size() <= 100 &&
-             data.get('age', 0) is number &&
-             data.get('email', '') is string &&
-             data.get('teacherId', '') is string &&
-             data.get('kuttabResponsibleId', '') is string;
-    }
-
     match /students/{studentId} {
-      // Allow all signed-in users to list for the leaderboard/ranking features
-      allow list: if isSignedIn();
-      allow get: if isSignedIn() && (
-        isAdmin() ||
-        isTeacher() || 
-        resource.data.email == request.auth.token.email ||
-        resource.data.teacherId == request.auth.uid ||
-        resource.data.kuttabResponsibleId == request.auth.uid
-      );
-      allow create: if isTeacher() && isValidStudent(incoming()) && incoming().enrollmentDate == request.time;
-      allow update: if (isTeacher() || isAdmin()) && isValidStudent(incoming()) && (
-        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'age', 'email', 'kuttabName', 'teacherId', 'kuttabResponsibleId', 'updatedAt', 'attendanceRate', 'accuracy', 'memorizationProgress', 'totalScore', 'totalHizbs'])
-      );
-      allow delete: if isAdmin() || (isTeacher() && resource.data.kuttabResponsibleId == request.auth.uid);
-    }
-
-    match /next_revisions/{revisionId} {
-      function isValidNextRevision(data) {
-        return data.get('studentId', '') is string &&
-               data.get('studentEmail', '') is string &&
-               data.get('teacherId', '') is string &&
-               data.get('surahName', '') is string &&
-               data.get('hizbNumber', 0) is number &&
-               data.get('quantity', 0) is number;
-      }
+      allow get: if isSignedIn() && canAccessStudent(resource.data);
       allow list: if isSignedIn() && (
-        isAdmin() ||
-        resource.data.teacherId == request.auth.uid || 
-        resource.data.kuttabResponsibleId == request.auth.uid ||
-        resource.data.get('studentEmail', 'none') == request.auth.token.email
+        isAdmin() || 
+        (isTeacher() && request.query.limit <= 100) || 
+        resource.data.get('email', '').lower() == request.auth.token.email.lower()
       );
-      allow get: if isSignedIn();
-      allow create: if isTeacher() && isValidNextRevision(incoming());
-      allow update: if (isTeacher() || isAdmin()) && isValidNextRevision(incoming());
-      allow delete: if isAdmin() || (isTeacher() && (
-        resource.data.teacherId == request.auth.uid || 
-        resource.data.kuttabResponsibleId == request.auth.uid
-      ));
+      allow create: if isTeacher();
+      allow update: if isAdmin() || (isTeacher() && canAccessStudent(resource.data));
+      allow delete: if isAdmin();
     }
 
-    // Sub-data (Attendance, Evaluations, etc.)
-    // We use a shared pattern for sub-data because they all follow the studentId -> Student relationship
-    function canAccessSubData(data) {
-      return isAdmin() || 
-             data.teacherId == request.auth.uid || 
-             data.kuttabResponsibleId == request.auth.uid ||
-             (isSignedIn() && data.get('studentEmail', 'none') == request.auth.token.email);
-    }
-
+    // Sub-data collections (Attendance, Evaluations, etc.)
     match /attendance/{id} {
-      // Secure List Query: Enforce teacherId, kuttabResponsibleId, studentEmail, or Admin
-      allow list: if isSignedIn() && (
-        request.auth.token.email == 'abdessamadjibrane2@gmail.com' ||
-        request.auth.token.email == 'rachid.houlla@gmail.com' ||
-        resource.data.teacherId == request.auth.uid ||
-        resource.data.kuttabResponsibleId == request.auth.uid ||
-        resource.data.get('studentEmail', 'none') == request.auth.token.email
-      );
       allow get: if isSignedIn() && canAccessSubData(resource.data);
-      allow create: if isTeacher() && incoming().timestamp == request.time;
-      allow update: if isTeacher() && canAccessSubData(existing()) && incoming().updatedAt == request.time;
-      allow delete: if isTeacher() && canAccessSubData(existing());
+      allow list: if isSignedIn() && (
+        isAdmin() || 
+        (isTeacher() && request.query.limit <= 100) || 
+        resource.data.get('studentEmail', '').lower() == request.auth.token.email.lower()
+      );
+      allow create, update: if isAdmin() || isTeacher();
+      allow delete: if isAdmin();
     }
 
     match /evaluations/{id} {
-      allow list: if isSignedIn() && (
-        request.auth.token.email == 'abdessamadjibrane2@gmail.com' ||
-        request.auth.token.email == 'rachid.houlla@gmail.com' ||
-        resource.data.teacherId == request.auth.uid ||
-        resource.data.kuttabResponsibleId == request.auth.uid ||
-        resource.data.get('studentEmail', 'none') == request.auth.token.email
-      );
       allow get: if isSignedIn() && canAccessSubData(resource.data);
-      allow create: if isTeacher() && incoming().timestamp == request.time;
-      allow update: if isTeacher() && canAccessSubData(existing()) && incoming().updatedAt == request.time;
-      allow delete: if isTeacher() && canAccessSubData(existing());
+      allow list: if isSignedIn() && (
+        isAdmin() || 
+        (isTeacher() && request.query.limit <= 100) || 
+        resource.data.get('studentEmail', '').lower() == request.auth.token.email.lower()
+      );
+      allow create, update: if isAdmin() || isTeacher();
+      allow delete: if isAdmin();
     }
 
     match /memorizations/{id} {
-      allow list: if isSignedIn() && (
-        request.auth.token.email == 'abdessamadjibrane2@gmail.com' ||
-        request.auth.token.email == 'rachid.houlla@gmail.com' ||
-        resource.data.teacherId == request.auth.uid ||
-        resource.data.kuttabResponsibleId == request.auth.uid ||
-        resource.data.get('studentEmail', 'none') == request.auth.token.email
-      );
       allow get: if isSignedIn() && canAccessSubData(resource.data);
-      allow create: if isTeacher() && incoming().timestamp == request.time;
-      allow update: if isTeacher() && canAccessSubData(existing()) && incoming().updatedAt == request.time;
-      allow delete: if isTeacher() && canAccessSubData(existing());
+      allow list: if isSignedIn() && (
+        isAdmin() || 
+        (isTeacher() && request.query.limit <= 100) || 
+        resource.data.get('studentEmail', '').lower() == request.auth.token.email.lower()
+      );
+      allow create, update: if isAdmin() || isTeacher();
+      allow delete: if isAdmin();
     }
 
     match /revisions/{id} {
-      allow list: if isSignedIn() && (
-        request.auth.token.email == 'abdessamadjibrane2@gmail.com' ||
-        request.auth.token.email == 'rachid.houlla@gmail.com' ||
-        resource.data.teacherId == request.auth.uid ||
-        resource.data.kuttabResponsibleId == request.auth.uid ||
-        resource.data.get('studentEmail', 'none') == request.auth.token.email
-      );
       allow get: if isSignedIn() && canAccessSubData(resource.data);
-      allow create: if isTeacher() && incoming().timestamp == request.time;
-      allow update: if isTeacher() && canAccessSubData(existing()) && incoming().updatedAt == request.time;
-      allow delete: if isTeacher() && canAccessSubData(existing());
+      allow list: if isSignedIn() && (
+        isAdmin() || 
+        (isTeacher() && request.query.limit <= 100) || 
+        resource.data.get('studentEmail', '').lower() == request.auth.token.email.lower()
+      );
+      allow create, update: if isAdmin() || isTeacher();
+      allow delete: if isAdmin();
+    }
+
+    match /next_revisions/{id} {
+      allow get: if isSignedIn() && canAccessSubData(resource.data);
+      allow list: if isSignedIn() && (
+        isAdmin() || 
+        (isTeacher() && request.query.limit <= 100) || 
+        resource.data.get('studentEmail', '').lower() == request.auth.token.email.lower()
+      );
+      allow create, update, delete: if isAdmin() || isTeacher();
     }
   }
 }
-

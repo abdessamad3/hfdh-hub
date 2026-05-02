@@ -30,6 +30,7 @@ export interface Student {
   totalHizbs: number;
   accuracy: number;
   totalScore: number;
+  gender: 'male' | 'female';
   kuttabResponsibleId?: string; // ID of the teacher responsible for the kuttab
   stats?: {
     attendanceRate: number;

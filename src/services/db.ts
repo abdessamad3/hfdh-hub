@@ -18,7 +18,8 @@ import {
   Timestamp,
   increment,
   writeBatch,
-  type DocumentData
+  type DocumentData,
+  type QueryFilterConstraint
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import type { Student, Attendance, Memorization, Evaluation, Revision, UserProfile, UserRole, Kuttab, NextRevision } from '../types';
@@ -87,7 +88,8 @@ export const dbService = {
   },
 
   async getAllKuttabs() {
-    const snapshot = await getDocs(collection(db, 'kuttabs'));
+    const q = query(collection(db, 'kuttabs'), limit(100));
+    const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Kuttab));
   },
 
@@ -120,14 +122,6 @@ export const dbService = {
       const snap = await getDocs(q);
       if (!snap.empty) {
         kuttabResponsibleId = snap.docs[0].data().teacherId;
-      }
-    }
-
-    if (student.email) {
-      const qEmail = query(collection(db, 'students'), where('email', '==', student.email.toLowerCase()));
-      const snapEmail = await getDocs(qEmail);
-      if (!snapEmail.empty) {
-        throw new Error('A student with this email already exists.');
       }
     }
 
@@ -203,28 +197,31 @@ export const dbService = {
     if (isAdmin) {
       return this.getAllStudents();
     }
-    const queries = [
-      getDocs(query(collection(db, 'students'), where('teacherId', '==', teacherId))),
-      getDocs(query(collection(db, 'students'), where('kuttabResponsibleId', '==', teacherId)))
-    ];
-
+    
+    let q;
     if (kuttabName) {
-      queries.push(getDocs(query(collection(db, 'students'), where('kuttabName', '==', kuttabName))));
+      // If teacher belongs to a kuttab, show JUST students from that same kuttab
+      q = query(
+        collection(db, 'students'), 
+        where('kuttabName', '==', kuttabName),
+        limit(100)
+      );
+    } else {
+      // Otherwise show students where this teacher is either the teacher or responsible
+      q = query(
+        collection(db, 'students'), 
+        or(
+          where('teacherId', '==', teacherId),
+          where('kuttabResponsibleId', '==', teacherId)
+        ),
+        limit(100)
+      );
     }
 
-    const snapshots = await Promise.all(queries);
+    const snapshot = await getDocs(q);
     
-    const combinedDocs = [] as any[];
-    snapshots.forEach(snap => {
-      snap.docs.forEach(doc => {
-        if (!combinedDocs.some(d => d.id === doc.id)) {
-          combinedDocs.push(doc);
-        }
-      });
-    });
-
-    return combinedDocs.map(doc => {
-      const data = doc.data();
+    return snapshot.docs.map(doc => {
+      const data = doc.data() as any;
       // Safely handle Firestore Timestamp or string
       const enrollmentDate = data.enrollmentDate?.toDate 
         ? data.enrollmentDate.toDate().toISOString() 
@@ -243,10 +240,79 @@ export const dbService = {
     });
   },
 
-  async getAllStudents() {
-    const snapshot = await getDocs(collection(db, 'students'));
+  async getTopRankingStudents(limitCount: number = 10) {
+    try {
+      const q = query(
+        collection(db, 'students'), 
+        orderBy('totalScore', 'desc'), 
+        limit(limitCount)
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => {
+        const data = doc.data() as any;
+        return {
+          id: doc.id,
+          ...data,
+          enrollmentDate: data.enrollmentDate?.toDate 
+            ? data.enrollmentDate.toDate().toISOString() 
+            : (data.enrollmentDate || new Date().toISOString())
+        } as Student;
+      });
+    } catch (error) {
+      console.error("Error fetching top ranking students:", error);
+      return [];
+    }
+  },
+
+  async getStudentsByKuttab(kuttabName: string) {
+    try {
+      const q = query(
+        collection(db, 'students'), 
+        where('kuttabName', '==', kuttabName),
+        limit(100)
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => {
+        const data = doc.data() as any;
+        return {
+          id: doc.id,
+          ...data,
+          enrollmentDate: data.enrollmentDate?.toDate 
+            ? data.enrollmentDate.toDate().toISOString() 
+            : (data.enrollmentDate || new Date().toISOString())
+        } as Student;
+      });
+    } catch (error) {
+      console.error("Error fetching students by kuttab:", error);
+      return [];
+    }
+  },
+
+  async getAllStudents(kuttabName?: string, isAdmin: boolean = false) {
+    let q;
+    if (isAdmin) {
+      q = query(collection(db, 'students'), limit(100));
+    } else if (kuttabName) {
+      q = query(
+        collection(db, 'students'), 
+        where('kuttabName', '==', kuttabName),
+        limit(100)
+      );
+    } else {
+      // Fallback for non-admin without kuttab: only their own students
+      q = query(
+        collection(db, 'students'),
+        or(
+          where('teacherId', '==', auth.currentUser?.uid),
+          where('kuttabResponsibleId', '==', auth.currentUser?.uid)
+        ),
+        limit(100)
+      );
+    }
+
+    const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => {
-      const data = doc.data();
+      const data = doc.data() as any;
       const enrollmentDate = data.enrollmentDate?.toDate 
         ? data.enrollmentDate.toDate().toISOString() 
         : (data.enrollmentDate || new Date().toISOString());
@@ -261,7 +327,7 @@ export const dbService = {
 
   subscribeStudents(teacherId: string, kuttabName: string | undefined, isAdmin: boolean, callback: (students: Student[]) => void) {
     if (isAdmin) {
-      return onSnapshot(query(collection(db, 'students')), (snapshot) => {
+      return onSnapshot(query(collection(db, 'students'), limit(100)), (snapshot) => {
         const students = snapshot.docs.map(doc => {
           const data = doc.data();
           const enrollmentDate = data.enrollmentDate?.toDate 
@@ -286,19 +352,24 @@ export const dbService = {
     }
 
     // For non-admin, subscribe to students where teacher is teacherId OR kuttabResponsibleId OR same kuttabName
-    const conditions = [
-      where('teacherId', '==', teacherId),
-      where('kuttabResponsibleId', '==', teacherId)
-    ];
-
+    let q;
     if (kuttabName) {
-      conditions.push(where('kuttabName', '==', kuttabName));
+      // Show JUST students with same kuttab
+      q = query(
+        collection(db, 'students'), 
+        where('kuttabName', '==', kuttabName),
+        limit(100)
+      );
+    } else {
+      q = query(
+        collection(db, 'students'),
+        or(
+          where('teacherId', '==', teacherId),
+          where('kuttabResponsibleId', '==', teacherId)
+        ),
+        limit(100)
+      );
     }
-
-    const q = query(
-      collection(db, 'students'),
-      or(...conditions)
-    );
     
     return onSnapshot(q, (snapshot) => {
       const students = snapshot.docs.map(doc => {
@@ -372,7 +443,8 @@ export const dbService = {
         const cleanData = Object.fromEntries(
           Object.entries({
             ...enrichedRecord,
-            timestamp: serverTimestamp()
+            timestamp: serverTimestamp(),
+            updatedAt: serverTimestamp()
           }).filter(([_, v]) => v !== undefined)
         );
 
@@ -383,8 +455,7 @@ export const dbService = {
           return addDoc(collection(db, 'attendance'), cleanData);
         }
       } catch (err) {
-        console.error(`Error saving attendance for student ${record.studentId}:`, err);
-        throw err;
+        return handleFirestoreError(err, OperationType.WRITE, 'attendance');
       }
     });
 
@@ -403,16 +474,16 @@ export const dbService = {
 
   async getAttendanceByDate(teacherId: string, kuttabName: string | undefined, date: string, isAdmin: boolean = false) {
     if (isAdmin) {
-      const snap = await getDocs(query(collection(db, 'attendance'), where('date', '==', date)));
+      const snap = await getDocs(query(collection(db, 'attendance'), where('date', '==', date), limit(100)));
       return snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Attendance));
     }
     const queries = [
-      getDocs(query(collection(db, 'attendance'), where('teacherId', '==', teacherId), where('date', '==', date))),
-      getDocs(query(collection(db, 'attendance'), where('kuttabResponsibleId', '==', teacherId), where('date', '==', date)))
+      getDocs(query(collection(db, 'attendance'), where('teacherId', '==', teacherId), where('date', '==', date), limit(100))),
+      getDocs(query(collection(db, 'attendance'), where('kuttabResponsibleId', '==', teacherId), where('date', '==', date), limit(100)))
     ];
 
     if (kuttabName) {
-      queries.push(getDocs(query(collection(db, 'attendance'), where('kuttabName', '==', kuttabName), where('date', '==', date))));
+      queries.push(getDocs(query(collection(db, 'attendance'), where('kuttabName', '==', kuttabName), where('date', '==', date), limit(100))));
     }
 
     const snapshots = await Promise.all(queries);
@@ -433,7 +504,8 @@ export const dbService = {
     const q = query(
       collection(db, 'attendance'),
       where('studentId', '==', studentId),
-      orderBy('date', 'desc')
+      orderBy('date', 'desc'),
+      limit(100)
     );
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Attendance));
@@ -451,7 +523,11 @@ export const dbService = {
     const dateStr = `${year}-${month}-${day}`;
 
     if (isAdmin) {
-      const snap = await getDocs(query(collection(db, 'attendance'), where('date', '>=', dateStr)));
+      const snap = await getDocs(query(
+        collection(db, 'attendance'), 
+        where('date', '>=', dateStr),
+        limit(50)
+      ));
       const records = snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Attendance));
       return records.sort((a, b) => {
         const dateCompare = b.date.localeCompare(a.date);
@@ -462,27 +538,30 @@ export const dbService = {
       });
     }
 
-    const queries = [
-      getDocs(query(collection(db, 'attendance'), where('teacherId', '==', teacherId), where('date', '>=', dateStr))),
-      getDocs(query(collection(db, 'attendance'), where('kuttabResponsibleId', '==', teacherId), where('date', '>=', dateStr)))
-    ];
-
+    let q;
     if (kuttabName) {
-      queries.push(getDocs(query(collection(db, 'attendance'), where('kuttabName', '==', kuttabName), where('date', '>=', dateStr))));
+      q = query(
+        collection(db, 'attendance'), 
+        where('kuttabName', '==', kuttabName), 
+        where('date', '>=', dateStr),
+        limit(50)
+      );
+    } else {
+      q = query(
+        collection(db, 'attendance'), 
+        and(
+          or(
+            where('teacherId', '==', teacherId),
+            where('kuttabResponsibleId', '==', teacherId)
+          ),
+          where('date', '>=', dateStr)
+        ),
+        limit(50)
+      );
     }
 
-    const snapshots = await Promise.all(queries);
-
-    const combinedDocs = [] as any[];
-    snapshots.forEach(snap => {
-      snap.docs.forEach(doc => {
-        if (!combinedDocs.some(d => d.id === doc.id)) {
-          combinedDocs.push(doc);
-        }
-      });
-    });
-
-    const records = combinedDocs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Attendance));
+    const snap = await getDocs(q);
+    const records = snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Attendance));
     
     return records.sort((a, b) => {
       const dateCompare = b.date.localeCompare(a.date);
@@ -508,13 +587,18 @@ export const dbService = {
   },
 
   async getMemorizations(studentId: string) {
-    const q = query(
-      collection(db, 'memorizations'),
-      where('studentId', '==', studentId),
-      orderBy('date', 'desc')
-    );
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Memorization));
+    try {
+      const q = query(
+        collection(db, 'memorizations'),
+        where('studentId', '==', studentId),
+        orderBy('date', 'desc'),
+        limit(50)
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Memorization));
+    } catch (error) {
+      return handleFirestoreError(error, OperationType.LIST, 'memorizations');
+    }
   },
 
   // Evaluations
@@ -617,11 +701,13 @@ export const dbService = {
       const [attendanceSnap, evaluationSnap] = await Promise.all([
         getDocs(query(
           collection(db, 'attendance'), 
-          where('studentId', '==', studentId)
+          where('studentId', '==', studentId),
+          limit(100)
         )),
         getDocs(query(
           collection(db, 'evaluations'), 
-          where('studentId', '==', studentId)
+          where('studentId', '==', studentId),
+          limit(100)
         ))
       ]);
 
@@ -693,7 +779,8 @@ export const dbService = {
       const q = query(
         collection(db, 'evaluations'),
         where('studentId', '==', studentId),
-        orderBy('date', 'desc')
+        orderBy('date', 'desc'),
+        limit(50)
       );
       const snapshot = await getDocs(q);
       const items = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Evaluation));
@@ -719,9 +806,13 @@ export const dbService = {
     
     let q;
     if (isAdmin) {
-      q = query(collection(db, 'evaluations'), where('date', '>=', dateStr));
+      q = query(
+        collection(db, 'evaluations'), 
+        where('date', '>=', dateStr),
+        limit(50)
+      );
     } else {
-      const teacherConditions = [
+      const teacherConditions: QueryFilterConstraint[] = [
         where('teacherId', '==', teacherId),
         where('kuttabResponsibleId', '==', teacherId)
       ];
@@ -735,7 +826,8 @@ export const dbService = {
           or(...teacherConditions),
           where('date', '>=', dateStr)
         ),
-        orderBy('date', 'desc')
+        orderBy('date', 'desc'),
+        limit(50)
       );
     }
     
@@ -768,7 +860,11 @@ export const dbService = {
       const dateStr = `${year}-${month}-${day}`;
 
       if (isAdmin) {
-        const snap = await getDocs(query(collection(db, 'evaluations'), where('date', '>=', dateStr)));
+        const snap = await getDocs(query(
+          collection(db, 'evaluations'), 
+          where('date', '>=', dateStr),
+          limit(50)
+        ));
         const evaluations = snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Evaluation));
         return evaluations.sort((a, b) => {
           const dateCompare = b.date.localeCompare(a.date);
@@ -779,27 +875,30 @@ export const dbService = {
         });
       }
 
-      const queries = [
-        getDocs(query(collection(db, 'evaluations'), where('teacherId', '==', teacherId), where('date', '>=', dateStr))),
-        getDocs(query(collection(db, 'evaluations'), where('kuttabResponsibleId', '==', teacherId), where('date', '>=', dateStr)))
-      ];
-
+      let q;
       if (kuttabName) {
-        queries.push(getDocs(query(collection(db, 'evaluations'), where('kuttabName', '==', kuttabName), where('date', '>=', dateStr))));
+        q = query(
+          collection(db, 'evaluations'), 
+          where('kuttabName', '==', kuttabName), 
+          where('date', '>=', dateStr),
+          limit(50)
+        );
+      } else {
+        q = query(
+          collection(db, 'evaluations'),
+          and(
+            or(
+              where('teacherId', '==', teacherId),
+              where('kuttabResponsibleId', '==', teacherId)
+            ),
+            where('date', '>=', dateStr)
+          ),
+          limit(50)
+        );
       }
 
-      const snapshots = await Promise.all(queries);
-
-      const combinedDocs = [] as any[];
-      snapshots.forEach(snap => {
-        snap.docs.forEach(doc => {
-          if (!combinedDocs.some(d => d.id === doc.id)) {
-            combinedDocs.push(doc);
-          }
-        });
-      });
-
-      const evaluations = combinedDocs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Evaluation));
+      const snap = await getDocs(q);
+      const evaluations = snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Evaluation));
       
       // Sort in-memory: Date descending, then Timestamp descending
       return evaluations.sort((a, b) => {
@@ -917,7 +1016,8 @@ export const dbService = {
       const q = query(
         collection(db, 'revisions'),
         where('studentId', '==', studentId),
-        orderBy('date', 'desc')
+        orderBy('date', 'desc'),
+        limit(50) // Align with firestore rules limit
       );
       const snapshot = await getDocs(q);
       const items = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Revision));
@@ -947,7 +1047,11 @@ export const dbService = {
       const dateStr = `${year}-${month}-${day}`;
 
       if (isAdmin) {
-        const snap = await getDocs(query(collection(db, 'revisions'), where('date', '>=', dateStr)));
+        const snap = await getDocs(query(
+          collection(db, 'revisions'), 
+          where('date', '>=', dateStr),
+          limit(50)
+        ));
         const revisions = snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Revision));
         return revisions.sort((a, b) => {
           const dateCompare = b.date.localeCompare(a.date);
@@ -958,27 +1062,30 @@ export const dbService = {
         });
       }
 
-      const queries = [
-        getDocs(query(collection(db, 'revisions'), where('teacherId', '==', teacherId), where('date', '>=', dateStr))),
-        getDocs(query(collection(db, 'revisions'), where('kuttabResponsibleId', '==', teacherId), where('date', '>=', dateStr)))
-      ];
-
+      let q;
       if (kuttabName) {
-        queries.push(getDocs(query(collection(db, 'revisions'), where('kuttabName', '==', kuttabName), where('date', '>=', dateStr))));
+        q = query(
+          collection(db, 'revisions'), 
+          where('kuttabName', '==', kuttabName), 
+          where('date', '>=', dateStr),
+          limit(50)
+        );
+      } else {
+        q = query(
+          collection(db, 'revisions'),
+          and(
+            or(
+              where('teacherId', '==', teacherId),
+              where('kuttabResponsibleId', '==', teacherId)
+            ),
+            where('date', '>=', dateStr)
+          ),
+          limit(50)
+        );
       }
 
-      const snapshots = await Promise.all(queries);
-
-      const combinedDocs = [] as any[];
-      snapshots.forEach(snap => {
-        snap.docs.forEach(doc => {
-          if (!combinedDocs.some(d => d.id === doc.id)) {
-            combinedDocs.push(doc);
-          }
-        });
-      });
-
-      const revisions = combinedDocs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Revision));
+      const snap = await getDocs(q);
+      const revisions = snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Revision));
       
       // Sort in-memory: Date descending, then Timestamp descending
       return revisions.sort((a, b) => {
@@ -998,9 +1105,13 @@ export const dbService = {
     const today = new Date().toISOString().split('T')[0];
     let q;
     if (isAdmin) {
-      q = query(collection(db, 'revisions'), where('date', '==', today));
+      q = query(
+        collection(db, 'revisions'), 
+        where('date', '==', today),
+        limit(50)
+      );
     } else {
-      const teacherConditions = [
+      const teacherConditions: QueryFilterConstraint[] = [
         where('teacherId', '==', teacherId),
         where('kuttabResponsibleId', '==', teacherId)
       ];
@@ -1013,7 +1124,8 @@ export const dbService = {
         and(
           or(...teacherConditions),
           where('date', '==', today)
-        )
+        ),
+        limit(50)
       );
     }
     
@@ -1038,7 +1150,7 @@ export const dbService = {
       const dateStr = new Date().toISOString().split('T')[0];
 
       if (isAdmin) {
-        const snap = await getDocs(query(collection(db, 'revisions'), where('date', '==', dateStr)));
+        const snap = await getDocs(query(collection(db, 'revisions'), where('date', '==', dateStr), limit(100)));
         const revisions = snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Revision));
         return revisions.sort((a, b) => {
           const bTime = (b as any).timestamp?.toMillis?.() || 0;
@@ -1048,12 +1160,12 @@ export const dbService = {
       }
 
       const queries = [
-        getDocs(query(collection(db, 'revisions'), where('teacherId', '==', teacherId), where('date', '==', dateStr))),
-        getDocs(query(collection(db, 'revisions'), where('kuttabResponsibleId', '==', teacherId), where('date', '==', dateStr)))
+        getDocs(query(collection(db, 'revisions'), where('teacherId', '==', teacherId), where('date', '==', dateStr), limit(100))),
+        getDocs(query(collection(db, 'revisions'), where('kuttabResponsibleId', '==', teacherId), where('date', '==', dateStr), limit(100)))
       ];
 
       if (kuttabName) {
-        queries.push(getDocs(query(collection(db, 'revisions'), where('kuttabName', '==', kuttabName), where('date', '==', dateStr))));
+        queries.push(getDocs(query(collection(db, 'revisions'), where('kuttabName', '==', kuttabName), where('date', '==', dateStr), limit(100))));
       }
 
       const snapshots = await Promise.all(queries);
@@ -1107,10 +1219,11 @@ export const dbService = {
       q = query(
         collection(db, 'revisions'),
         where('date', '>=', startOfMonth),
-        where('date', '<=', endOfMonth)
+        where('date', '<=', endOfMonth),
+        limit(100)
       );
     } else {
-      const teacherConditions = [
+      const teacherConditions: QueryFilterConstraint[] = [
         where('teacherId', '==', teacherId),
         where('kuttabResponsibleId', '==', teacherId)
       ];
@@ -1124,7 +1237,8 @@ export const dbService = {
           where('date', '>=', startOfMonth),
           where('date', '<=', endOfMonth),
           or(...teacherConditions)
-        )
+        ),
+        limit(100)
       );
     }
 
@@ -1159,19 +1273,20 @@ export const dbService = {
         const q = query(
           collection(db, 'revisions'),
           where('date', '>=', startOfMonth),
-          where('date', '<=', endOfMonth)
+          where('date', '<=', endOfMonth),
+          limit(100)
         );
         const snapshot = await getDocs(q);
         return snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Revision));
       }
 
       const queries = [
-        getDocs(query(collection(db, 'revisions'), where('teacherId', '==', teacherId), where('date', '>=', startOfMonth), where('date', '<=', endOfMonth))),
-        getDocs(query(collection(db, 'revisions'), where('kuttabResponsibleId', '==', teacherId), where('date', '>=', startOfMonth), where('date', '<=', endOfMonth)))
+        getDocs(query(collection(db, 'revisions'), where('teacherId', '==', teacherId), where('date', '>=', startOfMonth), where('date', '<=', endOfMonth), limit(100))),
+        getDocs(query(collection(db, 'revisions'), where('kuttabResponsibleId', '==', teacherId), where('date', '>=', startOfMonth), where('date', '<=', endOfMonth), limit(100)))
       ];
 
       if (kuttabName) {
-        queries.push(getDocs(query(collection(db, 'revisions'), where('kuttabName', '==', kuttabName), where('date', '>=', startOfMonth), where('date', '<=', endOfMonth))));
+        queries.push(getDocs(query(collection(db, 'revisions'), where('kuttabName', '==', kuttabName), where('date', '>=', startOfMonth), where('date', '<=', endOfMonth), limit(100))));
       }
 
       const snapshots = await Promise.all(queries);
@@ -1233,10 +1348,8 @@ export const dbService = {
     try {
       const today = new Date().toISOString().split('T')[0];
       if (nextRevision.dueDate < today) {
-        // "if the students doesn't make the revision he will be deleted automaticly"
-        // Deleting student record as requested
-        await this.deleteStudent(nextRevision.studentId);
-        // Also delete the task
+        // We only remove the overdue task to keep things clean, 
+        // but WE NEVER delete the student automatically as it's too destructive.
         await this.deleteNextRevision(nextRevision.id);
         return true;
       }
@@ -1247,17 +1360,39 @@ export const dbService = {
     }
   },
 
-  async checkAndCleanupOverdueTasks(teacherId: string, isAdmin: boolean) {
-    // This will be called when the dashboard or tasks page loads
-    const snapshot = await getDocs(query(collection(db, 'next_revisions')));
-    const revisionsByTeacher = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as NextRevision))
-      .filter(r => isAdmin || r.teacherId === teacherId || r.kuttabResponsibleId === teacherId);
-    
-    const today = new Date().toISOString().split('T')[0];
-    for (const rev of revisionsByTeacher) {
-      if (rev.dueDate < today) {
-        await this.handleNextRevisionOverdue(rev);
+  async checkAndCleanupOverdueTasks(teacherId: string, isAdmin: boolean, kuttabName?: string) {
+    try {
+      // This will be called when the dashboard or tasks page loads
+      let q;
+      if (isAdmin) {
+        q = query(collection(db, 'next_revisions'), limit(100));
+      } else {
+        const teacherConditions: QueryFilterConstraint[] = [
+          where('teacherId', '==', teacherId),
+          where('kuttabResponsibleId', '==', teacherId)
+        ];
+        if (kuttabName) {
+          teacherConditions.push(where('kuttabName', '==', kuttabName));
+        }
+
+        q = query(
+          collection(db, 'next_revisions'),
+          or(...teacherConditions),
+          limit(50)
+        );
       }
+
+      const snapshot = await getDocs(q);
+      const revisionsByTeacher = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as NextRevision));
+      
+      const today = new Date().toISOString().split('T')[0];
+      for (const rev of revisionsByTeacher) {
+        if (rev.dueDate < today) {
+          await this.handleNextRevisionOverdue(rev);
+        }
+      }
+    } catch (error) {
+      console.error("Error cleaning up overdue tasks:", error);
     }
   },
 
@@ -1307,10 +1442,11 @@ export const dbService = {
     if (isAdmin) {
       q = query(
         collection(db, 'next_revisions'),
-        orderBy('dueDate', 'asc')
+        orderBy('dueDate', 'asc'),
+        limit(50)
       );
     } else {
-      const teacherConditions = [
+      const teacherConditions: QueryFilterConstraint[] = [
         where('teacherId', '==', teacherId),
         where('kuttabResponsibleId', '==', teacherId)
       ];
@@ -1321,7 +1457,8 @@ export const dbService = {
       q = query(
         collection(db, 'next_revisions'),
         or(...teacherConditions),
-        orderBy('dueDate', 'asc')
+        orderBy('dueDate', 'asc'),
+        limit(50)
       );
     }
 
@@ -1335,11 +1472,15 @@ export const dbService = {
 
   async getStudentNextRevisions(studentId: string) {
     try {
-      const q = query(collection(db, 'next_revisions'), where('studentId', '==', studentId));
+      const q = query(
+        collection(db, 'next_revisions'), 
+        where('studentId', '==', studentId),
+        limit(50)
+      );
       const snapshot = await getDocs(q);
       return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as NextRevision));
     } catch (error) {
-      return handleFirestoreError(error, OperationType.GET, 'next_revisions');
+      return handleFirestoreError(error, OperationType.LIST, 'next_revisions');
     }
   },
 
@@ -1348,7 +1489,8 @@ export const dbService = {
       collection(db, 'next_revisions'),
       where('studentEmail', '==', studentEmail),
       where('dueDate', '>=', new Date().toISOString().split('T')[0]),
-      orderBy('dueDate', 'asc')
+      orderBy('dueDate', 'asc'),
+      limit(50)
     );
 
     return onSnapshot(q, (snapshot) => {
@@ -1458,6 +1600,12 @@ export const dbService = {
     return { id: snap.docs[0].id, ...snap.docs[0].data() } as Student;
   },
 
+  async getStudentsByEmail(email: string) {
+    const q = query(collection(db, 'students'), where('email', '==', email.toLowerCase()));
+    const snap = await getDocs(q);
+    return snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Student));
+  },
+
   async getUserByEmail(email: string) {
     const q = query(collection(db, 'users'), where('email', '==', email.toLowerCase()));
     const snap = await getDocs(q);
@@ -1526,18 +1674,21 @@ export const dbService = {
         getDocs(query(
           collection(db, 'attendance'), 
           where('studentEmail', '==', email.toLowerCase()), 
-          orderBy('date', 'desc')
+          orderBy('date', 'desc'),
+          limit(50)
         )),
         getDocs(query(
           collection(db, 'evaluations'), 
           where('studentEmail', '==', email.toLowerCase()), 
-          orderBy('date', 'desc')
+          orderBy('date', 'desc'),
+          limit(50)
         )),
         getDocs(query(
           collection(db, 'revisions'), 
           where('studentEmail', '==', email.toLowerCase()), 
           where('date', '==', todayStr),
-          orderBy('date', 'desc')
+          orderBy('date', 'desc'),
+          limit(50)
         ))
       ]);
 

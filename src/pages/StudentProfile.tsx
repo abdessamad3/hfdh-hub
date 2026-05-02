@@ -45,6 +45,7 @@ export default function StudentProfile({ profile }: StudentProfileProps) {
   const [nextRevisions, setNextRevisions] = useState<NextRevision[]>([]);
   const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingEvaluation, setEditingEvaluation] = useState<Evaluation | null>(null);
 
@@ -54,6 +55,8 @@ export default function StudentProfile({ profile }: StudentProfileProps) {
 
   const fetchData = async () => {
     if (!id || !auth.currentUser) return;
+    setLoading(true);
+    setError(null);
     try {
       const [studentData, evalData, revData, attData, nextRevData] = await Promise.all([
         dbService.getStudent(id),
@@ -67,8 +70,15 @@ export default function StudentProfile({ profile }: StudentProfileProps) {
       setRevisions(revData);
       setAttendance(attData);
       setNextRevisions(nextRevData);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching data:', err);
+      // Try to extract Firestore error info if it's our JSON format
+      try {
+        const errorInfo = JSON.parse(err.message);
+        setError(errorInfo.error || err.message);
+      } catch {
+        setError(err.message || 'Failed to load student profile');
+      }
     } finally {
       setLoading(false);
     }
@@ -155,8 +165,24 @@ export default function StudentProfile({ profile }: StudentProfileProps) {
     }
   };
 
-  if (loading) return <div className="p-8 text-center">{t('loading')}</div>;
-  if (!student) return <div className="p-8 text-center">{t('student_not_found')}</div>;
+  if (loading) return <div className="p-8 text-center text-gray-500 font-medium">{t('loading')}</div>;
+  
+  if (error || !student) {
+    return (
+      <div className="p-8 max-w-2xl mx-auto text-center space-y-4">
+        <div className="bg-red-50 text-red-700 p-6 rounded-2xl border border-red-100 shadow-sm">
+          <p className="text-lg font-bold mb-2">{t('student_not_found')}</p>
+          {error && <p className="text-sm opacity-80 font-mono break-all">{error}</p>}
+        </div>
+        <button 
+          onClick={() => navigate('/students')}
+          className="text-emerald-600 hover:underline font-medium"
+        >
+          &larr; {t('back_to_students')}
+        </button>
+      </div>
+    );
+  }
 
   const chartData = evaluations.map(e => ({
     date: formatDate(e.date),
@@ -207,6 +233,13 @@ export default function StudentProfile({ profile }: StudentProfileProps) {
               <p className="text-gray-500 font-medium">
                 {t('years_old', { age: student.age })} • {student.enrollmentDate ? t('joined_on', { date: formatDate(student.enrollmentDate) }) : 'N/A'}
               </p>
+              {student.gender && (
+                <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-widest border ${
+                  student.gender === 'male' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-pink-50 text-pink-600 border-pink-100'
+                }`}>
+                  {t(student.gender)}
+                </span>
+              )}
               {student.email ? (
                 <span className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-black uppercase tracking-wider border border-emerald-100/50">
                   <Mail className="w-3 h-3" />

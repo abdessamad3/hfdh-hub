@@ -253,11 +253,11 @@ export default function App() {
           ) : (
             <>
               <Route path="/" element={<Dashboard profile={profile} />} />
+              <Route path="/teachers/:id" element={<TeacherProfile profile={profile} />} />
               {profile?.role === 'admin' && (
                 <>
                   <Route path="/kuttabs" element={<KuttabManagement profile={profile} />} />
                   <Route path="/teachers" element={<TeachersList profile={profile} />} />
-                  <Route path="/teachers/:id" element={<TeacherProfile profile={profile} />} />
                   <Route path="/login-history" element={<LoginHistory profile={profile} />} />
                 </>
               )}

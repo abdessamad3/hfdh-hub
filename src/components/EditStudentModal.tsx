@@ -17,6 +17,7 @@ interface EditStudentModalProps {
 export default function EditStudentModal({ student, isOpen, onClose, onSave, profile }: EditStudentModalProps) {
   const { t } = useTranslation();
   const [name, setName] = useState(student.name);
+  const [gender, setGender] = useState<'male' | 'female'>(student.gender || 'male');
   const [age, setAge] = useState((student.age ?? '').toString());
   const [email, setEmail] = useState(student.email || '');
   const [kuttabName, setKuttabName] = useState(student.kuttabName || '');
@@ -41,6 +42,7 @@ export default function EditStudentModal({ student, isOpen, onClose, onSave, pro
     try {
       await onSave({ 
         name, 
+        gender,
         age: parseInt(age), 
         email: email.toLowerCase(),
         kuttabName: isAdmin ? kuttabName : (student.kuttabName || profile?.kuttabName || '')
@@ -95,6 +97,21 @@ export default function EditStudentModal({ student, isOpen, onClose, onSave, pro
                     onChange={(e) => setName(e.target.value)}
                     className="w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-black font-medium"
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                    <User className="w-4 h-4 ml-1" />
+                    {t('gender')}
+                  </label>
+                  <select
+                    value={gender}
+                    onChange={(e) => setGender(e.target.value as 'male' | 'female')}
+                    className="w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-black font-medium"
+                  >
+                    <option value="male">{t('male')}</option>
+                    <option value="female">{t('female')}</option>
+                  </select>
                 </div>
 
                 <div className="space-y-2">

@@ -27,14 +27,24 @@ export default function RankingPage({ profile }: RankingPageProps) {
   useEffect(() => {
     const fetchData = async () => {
       if (!auth.currentUser || !profile) return;
+      setLoading(true);
       try {
-        const [studentData, kuttabData] = await Promise.all([
-          dbService.getAllStudents(),
+        let studentData: Student[] = [];
+        
+        if (selectedKuttab === 'all') {
+          // If all regions, fetch global top 10
+          studentData = await dbService.getTopRankingStudents(10);
+        } else {
+          // If specific kuttab, fetch all for that kuttab
+          studentData = await dbService.getStudentsByKuttab(selectedKuttab);
+        }
+
+        const [kuttabData] = await Promise.all([
           dbService.getAllKuttabs()
         ]);
         
         let finalKuttabs = [...kuttabData];
-        // Ensure the profile's kuttab is in the list just in case (though getAllKuttabs should have it)
+        // Ensure the profile's kuttab is in the list just in case
         if (profile.kuttabName && !finalKuttabs.some(k => k.name === profile.kuttabName)) {
            const k = await dbService.getKuttabByName(profile.kuttabName);
            if (k) finalKuttabs.push(k);
@@ -53,15 +63,11 @@ export default function RankingPage({ profile }: RankingPageProps) {
       }
     };
     fetchData();
-  }, [profile, isAdmin, sortBy]);
+  }, [profile, isAdmin, sortBy, selectedKuttab]);
 
   const filteredStudents = useMemo(() => {
-    let result = [...students];
-    if (selectedKuttab !== 'all') {
-      result = result.filter(s => s.kuttabName === selectedKuttab);
-    }
-    return result.slice(0, 15); // Show more on leaderboard
-  }, [students, selectedKuttab]);
+    return [...students].slice(0, 15);
+  }, [students]);
 
   const distributionData = useMemo(() => {
     const counts: Record<number, number> = {};

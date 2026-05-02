@@ -11,7 +11,8 @@ import {
   Clock,
   Star,
   History,
-  ClipboardList
+  ClipboardList,
+  ChevronRight
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { 
@@ -49,14 +50,31 @@ export default function StudentPortal() {
     nextTasks: NextRevision[];
   } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [multiStudents, setMultiStudents] = useState<Student[]>([]);
 
   useEffect(() => {
     let unsubscribeNext: (() => void) | undefined;
 
-    const fetchPortalData = async () => {
+    const fetchPortalData = async (selectedStudent?: Student) => {
       if (!auth.currentUser?.email) return;
       try {
-        const student = await dbService.getStudentByEmail(auth.currentUser.email);
+        setLoading(true);
+        if (!selectedStudent) {
+          const students = await dbService.getStudentsByEmail(auth.currentUser.email);
+          if (students.length > 1) {
+            setMultiStudents(students);
+            setLoading(false);
+            return;
+          }
+          if (students.length === 0) {
+            setData(null);
+            setLoading(false);
+            return;
+          }
+          selectedStudent = students[0];
+        }
+
+        const student = selectedStudent;
         if (student) {
           const portalData = await dbService.getStudentDataForPortal(student.id, student.teacherId);
           setData({ ...portalData, nextTasks: [] });
@@ -64,6 +82,7 @@ export default function StudentPortal() {
           unsubscribeNext = dbService.subscribeStudentNextRevisions(student.email || '', (tasks) => {
             setData(prev => prev ? { ...prev, nextTasks: tasks } : { ...portalData, nextTasks: tasks } as any);
           });
+          setMultiStudents([]);
         }
       } catch (err) {
         console.error('Error fetching portal data:', err);
@@ -84,6 +103,44 @@ export default function StudentPortal() {
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <div className="w-12 h-12 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" />
         <p className="text-gray-500 font-medium animate-pulse">{t('loading_progress')}</p>
+      </div>
+    );
+  }
+
+  if (multiStudents.length > 1) {
+    return (
+      <div className="p-8 max-w-2xl mx-auto text-center space-y-8">
+        <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-3xl flex items-center justify-center mx-auto shadow-inner">
+          <BookOpen className="w-10 h-10" />
+        </div>
+        <div>
+          <h2 className="text-3xl font-black text-gray-900">{t('multiple_profiles_found')}</h2>
+          <p className="text-gray-600 mt-2">{t('select_your_profile')}</p>
+        </div>
+        <div className="grid gap-4">
+          {multiStudents.map(s => (
+            <button
+              key={s.id}
+              onClick={() => {
+                setLoading(true);
+                dbService.getStudentDataForPortal(s.id, s.teacherId).then(portalData => {
+                  setData({ ...portalData, nextTasks: [] });
+                  setMultiStudents([]);
+                  setLoading(false);
+                });
+              }}
+              className="p-6 bg-white border rounded-3xl text-left hover:border-emerald-500 hover:shadow-lg transition-all group border-gray-100"
+            >
+              <div className="flex justify-between items-center">
+                <div>
+                  <h4 className="font-bold text-xl text-gray-900">{s.name}</h4>
+                  <p className="text-gray-500 text-sm">{s.kuttabName || t('independent')}</p>
+                </div>
+                <ChevronRight className="w-6 h-6 text-gray-300 group-hover:text-emerald-500 group-hover:translate-x-1 transition-all" />
+              </div>
+            </button>
+          ))}
+        </div>
       </div>
     );
   }

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, FormEvent } from 'react';
-import { Search, Plus, Filter, ChevronRight, X, User as UserIcon, Building, Edit2, Trash2 } from 'lucide-react';
+import { Search, Plus, Filter, ChevronRight, X, User as UserIcon, Building, Edit2, Trash2, Hash, UserCircle, Mail } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'react-hot-toast';
@@ -29,7 +29,7 @@ export default function StudentsList({ profile }: StudentsListProps) {
   const [minScore, setMinScore] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'age' | 'totalScore'>('name');
   
-  const [newStudent, setNewStudent] = useState({ name: '', age: '', email: '', kuttabName: profile?.kuttabName || '' });
+  const [newStudent, setNewStudent] = useState({ name: '', age: '', email: '', kuttabName: profile?.kuttabName || '', gender: 'male' as 'male' | 'female' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -82,6 +82,7 @@ export default function StudentsList({ profile }: StudentsListProps) {
       await dbService.addStudent({
         name: newStudent.name,
         age: parseInt(newStudent.age),
+        gender: newStudent.gender,
         email: newStudent.email.toLowerCase(),
         kuttabName: isAdmin ? newStudent.kuttabName : (profile?.kuttabName || ''),
         enrollmentDate: new Date().toISOString(),
@@ -93,7 +94,7 @@ export default function StudentsList({ profile }: StudentsListProps) {
         totalScore: 0
       });
       setIsModalOpen(false);
-      setNewStudent({ name: '', age: '', email: '', kuttabName: profile?.kuttabName || '' });
+      setNewStudent({ name: '', age: '', email: '', kuttabName: profile?.kuttabName || '', gender: 'male' });
       toast.success(t('student_enrolled_success'));
     } catch (err) {
       console.error('Error adding student:', err);
@@ -289,12 +290,13 @@ export default function StudentsList({ profile }: StudentsListProps) {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[800px] table-fixed">
+            <table className="w-full min-w-[1000px] table-fixed">
               <thead>
                 <tr className="text-left text-xs uppercase text-gray-400 tracking-wider bg-gray-50">
-                  <th className="px-6 py-4 font-black w-1/4">{t('name')}</th>
+                  <th className="px-6 py-4 font-black w-1/3">{t('name')}</th>
                   <th className="px-6 py-4 font-black w-24">{t('age')}</th>
-                  <th className="px-6 py-4 font-black">{t('kuttab')}</th>
+                  <th className="px-6 py-4 font-black w-28">{t('gender')}</th>
+                  <th className="px-6 py-4 font-black w-40">{t('kuttab')}</th>
                   <th className="px-6 py-4 font-black w-40">{t('total_hizbs')}</th>
                   <th className="px-6 py-4 font-black w-32">{t('overall_score')}</th>
                   <th className="px-6 py-4 text-right w-32">{t('actions')}</th>
@@ -309,12 +311,21 @@ export default function StudentsList({ profile }: StudentsListProps) {
                   key={student.id}
                   className="group hover:bg-emerald-50/50 transition-colors"
                 >
-                  <td onClick={() => navigate(`/students/${student.id}`)} className="px-6 py-4 cursor-pointer">
-                    <div className="font-semibold text-gray-900">{student.name}</div>
+                  <td onClick={() => navigate(`/students/${student.id}`)} className="px-6 py-4 cursor-pointer truncate">
+                    <div className="font-semibold text-gray-900 truncate">{student.name}</div>
                   </td>
                   <td onClick={() => navigate(`/students/${student.id}`)} className="px-6 py-4 text-gray-600 cursor-pointer">{t('years_old', { age: student.age })}</td>
-                  <td onClick={() => navigate(`/students/${student.id}`)} className="px-6 py-4 cursor-pointer">
-                    <span className="font-medium text-gray-500 italic">
+                  <td onClick={() => navigate(`/students/${student.id}`)} className="px-6 py-4 text-gray-600 cursor-pointer">
+                    <span className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-wider ${
+                      student.gender === 'male' ? 'bg-blue-50 text-blue-700' : 
+                      student.gender === 'female' ? 'bg-pink-50 text-pink-700' : 
+                      'bg-gray-100 text-gray-500'
+                    }`}>
+                      {student.gender ? t(student.gender) : '—'}
+                    </span>
+                  </td>
+                  <td onClick={() => navigate(`/students/${student.id}`)} className="px-6 py-4 cursor-pointer truncate">
+                    <span className="font-medium text-gray-500 italic truncate">
                       {student.kuttabName || '—'}
                     </span>
                   </td>
@@ -406,7 +417,10 @@ export default function StudentsList({ profile }: StudentsListProps) {
 
                 <form onSubmit={handleAddStudent} className="space-y-6">
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-700">{t('full_name')}</label>
+                    <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                      <UserIcon className="w-4 h-4" />
+                      {t('full_name')}
+                    </label>
                     <input
                       required
                       type="text"
@@ -417,12 +431,13 @@ export default function StudentsList({ profile }: StudentsListProps) {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-700">{t('age')}</label>
+                    <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                      <Hash className="w-4 h-4" />
+                      {t('age')}
+                    </label>
                     <input
                       required
                       type="number"
-                      min="4"
-                      max="20"
                       className="w-full p-4 bg-gray-50 border rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none"
                       placeholder="e.g. 10"
                       value={newStudent.age}
@@ -430,7 +445,25 @@ export default function StudentsList({ profile }: StudentsListProps) {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-700">{t('student_email')}</label>
+                    <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                      <UserCircle className="w-4 h-4" />
+                      {t('gender')}
+                    </label>
+                    <select
+                      required
+                      className="w-full p-4 bg-gray-50 border rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                      value={newStudent.gender}
+                      onChange={(e) => setNewStudent({ ...newStudent, gender: e.target.value as 'male' | 'female' })}
+                    >
+                      <option value="male">{t('male')}</option>
+                      <option value="female">{t('female')}</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                      <Mail className="w-4 h-4" />
+                      {t('student_email')}
+                    </label>
                     <input
                       type="email"
                       className="w-full p-4 bg-gray-50 border rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none"

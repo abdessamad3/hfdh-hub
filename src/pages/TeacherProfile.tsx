@@ -35,24 +35,24 @@ export default function TeacherProfile({ profile }: TeacherProfileProps) {
   useEffect(() => {
     const fetchTeacherData = async () => {
       if (!id) return;
+      
+      // Permission Check: Only admin can view ANY teacher. 
+      // Teachers can only view themselves.
+      if (profile?.role !== 'admin' && profile?.uid !== id) {
+        setLoading(false);
+        setTeacher(null);
+        return;
+      }
+
       try {
         setLoading(true);
-        const [teacherData, studentData] = await Promise.all([
-          dbService.getUserById(id),
-          dbService.getStudents(id, undefined, false)
-        ]);
-        
-        // If not admin, the security rules will filter students anyway
-        // But getStudents already handles some filtering if it's not admin
-        
+        const teacherData = await dbService.getUserById(id);
         setTeacher(teacherData);
-        // Filter students to only show those belonging to the teacher's assigned kuttab
-        setStudents(studentData.filter(s => {
-          if (teacherData?.kuttabName) {
-            return s.kuttabName === teacherData.kuttabName;
-          }
-          return s.teacherId === id || s.kuttabResponsibleId === id;
-        }));
+        
+        if (teacherData) {
+          const studentData = await dbService.getStudents(id, teacherData.kuttabName, false);
+          setStudents(studentData);
+        }
       } catch (err) {
         console.error('Error fetching teacher data:', err);
       } finally {
@@ -61,7 +61,7 @@ export default function TeacherProfile({ profile }: TeacherProfileProps) {
     };
 
     fetchTeacherData();
-  }, [id]);
+  }, [id, profile]);
 
   const filteredStudents = useMemo(() => {
     return students.filter(s => 
@@ -97,9 +97,13 @@ export default function TeacherProfile({ profile }: TeacherProfileProps) {
 
   if (!teacher) {
     return (
-      <div className="p-8 text-center">
-        <p className="text-gray-500">{t('teacher_not_found')}</p>
-        <button onClick={() => navigate(-1)} className="mt-4 text-emerald-600 font-bold flex items-center justify-center gap-2 mx-auto">
+      <div className="p-8 text-center bg-white min-h-screen flex flex-col items-center justify-center space-y-4">
+        <div className="w-20 h-20 bg-red-50 text-red-500 rounded-3xl flex items-center justify-center mb-4">
+          <Shield className="w-10 h-10" />
+        </div>
+        <h2 className="text-2xl font-bold text-gray-900">{t('profile_inaccessible')}</h2>
+        <p className="text-gray-500 max-w-xs mx-auto">{t('profile_inaccessible_desc')}</p>
+        <button onClick={() => navigate(-1)} className="mt-4 bg-emerald-600 text-white px-6 py-2 rounded-xl font-bold flex items-center justify-center gap-2 mx-auto hover:bg-emerald-700 transition-all">
           <ChevronLeft className="w-4 h-4" />
           {t('go_back')}
         </button>
