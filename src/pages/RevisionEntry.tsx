@@ -1,8 +1,9 @@
 import { useState, useEffect, FormEvent } from 'react';
-import { History, Save, Calendar, User, MessageCircle, BookOpen, Trash2, Edit2, X, Star } from 'lucide-react';
+import { History, Save, Calendar, User, MessageCircle, BookOpen, Trash2, Edit2, X, Star, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'react-hot-toast';
 import { dbService } from '../services/db';
+import { getDayIndex } from '../lib/dateUtils';
 import { auth } from '../lib/firebase';
 import type { Student, Revision, UserProfile } from '../types';
 import { useTranslation } from 'react-i18next';
@@ -39,23 +40,28 @@ export default function RevisionEntry({ profile }: RevisionEntryProps) {
   const [monthFilter, setMonthFilter] = useState(new Date().toISOString().slice(0, 7));
   const [studentFilter, setStudentFilter] = useState('');
   const [fetchingMonthly, setFetchingMonthly] = useState(false);
+  const [kuttabs, setKuttabs] = useState<Record<string, any>>({});
 
   useEffect(() => {
     if (!auth.currentUser || !profile) return;
     
-    const fetchStudents = async () => {
+    const fetchData = async () => {
       try {
         const isAdmin = profile.role === 'admin';
-        const data = isAdmin 
-          ? await dbService.getAllStudents()
-          : await dbService.getStudents(auth.currentUser.uid, profile.kuttabName);
-        setStudents(data);
+        const [studentsData, kuttabsData] = await Promise.all([
+          isAdmin 
+            ? dbService.getAllStudents()
+            : dbService.getStudents(auth.currentUser.uid, profile.kuttabName),
+          dbService.getAllKuttabs()
+        ]);
+        setStudents(studentsData);
+        setKuttabs(Object.fromEntries(kuttabsData.map(k => [k.name.trim().toLowerCase(), k])));
       } catch (err) {
-        console.error('Error fetching students:', err);
+        console.error('Error fetching data:', err);
       }
     };
 
-    fetchStudents();
+    fetchData();
     
     const isAdmin = profile.role === 'admin';
     const unsubscribe = dbService.subscribeDailyRevisions(
@@ -143,9 +149,32 @@ export default function RevisionEntry({ profile }: RevisionEntryProps) {
     }
   };
 
+  const isSessionDay = () => {
+    const student = students.find(s => s.id === studentId);
+    const kName = student?.kuttabName?.trim().toLowerCase();
+    if (!kName || !kuttabs[kName]) return false;
+    const kuttab = kuttabs[kName];
+    const schedule = kuttab.schedule?.lessons;
+    if (!schedule) return false;
+
+    if (schedule[date]) {
+      return schedule[date].lessons.length > 0;
+    }
+
+    const dayIdx = getDayIndex(date);
+    const recurring = schedule[dayIdx.toString()];
+    return recurring && recurring.type === 'recurring' && recurring.lessons.length > 0;
+  };
+
+  const isValidSession = isSessionDay();
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!auth.currentUser) return;
+    if (!isValidSession) {
+      toast.error(t('no_session_warning') || 'You cannot add a revision on a non-session day.');
+      return;
+    }
     setLoading(true);
     try {
       const hNumber = parseInt(hizbNumber) || 0;
@@ -347,8 +376,14 @@ export default function RevisionEntry({ profile }: RevisionEntryProps) {
                 required
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-blue-500"
+                className={`w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 ${!isValidSession ? 'border-red-300 focus:ring-red-500' : 'focus:ring-blue-500'}`}
               />
+              {!isValidSession && studentId && (
+                <p className="text-xs font-bold text-red-500 mt-1 flex items-center gap-1">
+                   <AlertCircle className="w-3 h-3" />
+                  {t('no_session')}
+                </p>
+              )}
             </div>
           </div>
 
@@ -367,7 +402,7 @@ export default function RevisionEntry({ profile }: RevisionEntryProps) {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !isValidSession}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-100 disabled:opacity-50 mt-4"
           >
             {loading ? (

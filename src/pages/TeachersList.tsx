@@ -36,7 +36,8 @@ export default function TeachersList({ profile }: TeachersListProps) {
     kuttabName: ''
   });
 
-  const isAdmin = profile?.role === 'admin';
+  const isSenior = profile?.role === 'admin' || profile?.role === 'manager';
+  const isAdminOnly = profile?.role === 'admin';
 
   useEffect(() => {
     fetchTeachers();
@@ -45,10 +46,9 @@ export default function TeachersList({ profile }: TeachersListProps) {
   const fetchTeachers = async () => {
     if (!profile) return;
     try {
-      const isAdmin = profile.role === 'admin';
       const [teacherData, kuttabData] = await Promise.all([
-        dbService.getTeachers(isAdmin ? undefined : profile.kuttabName),
-        isAdmin ? dbService.getAllKuttabs() : Promise.resolve([])
+        dbService.getTeachers(isSenior ? undefined : profile.kuttabName),
+        isSenior ? dbService.getAllKuttabs() : Promise.resolve([])
       ]);
       setTeachers(teacherData);
       setKuttabs(kuttabData);
@@ -76,7 +76,11 @@ export default function TeachersList({ profile }: TeachersListProps) {
       fetchTeachers();
     } catch (err: any) {
       console.error('Error adding teacher:', err);
-      toast.error(err.message || t('add_teacher_failed'));
+      if (err.message === 'email_already_exists') {
+        toast(t('email_already_exists'), { icon: '⚠️', duration: 4000 });
+      } else {
+        toast.error(t(err.message) || t('add_teacher_failed'));
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -105,9 +109,13 @@ export default function TeachersList({ profile }: TeachersListProps) {
       toast.success(t('teacher_updated'));
       setIsEditModalOpen(false);
       fetchTeachers();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error updating teacher:', err);
-      toast.error(t('teacher_update_failed'));
+      if (err.message === 'email_already_exists') {
+        toast(t('email_already_exists'), { icon: '⚠️', duration: 4000 });
+      } else {
+        toast.error(t(err.message) || t('teacher_update_failed'));
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -147,7 +155,7 @@ export default function TeachersList({ profile }: TeachersListProps) {
           <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">{t('teachers_management')}</h2>
           <p className="text-gray-500 mt-1">{t('teachers_subtitle')}</p>
         </div>
-        {isAdmin && (
+        {isSenior && (
           <button 
             onClick={() => setIsModalOpen(true)}
             className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-bold transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-200"
@@ -217,7 +225,9 @@ export default function TeachersList({ profile }: TeachersListProps) {
                       <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
                         teacher.role === 'admin' 
                           ? 'bg-purple-100 text-purple-700' 
-                          : 'bg-emerald-100 text-emerald-700'
+                          : teacher.role === 'manager'
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-emerald-100 text-emerald-700'
                       }`}>
                         {t(`role_${teacher.role}`)}
                       </span>
@@ -233,7 +243,7 @@ export default function TeachersList({ profile }: TeachersListProps) {
                       )}
                     </td>
                     <td className="px-8 py-5 text-right">
-                      {(isAdmin || teacher.uid === profile?.uid) && (
+                      {(isSenior || teacher.uid === profile?.uid) && (
                         <div className="flex items-center justify-end gap-2 text-gray-400">
                           <button 
                             onClick={() => handleEditTeacher(teacher)}
@@ -242,7 +252,7 @@ export default function TeachersList({ profile }: TeachersListProps) {
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
-                          {isAdmin && (
+                          {isSenior && (
                             <button 
                               onClick={() => handleDeleteTeacher(teacher.uid)}
                               className={`p-2 rounded-xl transition-all ${
@@ -309,7 +319,8 @@ export default function TeachersList({ profile }: TeachersListProps) {
                       onChange={(e) => setEditForm({ ...editForm, role: e.target.value as UserRole })}
                     >
                       <option value="teacher">{t('role_teacher')}</option>
-                      <option value="admin">{t('role_admin')}</option>
+                      <option value="manager">{t('role_manager')}</option>
+                      {isAdminOnly && <option value="admin">{t('role_admin')}</option>}
                     </select>
                   </div>
 
@@ -402,7 +413,8 @@ export default function TeachersList({ profile }: TeachersListProps) {
                       onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })}
                     >
                       <option value="teacher">{t('role_teacher')}</option>
-                      <option value="admin">{t('role_admin')}</option>
+                      <option value="manager">{t('role_manager')}</option>
+                      {isAdminOnly && <option value="admin">{t('role_admin')}</option>}
                     </select>
                   </div>
 

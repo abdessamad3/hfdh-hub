@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { auth } from '../lib/firebase';
 import { dbService } from '../services/db';
-import { Student, Attendance, Evaluation, Revision, NextRevision } from '../types';
+import { Student, Attendance, Evaluation, Revision, NextRevision, Kuttab } from '../types';
 import { 
   BookOpen, 
   CheckCircle, 
@@ -25,10 +25,11 @@ import {
   ResponsiveContainer
 } from 'recharts';
 import { useTranslation } from 'react-i18next';
-import { formatDate } from '../lib/dateUtils';
+import { formatDate, isToday } from '../lib/dateUtils';
 import { formatQuranProgress } from '../lib/quranUtils';
 import MemorizationGrid from '../components/MemorizationGrid';
 import StudentCalendar from '../components/StudentCalendar';
+import KuttabWeeklyOverview from '../components/KuttabWeeklyOverview';
 
 export default function StudentPortal() {
   const { t } = useTranslation();
@@ -48,53 +49,95 @@ export default function StudentPortal() {
     evaluations: Evaluation[];
     revisions: Revision[];
     nextTasks: NextRevision[];
+    kuttabs: Kuttab[];
   } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [multiStudents, setMultiStudents] = useState<Student[]>([]);
 
   useEffect(() => {
-    let unsubscribeNext: (() => void) | undefined;
+    let unsubscribes: (() => void)[] = [];
 
-    const fetchPortalData = async (selectedStudent?: Student) => {
+    const setupSubscriptions = async () => {
       if (!auth.currentUser?.email) return;
       try {
         setLoading(true);
-        if (!selectedStudent) {
-          const students = await dbService.getStudentsByEmail(auth.currentUser.email);
-          if (students.length > 1) {
-            setMultiStudents(students);
-            setLoading(false);
-            return;
-          }
-          if (students.length === 0) {
+        const email = auth.currentUser.email.toLowerCase();
+        
+        let currentStudentId: string | null = null;
+        let subUnsubscribes: (() => void)[] = [];
+
+        const mainUnsubscribe = dbService.subscribeStudentProfile(email, (student) => {
+          if (!student) {
+            subUnsubscribes.forEach(u => u());
+            subUnsubscribes = [];
+            currentStudentId = null;
             setData(null);
             setLoading(false);
             return;
           }
-          selectedStudent = students[0];
-        }
 
-        const student = selectedStudent;
-        if (student) {
-          const portalData = await dbService.getStudentDataForPortal(student.id, student.teacherId);
-          setData({ ...portalData, nextTasks: [] });
-
-          unsubscribeNext = dbService.subscribeStudentNextRevisions(student.email || '', (tasks) => {
-            setData(prev => prev ? { ...prev, nextTasks: tasks } : { ...portalData, nextTasks: tasks } as any);
+          setData(prev => prev ? { ...prev, student } : { 
+            student, 
+            attendance: [], 
+            evaluations: [], 
+            revisions: [], 
+            nextTasks: [],
+            kuttabs: []
           });
-          setMultiStudents([]);
-        }
+
+          // Only reset sub-subscriptions if the student ID changed
+          if (student.id === currentStudentId) {
+            setLoading(false);
+            return;
+          }
+
+          // Clear previous sub-subscriptions
+          subUnsubscribes.forEach(u => u());
+          subUnsubscribes = [];
+          currentStudentId = student.id;
+
+          const studentId = student.id;
+          
+          subUnsubscribes.push(dbService.subscribeStudentNextRevisions(studentId, email, (tasks) => {
+            setData(prev => prev ? { ...prev, nextTasks: tasks } : null);
+          }));
+
+          subUnsubscribes.push(dbService.subscribeStudentAttendance(studentId, email, (attendance) => {
+            setData(prev => prev ? { ...prev, attendance } : null);
+          }));
+
+          subUnsubscribes.push(dbService.subscribeStudentEvaluations(studentId, email, (evaluations) => {
+            setData(prev => prev ? { ...prev, evaluations } : null);
+          }));
+
+          subUnsubscribes.push(dbService.subscribeStudentRevisions(studentId, email, (revisions) => {
+            setData(prev => prev ? { ...prev, revisions } : null);
+          }));
+
+          // Fetch kuttab info
+          if (student.kuttabName) {
+            dbService.getAllKuttabs().then(allKuttabs => {
+              const myKuttab = allKuttabs.filter(k => k.name === student.kuttabName);
+              setData(prev => prev ? { ...prev, kuttabs: myKuttab } : null);
+            });
+          }
+          
+          setLoading(false);
+        });
+
+        unsubscribes.push(mainUnsubscribe);
+        // Add a cleanup for subUnsubscribes to the main cleanup too
+        unsubscribes.push(() => subUnsubscribes.forEach(u => u()));
+
       } catch (err) {
-        console.error('Error fetching portal data:', err);
-      } finally {
+        console.error('Error setting up portal subscriptions:', err);
         setLoading(false);
       }
     };
 
-    fetchPortalData();
+    setupSubscriptions();
 
     return () => {
-      if (unsubscribeNext) unsubscribeNext();
+      unsubscribes.forEach(unsub => unsub());
     };
   }, []);
 
@@ -103,44 +146,6 @@ export default function StudentPortal() {
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <div className="w-12 h-12 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" />
         <p className="text-gray-500 font-medium animate-pulse">{t('loading_progress')}</p>
-      </div>
-    );
-  }
-
-  if (multiStudents.length > 1) {
-    return (
-      <div className="p-8 max-w-2xl mx-auto text-center space-y-8">
-        <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-3xl flex items-center justify-center mx-auto shadow-inner">
-          <BookOpen className="w-10 h-10" />
-        </div>
-        <div>
-          <h2 className="text-3xl font-black text-gray-900">{t('multiple_profiles_found')}</h2>
-          <p className="text-gray-600 mt-2">{t('select_your_profile')}</p>
-        </div>
-        <div className="grid gap-4">
-          {multiStudents.map(s => (
-            <button
-              key={s.id}
-              onClick={() => {
-                setLoading(true);
-                dbService.getStudentDataForPortal(s.id, s.teacherId).then(portalData => {
-                  setData({ ...portalData, nextTasks: [] });
-                  setMultiStudents([]);
-                  setLoading(false);
-                });
-              }}
-              className="p-6 bg-white border rounded-3xl text-left hover:border-emerald-500 hover:shadow-lg transition-all group border-gray-100"
-            >
-              <div className="flex justify-between items-center">
-                <div>
-                  <h4 className="font-bold text-xl text-gray-900">{s.name}</h4>
-                  <p className="text-gray-500 text-sm">{s.kuttabName || t('independent')}</p>
-                </div>
-                <ChevronRight className="w-6 h-6 text-gray-300 group-hover:text-emerald-500 group-hover:translate-x-1 transition-all" />
-              </div>
-            </button>
-          ))}
-        </div>
       </div>
     );
   }
@@ -160,6 +165,9 @@ export default function StudentPortal() {
   }
 
   const { student, attendance, evaluations, revisions } = data;
+  
+  const todaysRevisions = revisions.filter(r => isToday(r.date));
+  const recentRevisions = revisions.filter(r => !isToday(r.date)).slice(0, 5);
 
   const chartData = [...evaluations].reverse().map(e => ({
     date: formatDate(e.date),
@@ -206,6 +214,17 @@ export default function StudentPortal() {
           </motion.div>
         ))}
       </div>
+
+      {data.kuttabs.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="mt-8"
+        >
+          <KuttabWeeklyOverview kuttabs={data.kuttabs} />
+        </motion.div>
+      )}
 
       {data.nextTasks && data.nextTasks.length > 0 && (
         <motion.div 
@@ -343,10 +362,10 @@ export default function StudentPortal() {
               <History className="w-5 h-5 text-blue-500" />
             </div>
             <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 scrollbar-thin">
-              {revisions.length === 0 ? (
+              {todaysRevisions.length === 0 ? (
                 <p className="text-center py-8 text-gray-400 font-medium italic">{t('no_eval_data')}</p>
-              ) : revisions.map((rev) => (
-                <div key={rev.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-between group hover:bg-white hover:shadow-md transition-all">
+              ) : todaysRevisions.map((rev) => (
+                <div key={rev.id} className="p-4 bg-emerald-50 border-emerald-100 rounded-2xl border flex items-center justify-between group hover:bg-white hover:shadow-md transition-all">
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 bg-white border rounded-xl flex items-center justify-center font-bold text-blue-600 shadow-sm">
                       {rev.qualityScore}
@@ -355,9 +374,9 @@ export default function StudentPortal() {
                       <h5 className="font-bold text-gray-900 truncate max-w-[150px]">
                         {rev.surahName ? `${t('surah')} ${rev.surahName}` : `${t('hizb')} ${rev.hizbNumber}`}
                       </h5>
-                      <p className="text-[10px] text-gray-400 flex items-center gap-1 font-bold uppercase tracking-wider">
-                        <Calendar className="w-3 h-3" />
-                        {formatDate(rev.date)}
+                      <p className="text-[10px] text-emerald-600 flex items-center gap-1 font-bold uppercase tracking-wider">
+                        <CheckCircle className="w-3 h-3" />
+                        {t('today')}
                       </p>
                     </div>
                   </div>
@@ -369,6 +388,34 @@ export default function StudentPortal() {
                 </div>
               ))}
             </div>
+            
+            {recentRevisions.length > 0 && (
+              <div className="mt-6 pt-6 border-t">
+                <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">{t('recent_revisions')}</h4>
+                <div className="space-y-3">
+                  {recentRevisions.map((rev) => (
+                    <div key={rev.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
+                      <div className="flex items-center gap-3">
+                         <div className="w-8 h-8 bg-white border rounded-lg flex items-center justify-center text-[10px] font-bold text-blue-500">
+                           {rev.qualityScore}
+                         </div>
+                         <div>
+                           <p className="text-xs font-bold text-gray-900 truncate max-w-[120px]">
+                             {rev.surahName ? `${t('surah')} ${rev.surahName}` : `${t('hizb')} ${rev.hizbNumber}`}
+                           </p>
+                           <p className="text-[8px] text-gray-400 font-bold uppercase tracking-wider">
+                             {formatDate(rev.date)}
+                           </p>
+                         </div>
+                      </div>
+                      <div className="text-[8px] px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-black">
+                        {rev.qualityScore}%
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

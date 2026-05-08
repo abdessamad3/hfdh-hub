@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, FormEvent } from 'react';
-import { Search, Plus, Filter, ChevronRight, X, User as UserIcon, Building, Edit2, Trash2, Hash, UserCircle, Mail } from 'lucide-react';
+import { Search, Plus, Filter, ChevronRight, X, User as UserIcon, Building, Edit2, Trash2, Hash, UserCircle, Mail, Calendar } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'react-hot-toast';
@@ -9,6 +9,7 @@ import type { Student, Kuttab, UserProfile } from '../types';
 import EditStudentModal from '../components/EditStudentModal';
 import { useTranslation } from 'react-i18next';
 import { formatQuranProgress } from '../lib/quranUtils';
+import { formatDate } from '../lib/dateUtils';
 
 interface StudentsListProps {
   profile: UserProfile | null;
@@ -29,27 +30,33 @@ export default function StudentsList({ profile }: StudentsListProps) {
   const [minScore, setMinScore] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'age' | 'totalScore'>('name');
   
-  const [newStudent, setNewStudent] = useState({ name: '', age: '', email: '', kuttabName: profile?.kuttabName || '', gender: 'male' as 'male' | 'female' });
+  const [newStudent, setNewStudent] = useState({ 
+    name: '', 
+    age: '', 
+    email: '', 
+    kuttabName: profile?.kuttabName || '', 
+    gender: 'male' as 'male' | 'female',
+    enrollmentDate: new Date().toISOString().split('T')[0]
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   
-  const isAdmin = profile?.role === 'admin';
+  const isSenior = profile?.role === 'admin' || profile?.role === 'manager';
 
   useEffect(() => {
     if (!auth.currentUser || !profile) return;
     
     setLoading(true);
-    const isAdmin = profile.role === 'admin';
 
     const fetchKuttabs = async () => {
       try {
-        const kuttabData = isAdmin 
+        const kuttabData = isSenior 
           ? await dbService.getAllKuttabs() 
           : await dbService.getKuttabs(auth.currentUser.uid);
         
         let finalKuttabs = [...kuttabData];
-        if (!isAdmin && profile.kuttabName && !finalKuttabs.some(k => k.name === profile.kuttabName)) {
+        if (!isSenior && profile.kuttabName && !finalKuttabs.some(k => k.name === profile.kuttabName)) {
           const k = await dbService.getKuttabByName(profile.kuttabName);
           if (k) finalKuttabs.push(k);
         }
@@ -64,7 +71,7 @@ export default function StudentsList({ profile }: StudentsListProps) {
     const unsubscribe = dbService.subscribeStudents(
       auth.currentUser.uid,
       profile.kuttabName,
-      isAdmin,
+      isSenior,
       (studentList) => {
         setStudents(studentList);
         setLoading(false);
@@ -84,8 +91,8 @@ export default function StudentsList({ profile }: StudentsListProps) {
         age: parseInt(newStudent.age),
         gender: newStudent.gender,
         email: newStudent.email.toLowerCase(),
-        kuttabName: isAdmin ? newStudent.kuttabName : (profile?.kuttabName || ''),
-        enrollmentDate: new Date().toISOString(),
+        kuttabName: isSenior ? newStudent.kuttabName : (profile?.kuttabName || ''),
+        enrollmentDate: new Date(newStudent.enrollmentDate).toISOString(),
         teacherId: auth.currentUser.uid,
         attendanceRate: 0,
         memorizationProgress: 0,
@@ -94,11 +101,22 @@ export default function StudentsList({ profile }: StudentsListProps) {
         totalScore: 0
       });
       setIsModalOpen(false);
-      setNewStudent({ name: '', age: '', email: '', kuttabName: profile?.kuttabName || '', gender: 'male' });
+      setNewStudent({ 
+        name: '', 
+        age: '', 
+        email: '', 
+        kuttabName: profile?.kuttabName || '', 
+        gender: 'male',
+        enrollmentDate: new Date().toISOString().split('T')[0]
+      });
       toast.success(t('student_enrolled_success'));
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error adding student:', err);
-      toast.error(t('failed_to_add_student'));
+      if (err.message === 'email_already_exists') {
+        toast(t('email_already_exists'), { icon: '⚠️', duration: 4000 });
+      } else {
+        toast.error(t(err.message) || t('failed_to_add_student'));
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -109,9 +127,13 @@ export default function StudentsList({ profile }: StudentsListProps) {
     try {
       await dbService.updateStudent(editingStudent.id, data);
       toast.success(t('student_updated_success'));
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error updating student:', err);
-      toast.error(t('failed_to_update_student'));
+      if (err.message === 'email_already_exists') {
+        toast(t('email_already_exists'), { icon: '⚠️', duration: 4000 });
+      } else {
+        toast.error(t(err.message) || t('failed_to_update_student'));
+      }
       throw err;
     }
   };
@@ -296,6 +318,7 @@ export default function StudentsList({ profile }: StudentsListProps) {
                   <th className="px-6 py-4 font-black w-1/3">{t('name')}</th>
                   <th className="px-6 py-4 font-black w-24">{t('age')}</th>
                   <th className="px-6 py-4 font-black w-28">{t('gender')}</th>
+                  <th className="px-6 py-4 font-black w-32">{t('enrollment_date')}</th>
                   <th className="px-6 py-4 font-black w-40">{t('kuttab')}</th>
                   <th className="px-6 py-4 font-black w-40">{t('total_hizbs')}</th>
                   <th className="px-6 py-4 font-black w-32">{t('overall_score')}</th>
@@ -323,6 +346,9 @@ export default function StudentsList({ profile }: StudentsListProps) {
                     }`}>
                       {student.gender ? t(student.gender) : '—'}
                     </span>
+                  </td>
+                  <td onClick={() => navigate(`/students/${student.id}`)} className="px-6 py-4 text-gray-600 cursor-pointer text-xs">
+                    {student.enrollmentDate ? formatDate(student.enrollmentDate) : '—'}
                   </td>
                   <td onClick={() => navigate(`/students/${student.id}`)} className="px-6 py-4 cursor-pointer truncate">
                     <span className="font-medium text-gray-500 italic truncate">
@@ -461,6 +487,19 @@ export default function StudentsList({ profile }: StudentsListProps) {
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                      <Calendar className="w-4 h-4" />
+                      {t('enrollment_date')}
+                    </label>
+                    <input
+                      required
+                      type="date"
+                      className="w-full p-4 bg-gray-50 border rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                      value={newStudent.enrollmentDate}
+                      onChange={(e) => setNewStudent({ ...newStudent, enrollmentDate: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
                       <Mail className="w-4 h-4" />
                       {t('student_email')}
                     </label>
@@ -473,7 +512,7 @@ export default function StudentsList({ profile }: StudentsListProps) {
                     />
                     <p className="text-[10px] text-gray-400">{t('required_for_portal')}</p>
                   </div>
-                  {isAdmin && (
+                  {isSenior && (
                     <div className="space-y-2">
                       <div className="flex justify-between items-center ml-1 uppercase tracking-wider">
                         <label className="text-[10px] font-black text-gray-400">{t('assigned_kuttab')}</label>

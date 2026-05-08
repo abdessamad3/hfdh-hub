@@ -22,7 +22,7 @@ export default function RankingPage({ profile }: RankingPageProps) {
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
 
-  const isAdmin = profile?.role === 'admin' || auth.currentUser?.email === 'abdessamadjibrane2@gmail.com';
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'manager' || auth.currentUser?.email === 'abdessamadjibrane2@gmail.com';
 
   useEffect(() => {
     const fetchData = async () => {
@@ -32,10 +32,10 @@ export default function RankingPage({ profile }: RankingPageProps) {
         let studentData: Student[] = [];
         
         if (selectedKuttab === 'all') {
-          // If all regions, fetch global top 10
-          studentData = await dbService.getTopRankingStudents(10);
+          // If all regions, fetch global top 50
+          studentData = await dbService.getTopRankingStudents(50);
         } else {
-          // If specific kuttab, fetch all for that kuttab
+          // If specific kuttab, fetch all for that kuttab (limited to 100 in service)
           studentData = await dbService.getStudentsByKuttab(selectedKuttab);
         }
 
@@ -66,7 +66,7 @@ export default function RankingPage({ profile }: RankingPageProps) {
   }, [profile, isAdmin, sortBy, selectedKuttab]);
 
   const filteredStudents = useMemo(() => {
-    return [...students].slice(0, 15);
+    return [...students].slice(0, 50);
   }, [students]);
 
   const distributionData = useMemo(() => {

@@ -9,6 +9,7 @@ import Dashboard from './pages/Dashboard';
 import StudentsList from './pages/StudentsList';
 import StudentProfile from './pages/StudentProfile';
 import AttendancePage from './pages/Attendance';
+import MonthlyReport from './pages/MonthlyReport';
 import EvaluationEntry from './pages/EvaluationEntry';
 import RankingPage from './pages/RankingPage';
 import StudentPortal from './pages/StudentPortal';
@@ -17,6 +18,7 @@ import NextRevisionTask from './pages/NextRevisionTask';
 import KuttabManagement from './pages/KuttabManagement';
 import TeachersList from './pages/TeachersList';
 import TeacherProfile from './pages/TeacherProfile';
+import KuttabProfile from './pages/KuttabProfile';
 import LoginHistory from './pages/LoginHistory';
 import AdminSearchBar from './components/AdminSearchBar';
 import { BookOpen, AlertCircle, Chrome, Menu, Globe } from 'lucide-react';
@@ -40,7 +42,7 @@ function Layout({ children, profile }: { children: ReactNode; profile: UserProfi
         onClose={() => setIsSidebarOpen(false)} 
         profile={profile}
       />
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className={`flex-1 flex flex-col min-w-0 ${i18n.language === 'ar' ? 'lg:mr-64' : 'lg:ml-64'}`}>
         {/* Mobile Header */}
         <header className="lg:hidden bg-white border-b px-6 py-4 flex items-center justify-between sticky top-0 z-30 shadow-sm">
           <div className="flex items-center gap-2 text-emerald-700 font-bold">
@@ -56,7 +58,7 @@ function Layout({ children, profile }: { children: ReactNode; profile: UserProfi
         </header>
         
         {/* Admin Search Bar - Desktop & Mobile */}
-        {profile?.role === 'admin' && (
+        {(profile?.role === 'admin' || profile?.role === 'manager') && (
           <div className="bg-white border-b px-4 py-3 sticky top-0 lg:static z-20 shadow-sm lg:shadow-none">
             <AdminSearchBar profile={profile} />
           </div>
@@ -194,12 +196,30 @@ export default function App() {
             return;
           }
 
+          // Determine role and robust name selection
           const initialRole = isAdmin ? 'admin' : (teacherDoc?.role || 'student');
           
+          // CRITICAL: Prioritize the name from the database (Students collection or Users collection)
+          // to prevent overwriting by external providers (Google display names).
+          // We look in studentDoc first if they are a student, then teacherDoc.
+          let finalDisplayName = '';
+          
+          if (initialRole === 'student' && studentDoc?.name) {
+            finalDisplayName = studentDoc.name;
+          } else if (teacherDoc?.displayName) {
+            finalDisplayName = teacherDoc.displayName;
+          } else if (studentDoc?.name) { // Fallback if they have a student record but role is something else
+            finalDisplayName = studentDoc.name;
+          } else {
+            finalDisplayName = u.displayName || '';
+          }
+          
+          const finalPhotoURL = teacherDoc?.photoURL || u.photoURL || '';
+
           const userProfile = await dbService.upsertUserProfile(u.uid, {
             email: email,
-            displayName: u.displayName || teacherDoc?.displayName || '',
-            photoURL: u.photoURL || teacherDoc?.photoURL || '',
+            displayName: finalDisplayName,
+            photoURL: finalPhotoURL,
             role: initialRole,
             studentId: studentDoc?.id
           });
@@ -207,9 +227,21 @@ export default function App() {
           setUser(u);
           
           // Log sign in
-          await dbService.logSignIn(u.uid, email, u.displayName || teacherDoc?.displayName || '');
-        } catch (err) {
+          await dbService.logSignIn(u.uid, email, finalDisplayName);
+        } catch (err: any) {
           console.error('Profile Load Error:', err);
+          let errorMessage = 'Failed to load profile.';
+          try {
+            // Check if it's our JSON error format
+            const parsed = JSON.parse(err.message);
+            if (parsed.error) errorMessage = `Profile Load Error: ${parsed.error}`;
+          } catch {
+            errorMessage = `Profile Load Error: ${err.message || String(err)}`;
+          }
+          setAuthError(errorMessage);
+          await auth.signOut();
+          setUser(null);
+          setProfile(null);
         }
         setLoading(false);
       } else {
@@ -254,16 +286,20 @@ export default function App() {
             <>
               <Route path="/" element={<Dashboard profile={profile} />} />
               <Route path="/teachers/:id" element={<TeacherProfile profile={profile} />} />
-              {profile?.role === 'admin' && (
+              <Route path="/kuttabs/:id" element={<KuttabProfile profile={profile} />} />
+              {(profile?.role === 'admin' || profile?.role === 'manager') && (
                 <>
                   <Route path="/kuttabs" element={<KuttabManagement profile={profile} />} />
                   <Route path="/teachers" element={<TeachersList profile={profile} />} />
-                  <Route path="/login-history" element={<LoginHistory profile={profile} />} />
                 </>
+              )}
+              {profile?.role === 'admin' && (
+                <Route path="/login-history" element={<LoginHistory profile={profile} />} />
               )}
               <Route path="/students" element={<StudentsList profile={profile} />} />
               <Route path="/students/:id" element={<StudentProfile profile={profile} />} />
               <Route path="/attendance" element={<AttendancePage profile={profile} />} />
+              <Route path="/monthly-report" element={<MonthlyReport profile={profile} />} />
               <Route path="/evaluation" element={<EvaluationEntry profile={profile} />} />
               <Route path="/revision" element={<RevisionEntry profile={profile} />} />
               <Route path="/next-revision" element={<NextRevisionTask profile={profile} />} />

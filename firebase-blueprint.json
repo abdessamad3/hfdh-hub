@@ -97,7 +97,23 @@
       "properties": {
         "name": { "type": "string", "description": "Unique name of the Kuttab" },
         "location": { "type": "string", "description": "Physical location or address" },
-        "teacherId": { "type": "string", "description": "Admin/Teacher who created this" }
+        "teacherId": { "type": "string", "description": "Admin/Teacher who created this" },
+        "schedule": {
+          "type": "object",
+          "description": "Study schedule with recurring and specific days",
+          "properties": {
+            "lessons": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string", "enum": ["recurring", "specific"] },
+                  "lessons": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            }
+          }
+        }
       },
       "required": ["name", "teacherId"]
     },
@@ -113,6 +129,25 @@
         "timestamp": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "email", "timestamp"]
+    },
+    "NextRevision": {
+      "title": "Next Revision",
+      "description": "A scheduled upcoming revision task",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string" },
+        "studentEmail": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "kuttabResponsibleId": { "type": "string" },
+        "kuttabName": { "type": "string" },
+        "surahName": { "type": "string" },
+        "hizbNumber": { "type": "number" },
+        "quantity": { "type": "number" },
+        "quantityIdentifier": { "type": "string" },
+        "dueDate": { "type": "string", "format": "date" },
+        "notes": { "type": "string" }
+      },
+      "required": ["studentId", "dueDate"]
     }
   },
   "firestore": {
@@ -122,6 +157,7 @@
     "/memorizations/{memId}": { "schema": "Memorization", "description": "Memorization records" },
     "/evaluations/{evalId}": { "schema": "Evaluation", "description": "Evaluation sessions" },
     "/revisions/{revId}": { "schema": "Revision", "description": "Revision history" },
+    "/next_revisions/{id}": { "schema": "NextRevision", "description": "Scheduled revision tasks" },
     "/kuttabs/{kuttabId}": { "schema": "Kuttab", "description": "List of learning institutions" },
     "/login_history/{id}": { "schema": "LoginHistory", "description": "Log of user sessions" }
   }

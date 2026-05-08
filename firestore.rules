@@ -6,27 +6,30 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
-
-    function hasProfile() {
-      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
-    }
-
     function isAdmin() {
+      let email = request.auth.token.get('email', '').lower();
       return isSignedIn() && (
-        request.auth.token.email.lower() == 'abdessamadjibrane2@gmail.com' ||
-        request.auth.token.email.lower() == 'rachid.houlla@gmail.com' ||
-        request.auth.token.email.lower() == 'locatortradi@gmail.com' ||
-        (hasProfile() && getUserData().get('role', 'none') == 'admin')
+        email == 'abdessamadjibrane2@gmail.com' ||
+        email == 'rachid.houlla@gmail.com' ||
+        email == 'locatortradi@gmail.com' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'none') == 'admin')
+      );
+    }
+
+    function isManager() {
+      return isSignedIn() && (
+        isAdmin() || 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'none') == 'manager')
       );
     }
 
     function isTeacher() {
       return isSignedIn() && (
-        isAdmin() || 
-        (hasProfile() && getUserData().get('role', 'none') == 'teacher')
+        isManager() || 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'none') == 'teacher')
       );
     }
 
@@ -37,17 +40,18 @@ service cloud.firestore {
 
     // User Profiles
     match /users/{uid} {
-      allow get: if isSignedIn() && (isAdmin() || request.auth.uid == uid || resource.data.email == request.auth.token.email);
-      allow list: if isSignedIn() && (isAdmin() || resource.data.email == request.auth.token.email);
-      allow create: if isSignedIn() && (isAdmin() || request.auth.uid == uid || request.resource.data.email == request.auth.token.email);
-      allow update: if isSignedIn() && (isAdmin() || request.auth.uid == uid);
+      allow get: if isSignedIn() && (request.auth.uid == uid || isManager());
+      allow list: if isSignedIn() && (isManager() || resource.data.email.lower() == request.auth.token.email.lower());
+      allow create: if isSignedIn() && (request.auth.uid == uid || isManager());
+      allow update: if isSignedIn() && (request.auth.uid == uid || isManager());
       allow delete: if isAdmin();
     }
 
     // Kuttabs
     match /kuttabs/{kuttabId} {
       allow read: if isSignedIn();
-      allow create, update: if isAdmin() || isTeacher();
+      allow create: if isManager();
+      allow update: if isManager() || (isTeacher() && resource.data.teacherId == request.auth.uid);
       allow delete: if isAdmin();
     }
 
@@ -59,22 +63,20 @@ service cloud.firestore {
 
     // Relational Helpers for data access
     function canAccessStudent(data) {
-      let email = request.auth.token.email.lower();
-      let uid = request.auth.uid;
-      return isAdmin() || 
-             data.teacherId == uid || 
-             data.kuttabResponsibleId == uid || 
-             data.get('email', '').lower() == email ||
+      let userEmail = request.auth.token.get('email', '').lower();
+      return isManager() || 
+             data.teacherId == request.auth.uid || 
+             data.kuttabResponsibleId == request.auth.uid || 
+             data.get('email', '').lower() == userEmail ||
              (isTeacher() && hasProfile() && data.get('kuttabName', '') != '' && data.kuttabName == getUserData().get('kuttabName', ''));
     }
 
     function canAccessSubData(data) {
-      let email = request.auth.token.email.lower();
-      let uid = request.auth.uid;
-      return isAdmin() || 
-             data.teacherId == uid || 
-             data.kuttabResponsibleId == uid || 
-             data.get('studentEmail', '').lower() == email ||
+      let userEmail = request.auth.token.get('email', '').lower();
+      return isManager() || 
+             data.teacherId == request.auth.uid || 
+             data.kuttabResponsibleId == request.auth.uid || 
+             data.get('studentEmail', '').lower() == userEmail ||
              (isTeacher() && hasProfile() && data.get('kuttabName', '') != '' && data.kuttabName == getUserData().get('kuttabName', ''));
     }
 
@@ -82,68 +84,48 @@ service cloud.firestore {
     match /students/{studentId} {
       allow get: if isSignedIn() && canAccessStudent(resource.data);
       allow list: if isSignedIn() && (
-        isAdmin() || 
-        (isTeacher() && request.query.limit <= 100) || 
-        resource.data.get('email', '').lower() == request.auth.token.email.lower()
+        isTeacher() || 
+        (resource.data.get('email', '').lower() == request.auth.token.email.lower())
       );
       allow create: if isTeacher();
-      allow update: if isAdmin() || (isTeacher() && canAccessStudent(resource.data));
+      allow update: if isManager() || (isTeacher() && canAccessStudent(resource.data));
       allow delete: if isAdmin();
     }
 
     // Sub-data collections (Attendance, Evaluations, etc.)
     match /attendance/{id} {
-      allow get: if isSignedIn() && canAccessSubData(resource.data);
-      allow list: if isSignedIn() && (
-        isAdmin() || 
-        (isTeacher() && request.query.limit <= 100) || 
-        resource.data.get('studentEmail', '').lower() == request.auth.token.email.lower()
-      );
-      allow create, update: if isAdmin() || isTeacher();
+      allow get, list: if isSignedIn();
+      allow create, update: if isTeacher();
+      allow delete: if isAdmin();
+    }
+
+    match /teacher_attendance/{id} {
+      allow get, list: if isManager();
+      allow create, update: if isManager();
       allow delete: if isAdmin();
     }
 
     match /evaluations/{id} {
-      allow get: if isSignedIn() && canAccessSubData(resource.data);
-      allow list: if isSignedIn() && (
-        isAdmin() || 
-        (isTeacher() && request.query.limit <= 100) || 
-        resource.data.get('studentEmail', '').lower() == request.auth.token.email.lower()
-      );
-      allow create, update: if isAdmin() || isTeacher();
+      allow get, list: if isSignedIn();
+      allow create, update: if isTeacher();
       allow delete: if isAdmin();
     }
 
     match /memorizations/{id} {
-      allow get: if isSignedIn() && canAccessSubData(resource.data);
-      allow list: if isSignedIn() && (
-        isAdmin() || 
-        (isTeacher() && request.query.limit <= 100) || 
-        resource.data.get('studentEmail', '').lower() == request.auth.token.email.lower()
-      );
-      allow create, update: if isAdmin() || isTeacher();
+      allow get, list: if isSignedIn();
+      allow create, update: if isTeacher();
       allow delete: if isAdmin();
     }
 
     match /revisions/{id} {
-      allow get: if isSignedIn() && canAccessSubData(resource.data);
-      allow list: if isSignedIn() && (
-        isAdmin() || 
-        (isTeacher() && request.query.limit <= 100) || 
-        resource.data.get('studentEmail', '').lower() == request.auth.token.email.lower()
-      );
-      allow create, update: if isAdmin() || isTeacher();
+      allow get, list: if isSignedIn();
+      allow create, update: if isTeacher();
       allow delete: if isAdmin();
     }
 
     match /next_revisions/{id} {
-      allow get: if isSignedIn() && canAccessSubData(resource.data);
-      allow list: if isSignedIn() && (
-        isAdmin() || 
-        (isTeacher() && request.query.limit <= 100) || 
-        resource.data.get('studentEmail', '').lower() == request.auth.token.email.lower()
-      );
-      allow create, update, delete: if isAdmin() || isTeacher();
+      allow get, list: if isSignedIn();
+      allow create, update, delete: if isTeacher();
     }
   }
 }

@@ -42,7 +42,13 @@ export default function StudentCalendar({ attendance = [], evaluations = [], rev
     data: Evaluation | Revision | NextRevision;
   } | null>(null);
 
-  const getPortionLabel = (q: number) => {
+  const getPortionLabel = (q: number, identifier?: string) => {
+    if (identifier) {
+      if (identifier.startsWith('t')) return t(`thumun_${identifier.substring(1)}`);
+      if (identifier.startsWith('r')) return t(`rubu_${identifier.substring(1)}`);
+      if (identifier.startsWith('n')) return t(`nisf_${identifier.substring(1)}`);
+      if (identifier === 'h1' || identifier === 'h') return t('hizb');
+    }
     if (q >= 1 && q <= 8) return t(`thumun_${q}`);
     return q > 0 ? `${q} ${t('unit_thumn')}` : '';
   };
@@ -120,11 +126,16 @@ export default function StudentCalendar({ attendance = [], evaluations = [], rev
 
       <div className="p-6">
         <div className="grid grid-cols-7 mb-4">
-          {weekDays.map(day => (
-            <div key={day} className="text-center text-[10px] sm:text-xs font-black text-gray-400 uppercase tracking-widest py-2">
-              {day}
-            </div>
-          ))}
+          {weekDays.map((day, idx) => {
+            const isToday = new Date().getDay() === idx;
+            return (
+              <div key={idx} className={`text-center text-[10px] sm:text-xs font-black uppercase tracking-widest py-2 ${
+                isToday ? 'text-emerald-600' : 'text-gray-400'
+              }`}>
+                {day}
+              </div>
+            );
+          })}
         </div>
 
         <div className="grid grid-cols-7 gap-px bg-gray-100 border border-gray-100 rounded-xl overflow-hidden">
@@ -136,12 +147,17 @@ export default function StudentCalendar({ attendance = [], evaluations = [], rev
               nextRevisions: dayNextRevisions
             } = getDayData(day);
             const isCurrentMonth = isSameMonth(day, currentMonth);
+            const isToday = isSameDay(day, new Date());
 
             return (
               <div 
                 key={idx}
-                className={`min-h-[90px] sm:min-h-[120px] p-1 sm:p-2 transition-all group relative ${
-                  isCurrentMonth ? 'bg-white' : 'bg-gray-50 text-gray-300'
+                className={`min-h-[90px] sm:min-h-[120px] p-1 sm:p-2 transition-all group relative border-2 ${
+                  isCurrentMonth 
+                    ? isToday 
+                      ? 'bg-emerald-50/20 border-emerald-500 z-10 shadow-sm' 
+                      : 'bg-white border-transparent' 
+                    : 'bg-gray-50 text-gray-300 border-transparent'
                 }`}
               >
                 <div className="flex justify-between items-start mb-0.5 sm:mb-1">
@@ -178,7 +194,7 @@ export default function StudentCalendar({ attendance = [], evaluations = [], rev
                       <div className="text-[7px] sm:text-[8px] text-emerald-600 font-medium truncate leading-tight mt-0.5">
                         <span className="hidden sm:inline">{ev.hizbNumber ? `${t('hizb')} ${ev.hizbNumber}` : 'Eval'}</span>
                         <span className="sm:hidden">{ev.hizbNumber ? `H${ev.hizbNumber}` : 'E'}</span>
-                        {ev.quantity && ` (${getPortionLabel(ev.quantity)})`}
+                        {ev.quantity && ` (${getPortionLabel(ev.quantity, ev.quantityIdentifier)})`}
                       </div>
                     </button>
                   ))}
@@ -197,7 +213,7 @@ export default function StudentCalendar({ attendance = [], evaluations = [], rev
                       <div className="text-[7px] sm:text-[8px] text-blue-600 font-medium truncate leading-tight mt-0.5">
                         <span className="hidden sm:inline">{rev.hizbNumber ? `${t('hizb')} ${rev.hizbNumber}` : 'Rev'}</span>
                         <span className="sm:hidden">{rev.hizbNumber ? `H${rev.hizbNumber}` : 'R'}</span>
-                        {rev.quantity && ` (${getPortionLabel(rev.quantity)})`}
+                        {rev.quantity && ` (${getPortionLabel(rev.quantity, rev.quantityIdentifier)})`}
                       </div>
                     </button>
                   ))}
@@ -216,7 +232,7 @@ export default function StudentCalendar({ attendance = [], evaluations = [], rev
                       <div className="text-[7px] sm:text-[8px] text-purple-600 font-medium truncate leading-tight mt-0.5">
                         <span className="hidden sm:inline">{rev.hizbNumber ? `${t('hizb')} ${rev.hizbNumber}` : 'Next'}</span>
                         <span className="sm:hidden">{rev.hizbNumber ? `H${rev.hizbNumber}` : 'N'}</span>
-                        {rev.quantity && ` (${getPortionLabel(rev.quantity)})`}
+                        {rev.quantity && ` (${getPortionLabel(rev.quantity, rev.quantityIdentifier)})`}
                       </div>
                     </button>
                   ))}
@@ -322,7 +338,7 @@ export default function StudentCalendar({ attendance = [], evaluations = [], rev
                   {selectedDetail.data.quantity && (
                     <div className="flex items-center justify-between px-6 py-4 bg-white border border-gray-100 rounded-[20px] shadow-sm">
                       <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{t('quantity')}</span>
-                      <span className="font-black text-gray-900">{getPortionLabel(selectedDetail.data.quantity)}</span>
+                      <span className="font-black text-gray-900">{getPortionLabel(selectedDetail.data.quantity, selectedDetail.data.quantityIdentifier)}</span>
                     </div>
                   )}
                   {selectedDetail.data.notes && (

@@ -8,10 +8,11 @@ import {
 } from 'recharts';
 import { dbService } from '../services/db';
 import { auth } from '../lib/firebase';
-import type { Student, Attendance, Evaluation, Revision, UserProfile } from '../types';
+import type { Student, Attendance, Evaluation, Revision, UserProfile, Kuttab } from '../types';
 
 import { useTranslation } from 'react-i18next';
 import { formatDate } from '../lib/dateUtils';
+import KuttabWeeklyOverview from '../components/KuttabWeeklyOverview';
 
 interface DashboardProps {
   profile: UserProfile | null;
@@ -24,7 +25,10 @@ export default function Dashboard({ profile }: DashboardProps) {
   const [attendanceRecords, setAttendanceRecords] = useState<Attendance[]>([]);
   const [performanceData, setPerformanceData] = useState<Evaluation[]>([]);
   const [revisionData, setRevisionData] = useState<Revision[]>([]);
+  const [kuttabs, setKuttabs] = useState<Kuttab[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const isSenior = profile?.role === 'admin' || profile?.role === 'manager';
 
   const attendanceData = useMemo(() => {
     if (!attendanceRecords) return [];
@@ -69,29 +73,36 @@ export default function Dashboard({ profile }: DashboardProps) {
     if (!auth.currentUser || !profile) return;
     
     setLoading(true);
-    const isAdmin = profile.role === 'admin';
 
-    const fetchWeeklyStats = async () => {
+    const fetchData = async () => {
       try {
-        const [weeklyAttendance, weeklyEval, weeklyRev] = await Promise.all([
-          dbService.getWeeklyAttendanceByTeacher(auth.currentUser!.uid, profile.kuttabName, isAdmin),
-          dbService.getWeeklyEvaluationsByTeacher(auth.currentUser!.uid, profile.kuttabName, isAdmin),
-          dbService.getWeeklyRevisionsByTeacher(auth.currentUser!.uid, profile.kuttabName, isAdmin)
+        const [weeklyAttendance, weeklyEval, weeklyRev, allKuttabs] = await Promise.all([
+          dbService.getWeeklyAttendanceByTeacher(auth.currentUser!.uid, profile.kuttabName, isSenior),
+          dbService.getWeeklyEvaluationsByTeacher(auth.currentUser!.uid, profile.kuttabName, isSenior),
+          dbService.getWeeklyRevisionsByTeacher(auth.currentUser!.uid, profile.kuttabName, isSenior),
+          (isSenior || profile.kuttabName) ? dbService.getAllKuttabs() : Promise.resolve([])
         ]);
+        
+        let filteredKuttabs = allKuttabs;
+        if (!isSenior && profile.kuttabName) {
+          filteredKuttabs = allKuttabs.filter(k => k.name === profile.kuttabName);
+        }
+
         setPerformanceData(weeklyEval);
         setRevisionData(weeklyRev);
         setAttendanceRecords(weeklyAttendance);
+        setKuttabs(filteredKuttabs);
       } catch (err) {
-        console.error('Error fetching weekly stats:', err);
+        console.error('Error fetching dashboard stats:', err);
       }
     };
 
-    fetchWeeklyStats();
+    fetchData();
 
     const unsubscribe = dbService.subscribeStudents(
       auth.currentUser.uid,
       profile.kuttabName,
-      isAdmin,
+      isSenior,
       (studentList) => {
         setStudents(studentList);
         setLoading(false);
@@ -99,7 +110,7 @@ export default function Dashboard({ profile }: DashboardProps) {
     );
 
     return () => unsubscribe();
-  }, [auth.currentUser, profile]);
+  }, [auth.currentUser, profile, isSenior]);
 
   const activeDaysData = attendanceData.filter(d => d.present > 0 || students.length > 0);
   const activeDaysWithRecords = activeDaysData.length;
@@ -173,6 +184,16 @@ export default function Dashboard({ profile }: DashboardProps) {
           </motion.div>
         ))}
       </div>
+
+      {kuttabs.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+        >
+          <KuttabWeeklyOverview kuttabs={kuttabs} />
+        </motion.div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 text-black">
         <div className="p-6 bg-white rounded-2xl border shadow-sm space-y-4">

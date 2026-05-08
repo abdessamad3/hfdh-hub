@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Calendar, BookOpen, Award, ChevronLeft, TrendingUp, AlertCircle, Trash2, Edit2, Mail, Home } from 'lucide-react';
+import { Calendar, BookOpen, Award, ChevronLeft, TrendingUp, AlertCircle, Trash2, Edit2, Mail, Home, Filter } from 'lucide-react';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area 
@@ -46,6 +46,10 @@ export default function StudentProfile({ profile }: StudentProfileProps) {
   const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  const [monthFrom, setMonthFrom] = useState<string>('');
+  const [monthTo, setMonthTo] = useState<string>('');
+
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingEvaluation, setEditingEvaluation] = useState<Evaluation | null>(null);
 
@@ -84,6 +88,42 @@ export default function StudentProfile({ profile }: StudentProfileProps) {
     }
   };
 
+  const filteredEvaluations = useMemo(() => {
+    return evaluations.filter(e => {
+      const dateStr = e.date.substring(0, 7); // YYYY-MM
+      if (monthFrom && dateStr < monthFrom) return false;
+      if (monthTo && dateStr > monthTo) return false;
+      return true;
+    });
+  }, [evaluations, monthFrom, monthTo]);
+
+  const filteredRevisions = useMemo(() => {
+    return revisions.filter(r => {
+      const dateStr = r.date.substring(0, 7); // YYYY-MM
+      if (monthFrom && dateStr < monthFrom) return false;
+      if (monthTo && dateStr > monthTo) return false;
+      return true;
+    });
+  }, [revisions, monthFrom, monthTo]);
+
+  const filteredAttendance = useMemo(() => {
+    return attendance.filter(a => {
+      const dateStr = a.date.substring(0, 7); // YYYY-MM
+      if (monthFrom && dateStr < monthFrom) return false;
+      if (monthTo && dateStr > monthTo) return false;
+      return true;
+    });
+  }, [attendance, monthFrom, monthTo]);
+
+  const filteredNextRevisions = useMemo(() => {
+    return nextRevisions.filter(nr => {
+      const dateStr = nr.dueDate.substring(0, 7); // YYYY-MM
+      if (monthFrom && dateStr < monthFrom) return false;
+      if (monthTo && dateStr > monthTo) return false;
+      return true;
+    });
+  }, [nextRevisions, monthFrom, monthTo]);
+
   useEffect(() => {
     fetchData();
   }, [id]);
@@ -94,9 +134,13 @@ export default function StudentProfile({ profile }: StudentProfileProps) {
       await dbService.updateStudent(id, data);
       await fetchData();
       toast.success(t('student_profile_updated'));
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error updating student:', err);
-      toast.error(t('failed_to_update_student'));
+      if (err.message === 'email_already_exists') {
+        toast(t('email_already_exists'), { icon: '⚠️', duration: 4000 });
+      } else {
+        toast.error(t('failed_to_update_student'));
+      }
       throw err;
     }
   };
@@ -184,7 +228,7 @@ export default function StudentProfile({ profile }: StudentProfileProps) {
     );
   }
 
-  const chartData = evaluations.map(e => ({
+  const chartData = filteredEvaluations.map(e => ({
     date: formatDate(e.date),
     accuracy: e.accuracyScore,
     mistakes: e.mistakesCount
@@ -216,6 +260,44 @@ export default function StudentProfile({ profile }: StudentProfileProps) {
             <Trash2 className="w-4 h-4" />
             {confirmDeleteStudent ? t('confirm_delete_student') : t('delete_student')}
           </button>
+        </div>
+      </div>
+
+      <div className="bg-white border rounded-3xl p-6 shadow-sm flex flex-wrap gap-6 items-center">
+        <div className="flex items-center gap-2 text-gray-500 font-bold uppercase text-[10px] tracking-widest">
+          <Filter className="w-4 h-4" />
+          {t('filter_by_month')}
+        </div>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-gray-400 uppercase">{t('from')}</span>
+            <input 
+              type="month" 
+              value={monthFrom}
+              onChange={(e) => setMonthFrom(e.target.value)}
+              className="bg-gray-50 border rounded-xl px-3 py-2 text-sm font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-gray-400 uppercase">{t('to')}</span>
+            <input 
+              type="month" 
+              value={monthTo}
+              onChange={(e) => setMonthTo(e.target.value)}
+              className="bg-gray-50 border rounded-xl px-3 py-2 text-sm font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
+            />
+          </div>
+          {(monthFrom || monthTo) && (
+            <button 
+              onClick={() => {
+                setMonthFrom('');
+                setMonthTo('');
+              }}
+              className="text-[10px] font-black uppercase text-red-500 hover:text-red-600 transition-colors"
+            >
+              {t('clear_filter')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -334,7 +416,7 @@ export default function StudentProfile({ profile }: StudentProfileProps) {
       </div>
       
       <div className="mt-8">
-        <MemorizationGrid evaluations={evaluations} />
+        <MemorizationGrid evaluations={filteredEvaluations} />
       </div>
       
       <div className="mt-8">
@@ -343,10 +425,10 @@ export default function StudentProfile({ profile }: StudentProfileProps) {
           {t('attendance_eval_timeline')}
         </h3>
         <StudentCalendar 
-          attendance={attendance} 
-          evaluations={evaluations} 
-          revisions={revisions} 
-          nextRevisions={nextRevisions} 
+          attendance={filteredAttendance} 
+          evaluations={filteredEvaluations} 
+          revisions={filteredRevisions} 
+          nextRevisions={filteredNextRevisions} 
         />
       </div>
 
@@ -354,15 +436,15 @@ export default function StudentProfile({ profile }: StudentProfileProps) {
         <div className="p-6 bg-gray-50 flex justify-between items-center border-b">
           <h3 className="font-bold flex items-center gap-2 uppercase text-xs tracking-widest text-gray-500">
             <History className="w-4 h-4" />
-            {t('todays_revisions')}
+            {t('revisions_history')}
           </h3>
         </div>
         <div className="divide-y text-black">
-          {revisions.filter(r => r.date === new Date().toISOString().split('T')[0]).length === 0 ? (
+          {filteredRevisions.length === 0 ? (
             <div className="p-12 text-center text-gray-500 font-medium">{t('no_eval_data')}</div>
           ) : (
-            revisions
-              .filter(r => r.date === new Date().toISOString().split('T')[0])
+            filteredRevisions
+              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
               .map((rev) => (
               <div key={rev.id} className="p-6 hover:bg-gray-50 transition-colors">
                 <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
@@ -440,10 +522,12 @@ export default function StudentProfile({ profile }: StudentProfileProps) {
           </h3>
         </div>
         <div className="divide-y text-black">
-          {evaluations.length === 0 ? (
+          {filteredEvaluations.length === 0 ? (
             <div className="p-12 text-center text-gray-500 font-medium">{t('no_unified_records')}</div>
           ) : (
-            evaluations.map((evalItem) => (
+            filteredEvaluations
+              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+              .map((evalItem) => (
               <div key={evalItem.id} className="p-6 hover:bg-gray-50 transition-colors">
                 <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
                   <div className="space-y-4 flex-1">

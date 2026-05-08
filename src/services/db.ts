@@ -22,8 +22,9 @@ import {
   type QueryFilterConstraint
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
-import type { Student, Attendance, Memorization, Evaluation, Revision, UserProfile, UserRole, Kuttab, NextRevision } from '../types';
+import type { Student, Attendance, Memorization, Evaluation, Revision, UserProfile, UserRole, Kuttab, KuttabSchedule, NextRevision, TeacherAttendance } from '../types';
 import { getCoveredThumns } from '../lib/quranUtils';
+import { getDayIndex } from '../lib/dateUtils';
 
 enum OperationType {
   CREATE = 'create',
@@ -98,12 +99,43 @@ export const dbService = {
     return true;
   },
 
-  async updateKuttab(id: string, data: Partial<Kuttab>) {
+  async getKuttab(id: string) {
     const docRef = doc(db, 'kuttabs', id);
-    return await setDoc(docRef, {
-      ...data,
+    const snap = await getDoc(docRef);
+    if (!snap.exists()) return null;
+    return { id: snap.id, ...(snap.data() as object) } as Kuttab;
+  },
+
+  subscribeKuttab(id: string, callback: (kuttab: Kuttab | null) => void) {
+    const docRef = doc(db, 'kuttabs', id);
+    return onSnapshot(docRef, (snap) => {
+      if (!snap.exists()) {
+        callback(null);
+      } else {
+        callback({ id: snap.id, ...(snap.data() as object) } as Kuttab);
+      }
+    }, (error) => {
+      console.error("Error subscribing to kuttab:", error);
+    });
+  },
+
+  async updateKuttab(id: string, kuttab: Partial<Kuttab>) {
+    try {
+      await updateDoc(doc(db, 'kuttabs', id), {
+        ...kuttab,
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `kuttabs/${id}`);
+    }
+  },
+
+  async updateKuttabSchedule(id: string, schedule: KuttabSchedule) {
+    const docRef = doc(db, 'kuttabs', id);
+    return await updateDoc(docRef, {
+      schedule,
       updatedAt: serverTimestamp()
-    }, { merge: true });
+    });
   },
 
   async getKuttabByName(name: string) {
@@ -113,8 +145,32 @@ export const dbService = {
     return { id: snap.docs[0].id, ...snap.docs[0].data() } as Kuttab;
   },
 
+  // Unified email uniqueness check
+  async checkEmailUniqueness(email: string, excludeId?: string, collectionName: 'students' | 'users' = 'users') {
+    const emailLower = email.toLowerCase();
+    
+    // Check ONLY the target collection for the same ID exception
+    if (collectionName === 'students') {
+      const q = query(collection(db, 'students'), where('email', '==', emailLower));
+      const snap = await getDocs(q);
+      if (snap.docs.some(doc => doc.id !== excludeId)) {
+        throw new Error('email_already_exists');
+      }
+    } else {
+      const q = query(collection(db, 'users'), where('email', '==', emailLower));
+      const snap = await getDocs(q);
+      if (snap.docs.some(doc => doc.id !== excludeId)) {
+        throw new Error('email_already_exists');
+      }
+    }
+  },
+
   // Students
   async addStudent(student: Omit<Student, 'id'>) {
+    if (student.email) {
+      await this.checkEmailUniqueness(student.email, undefined, 'students');
+    }
+
     let kuttabResponsibleId = student.teacherId;
     
     if (student.kuttabName) {
@@ -138,6 +194,10 @@ export const dbService = {
   },
 
   async updateStudent(id: string, data: Partial<Student>) {
+    if (data.email) {
+      await this.checkEmailUniqueness(data.email, id, 'students');
+    }
+
     const studentRef = doc(db, 'students', id);
     let finalData = { ...data };
 
@@ -418,42 +478,119 @@ export const dbService = {
     } as Student;
   },
 
+  // Attendance helper
+  async ensurePresence(studentId: string, date: string, teacherId: string) {
+    try {
+      const isSession = await this.isSessionDay(studentId, date);
+      if (!isSession) return; // Silent return as this is a background helper
+
+      const id = `${studentId}_${date}`;
+      const docRef = doc(db, 'attendance', id);
+      const snap = await getDoc(docRef);
+      
+      if (snap.exists()) {
+        const currentData = snap.data() as Attendance;
+        if (currentData.status !== 'present') {
+          await updateDoc(docRef, { 
+            status: 'present', 
+            updatedAt: serverTimestamp(), 
+            excuse: null 
+          });
+        }
+      } else {
+        const student = await this.getStudent(studentId);
+        await setDoc(docRef, {
+          studentId,
+          teacherId,
+          date,
+          status: 'present',
+          studentEmail: student.email ? student.email.toLowerCase() : null,
+          kuttabResponsibleId: student.kuttabResponsibleId || null,
+          kuttabName: student.kuttabName || null,
+          timestamp: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      }
+    } catch (err) {
+      console.error('Error ensuring presence:', err);
+    }
+  },
+
+  async isSessionDay(studentId: string, date: string) {
+    try {
+      const student = await this.getStudent(studentId);
+      const kName = student.kuttabName?.trim().toLowerCase();
+      if (!kName) return false; // Strict: No kuttab = no session
+
+      const kuttabs = await this.getAllKuttabs();
+      const kuttab = kuttabs.find(k => k.name.trim().toLowerCase() === kName);
+      const schedule = kuttab?.schedule?.lessons;
+      if (!schedule) return false; // Strict: No schedule = no session
+
+      // Handle specific date overrides (e.g. '2026-05-08')
+      const specific = schedule[date];
+      if (specific) {
+        return specific.lessons.length > 0;
+      }
+
+      // Fallback to recurring schedule
+      const dayIdx = getDayIndex(date);
+      const recurring = schedule[dayIdx.toString()];
+      return recurring && recurring.type === 'recurring' && recurring.lessons.length > 0;
+    } catch (err) {
+      console.error('Error checking session day:', err);
+      return false; // Strict failure
+    }
+  },
+
   // Attendance
   async saveAttendance(records: Omit<Attendance, 'id'>[]) {
-    // For each record, check if it exists and update or create
     const promises = records.map(async (record) => {
       try {
-        const student = await this.getStudent(record.studentId);
-        const enrichedRecord = {
-          ...record,
-          studentEmail: student.email || null,
-          kuttabResponsibleId: student.kuttabResponsibleId || null,
-          kuttabName: student.kuttabName || null
-        };
+        const isSession = await this.isSessionDay(record.studentId, record.date);
+        if (!isSession) {
+          throw new Error('Attendance can only be marked on scheduled session days.');
+        }
 
-        const q = query(
-          collection(db, 'attendance'),
-          where('studentId', '==', record.studentId),
-          where('teacherId', '==', record.teacherId),
-          where('date', '==', record.date)
-        );
-        const snapshot = await getDocs(q);
+        const student = await this.getStudent(record.studentId);
+        const id = `${record.studentId}_${record.date}_${record.sessionIndex || 0}`;
+        const docRef = doc(db, 'attendance', id);
         
-        // Filter undefined values for Firestore
+        let finalStatus = record.status;
+        let finalExcuse = record.excuse;
+
+        if (finalStatus !== 'present') {
+           const [evals, revs, memos] = await Promise.all([
+             getDocs(query(collection(db, 'evaluations'), where('studentId', '==', record.studentId), where('date', '==', record.date), limit(1))),
+             getDocs(query(collection(db, 'revisions'), where('studentId', '==', record.studentId), where('date', '==', record.date), limit(1))),
+             getDocs(query(collection(db, 'memorizations'), where('studentId', '==', record.studentId), where('date', '==', record.date), limit(1)))
+           ]);
+           if (!evals.empty || !revs.empty || !memos.empty) {
+             finalStatus = 'present';
+             finalExcuse = undefined;
+           }
+        }
+
         const cleanData = Object.fromEntries(
           Object.entries({
-            ...enrichedRecord,
-            timestamp: serverTimestamp(),
+            ...record,
+            status: finalStatus,
+            excuse: finalExcuse,
+            studentEmail: student.email ? student.email.toLowerCase() : null,
+            kuttabResponsibleId: student.kuttabResponsibleId || null,
+            kuttabName: student.kuttabName || null,
             updatedAt: serverTimestamp()
           }).filter(([_, v]) => v !== undefined)
         );
 
-        if (!snapshot.empty) {
-          const docRef = doc(db, 'attendance', snapshot.docs[0].id);
-          return updateDoc(docRef, cleanData);
-        } else {
-          return addDoc(collection(db, 'attendance'), cleanData);
+        // Use set with merge to ensure we don't lose the created timestamp if it exists,
+        // but since we are using deterministic IDs, set is better.
+        const snap = await getDoc(docRef);
+        if (!snap.exists()) {
+          (cleanData as any).timestamp = serverTimestamp();
         }
+
+        return setDoc(docRef, cleanData, { merge: true });
       } catch (err) {
         return handleFirestoreError(err, OperationType.WRITE, 'attendance');
       }
@@ -461,13 +598,8 @@ export const dbService = {
 
     await Promise.all(promises);
     
-    // Update stats for all affected students
     const uniqueStudentIds = Array.from(new Set(records.map(r => r.studentId)));
-    const teacherId = records[0]?.teacherId;
-    if (teacherId) {
-      // Use teacherId for fetching records they touched, but stats update might need more broad view
-      await Promise.all(uniqueStudentIds.map(sid => this.updateStudentStats(sid)));
-    }
+    await Promise.all(uniqueStudentIds.map(sid => this.updateStudentStats(sid)));
     
     return true;
   },
@@ -500,6 +632,51 @@ export const dbService = {
     return combinedDocs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Attendance));
   },
 
+  // Teacher Attendance
+  async saveTeacherAttendance(records: Omit<TeacherAttendance, 'id'>[]) {
+    const promises = records.map(async (record) => {
+      try {
+        const q = query(
+          collection(db, 'teacher_attendance'),
+          where('teacherId', '==', record.teacherId),
+          where('date', '==', record.date),
+          where('sessionIndex', '==', record.sessionIndex || 0)
+        );
+        const snapshot = await getDocs(q);
+        
+        const cleanData = Object.fromEntries(
+          Object.entries({
+            ...record,
+            timestamp: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          }).filter(([_, v]) => v !== undefined)
+        );
+
+        if (!snapshot.empty) {
+          const docRef = doc(db, 'teacher_attendance', snapshot.docs[0].id);
+          return updateDoc(docRef, cleanData);
+        } else {
+          return addDoc(collection(db, 'teacher_attendance'), cleanData);
+        }
+      } catch (err) {
+        return handleFirestoreError(err, OperationType.WRITE, 'teacher_attendance');
+      }
+    });
+
+    await Promise.all(promises);
+    return true;
+  },
+
+  async getTeacherAttendanceByDate(date: string) {
+    try {
+      const q = query(collection(db, 'teacher_attendance'), where('date', '==', date));
+      const snap = await getDocs(q);
+      return snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as TeacherAttendance));
+    } catch (err) {
+      return handleFirestoreError(err, OperationType.LIST, 'teacher_attendance');
+    }
+  },
+
   async getStudentAttendance(studentId: string) {
     const q = query(
       collection(db, 'attendance'),
@@ -509,6 +686,120 @@ export const dbService = {
     );
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Attendance));
+  },
+
+  async getMonthlyAttendanceByTeacher(teacherId: string, kuttabName: string | undefined, year: number, month: number, isAdmin: boolean = false) {
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const nextMonth = month === 12 ? 1 : month + 1;
+    const nextYear = month === 12 ? year + 1 : year;
+    const endDate = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`;
+
+    let baseQuery;
+    if (isAdmin) {
+      baseQuery = query(
+        collection(db, 'attendance'),
+        where('date', '>=', startDate),
+        where('date', '<', endDate)
+      );
+    } else if (kuttabName) {
+      baseQuery = query(
+        collection(db, 'attendance'),
+        where('kuttabName', '==', kuttabName),
+        where('date', '>=', startDate),
+        where('date', '<', endDate)
+      );
+    } else {
+      baseQuery = query(
+        collection(db, 'attendance'),
+        and(
+          or(
+            where('teacherId', '==', teacherId),
+            where('kuttabResponsibleId', '==', teacherId)
+          ),
+          where('date', '>=', startDate),
+          where('date', '<', endDate)
+        )
+      );
+    }
+
+    const snap = await getDocs(baseQuery);
+    return snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Attendance));
+  },
+
+  async getMonthlyEvaluationsByTeacher(teacherId: string, kuttabName: string | undefined, year: number, month: number, isAdmin: boolean = false) {
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const nextMonth = month === 12 ? 1 : month + 1;
+    const nextYear = month === 12 ? year + 1 : year;
+    const endDate = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`;
+
+    let baseQuery;
+    if (isAdmin) {
+      baseQuery = query(
+        collection(db, 'evaluations'),
+        where('date', '>=', startDate),
+        where('date', '<', endDate)
+      );
+    } else if (kuttabName) {
+      baseQuery = query(
+        collection(db, 'evaluations'),
+        where('kuttabName', '==', kuttabName),
+        where('date', '>=', startDate),
+        where('date', '<', endDate)
+      );
+    } else {
+      baseQuery = query(
+        collection(db, 'evaluations'),
+        and(
+          or(
+            where('teacherId', '==', teacherId),
+            where('kuttabResponsibleId', '==', teacherId)
+          ),
+          where('date', '>=', startDate),
+          where('date', '<', endDate)
+        )
+      );
+    }
+
+    const snap = await getDocs(baseQuery);
+    return snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Evaluation));
+  },
+
+  async getMonthlyRevisionsByTeacher(teacherId: string, kuttabName: string | undefined, year: number, month: number, isAdmin: boolean = false) {
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const nextMonth = month === 12 ? 1 : month + 1;
+    const nextYear = month === 12 ? year + 1 : year;
+    const endDate = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`;
+
+    let baseQuery;
+    if (isAdmin) {
+      baseQuery = query(
+        collection(db, 'revisions'),
+        where('date', '>=', startDate),
+        where('date', '<', endDate)
+      );
+    } else if (kuttabName) {
+      baseQuery = query(
+        collection(db, 'revisions'),
+        where('kuttabName', '==', kuttabName),
+        where('date', '>=', startDate),
+        where('date', '<', endDate)
+      );
+    } else {
+      baseQuery = query(
+        collection(db, 'revisions'),
+        and(
+          or(
+            where('teacherId', '==', teacherId),
+            where('kuttabResponsibleId', '==', teacherId)
+          ),
+          where('date', '>=', startDate),
+          where('date', '<', endDate)
+        )
+      );
+    }
+
+    const snap = await getDocs(baseQuery);
+    return snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Revision));
   },
 
   async getWeeklyAttendanceByTeacher(teacherId: string, kuttabName: string | undefined, isAdmin: boolean = false) {
@@ -574,16 +865,52 @@ export const dbService = {
 
   // Memorization
   async addMemorization(record: Omit<Memorization, 'id'>) {
+    const isSession = await this.isSessionDay(record.studentId, record.date);
+    if (!isSession) {
+      throw new Error('Memorizations can only be added on scheduled session days.');
+    }
+
     const student = await this.getStudent(record.studentId);
     const docRef = await addDoc(collection(db, 'memorizations'), {
       ...record,
-      studentEmail: student.email || null,
+      studentEmail: student.email ? student.email.toLowerCase() : null,
       kuttabResponsibleId: student.kuttabResponsibleId || null,
       kuttabName: student.kuttabName || null,
       timestamp: serverTimestamp()
     });
+
+    // Ensure student is marked present
+    await this.ensurePresence(record.studentId, record.date, record.teacherId);
+
     await this.updateStudentStats(record.studentId);
     return docRef;
+  },
+
+  async getMemorizationsByDate(teacherId: string, kuttabName: string | undefined, date: string, isAdmin: boolean = false) {
+    try {
+      if (isAdmin) {
+        const snap = await getDocs(query(collection(db, 'memorizations'), where('date', '==', date), limit(100)));
+        return snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Memorization));
+      }
+
+      const q = query(
+        collection(db, 'memorizations'),
+        and(
+          or(
+            where('teacherId', '==', teacherId),
+            where('kuttabResponsibleId', '==', teacherId),
+            ...(kuttabName ? [where('kuttabName', '==', kuttabName)] : [])
+          ),
+          where('date', '==', date)
+        ),
+        limit(100)
+      );
+
+      const snap = await getDocs(q);
+      return snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Memorization));
+    } catch (error) {
+      return handleFirestoreError(error, OperationType.LIST, 'memorizations');
+    }
   },
 
   async getMemorizations(studentId: string) {
@@ -646,11 +973,16 @@ export const dbService = {
 
   async addEvaluation(record: Omit<Evaluation, 'id'>) {
     try {
+      const isSession = await this.isSessionDay(record.studentId, record.date);
+      if (!isSession) {
+        throw new Error('Evaluations can only be added on scheduled session days.');
+      }
+
       const student = await this.getStudent(record.studentId);
       
       const data = {
         ...record,
-        studentEmail: student.email || null,
+        studentEmail: student.email ? student.email.toLowerCase() : null,
         kuttabResponsibleId: student.kuttabResponsibleId || null,
         kuttabName: student.kuttabName || null,
         timestamp: serverTimestamp()
@@ -659,6 +991,10 @@ export const dbService = {
       const cleanData = Object.fromEntries(Object.entries(data).filter(([_, v]) => v !== undefined));
 
       const docRef = await addDoc(collection(db, 'evaluations'), cleanData);
+      
+      // Ensure the student is marked as present for this day
+      await this.ensurePresence(record.studentId, record.date, record.teacherId);
+      
       await this.updateStudentStats(record.studentId);
       return docRef;
     } catch (error) {
@@ -678,6 +1014,16 @@ export const dbService = {
       const cleanUpdateData = Object.fromEntries(Object.entries(updateData).filter(([_, v]) => v !== undefined));
 
       await setDoc(docRef, cleanUpdateData, { merge: true });
+
+      // Ensure the student is marked as present for this day
+      if (data.date || studentId) {
+        const finalSnap = await getDoc(docRef);
+        const finalData = finalSnap.data();
+        if (finalData?.date && finalData?.teacherId) {
+          await this.ensurePresence(studentId, finalData.date, finalData.teacherId);
+        }
+      }
+
       await this.updateStudentStats(studentId);
       return true;
     } catch (error) {
@@ -771,6 +1117,33 @@ export const dbService = {
       });
     } catch (err) {
       console.error('Error updating student stats:', err);
+    }
+  },
+
+  async getEvaluationsByDate(teacherId: string, kuttabName: string | undefined, date: string, isAdmin: boolean = false) {
+    try {
+      if (isAdmin) {
+        const snap = await getDocs(query(collection(db, 'evaluations'), where('date', '==', date), limit(100)));
+        return snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Evaluation));
+      }
+
+      const q = query(
+        collection(db, 'evaluations'),
+        and(
+          or(
+            where('teacherId', '==', teacherId),
+            where('kuttabResponsibleId', '==', teacherId),
+            ...(kuttabName ? [where('kuttabName', '==', kuttabName)] : [])
+          ),
+          where('date', '==', date)
+        ),
+        limit(100)
+      );
+
+      const snap = await getDocs(q);
+      return snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Evaluation));
+    } catch (error) {
+      return handleFirestoreError(error, OperationType.LIST, 'evaluations');
     }
   },
 
@@ -960,11 +1333,16 @@ export const dbService = {
 
   async addRevision(record: Omit<Revision, 'id'>) {
     try {
+      const isSession = await this.isSessionDay(record.studentId, record.date);
+      if (!isSession) {
+        throw new Error('Revisions can only be added on scheduled session days.');
+      }
+
       const student = await this.getStudent(record.studentId);
       
       const data = {
         ...record,
-        studentEmail: student.email || null,
+        studentEmail: student.email ? student.email.toLowerCase() : null,
         kuttabResponsibleId: student.kuttabResponsibleId || null,
         kuttabName: student.kuttabName || null,
         timestamp: serverTimestamp()
@@ -973,6 +1351,10 @@ export const dbService = {
       const cleanData = Object.fromEntries(Object.entries(data).filter(([_, v]) => v !== undefined));
 
       const docRef = await addDoc(collection(db, 'revisions'), cleanData);
+      
+      // Ensure the student is marked as present for this day
+      await this.ensurePresence(record.studentId, record.date, record.teacherId);
+
       await this.updateStudentStats(record.studentId);
       return docRef;
     } catch (error) {
@@ -992,6 +1374,16 @@ export const dbService = {
       const cleanUpdateData = Object.fromEntries(Object.entries(updateData).filter(([_, v]) => v !== undefined));
 
       await setDoc(docRef, cleanUpdateData, { merge: true });
+
+      // Ensure the student is marked as present for this day
+      if (data.date || studentId) {
+        const finalSnap = await getDoc(docRef);
+        const finalData = finalSnap.data();
+        if (finalData?.date && finalData?.teacherId) {
+          await this.ensurePresence(studentId, finalData.date, finalData.teacherId);
+        }
+      }
+
       await this.updateStudentStats(studentId);
       return true;
     } catch (error) {
@@ -1008,6 +1400,33 @@ export const dbService = {
       return true;
     } catch (error) {
       return handleFirestoreError(error, OperationType.DELETE, `revisions/${id}`);
+    }
+  },
+
+  async getRevisionsByDate(teacherId: string, kuttabName: string | undefined, date: string, isAdmin: boolean = false) {
+    try {
+      if (isAdmin) {
+        const snap = await getDocs(query(collection(db, 'revisions'), where('date', '==', date), limit(100)));
+        return snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Revision));
+      }
+
+      const q = query(
+        collection(db, 'revisions'),
+        and(
+          or(
+            where('teacherId', '==', teacherId),
+            where('kuttabResponsibleId', '==', teacherId),
+            ...(kuttabName ? [where('kuttabName', '==', kuttabName)] : [])
+          ),
+          where('date', '==', date)
+        ),
+        limit(100)
+      );
+
+      const snap = await getDocs(q);
+      return snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Revision));
+    } catch (error) {
+      return handleFirestoreError(error, OperationType.LIST, 'revisions');
     }
   },
 
@@ -1263,64 +1682,13 @@ export const dbService = {
     });
   },
 
-  async getMonthlyRevisionsByTeacher(teacherId: string, kuttabName: string | undefined, month: string, isAdmin: boolean = false) {
-    try {
-      // month is expected as "YYYY-MM"
-      const startOfMonth = `${month}-01`;
-      const endOfMonth = `${month}-31`; // Simple approach, Firestore range query will handle it
-
-      if (isAdmin) {
-        const q = query(
-          collection(db, 'revisions'),
-          where('date', '>=', startOfMonth),
-          where('date', '<=', endOfMonth),
-          limit(100)
-        );
-        const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Revision));
-      }
-
-      const queries = [
-        getDocs(query(collection(db, 'revisions'), where('teacherId', '==', teacherId), where('date', '>=', startOfMonth), where('date', '<=', endOfMonth), limit(100))),
-        getDocs(query(collection(db, 'revisions'), where('kuttabResponsibleId', '==', teacherId), where('date', '>=', startOfMonth), where('date', '<=', endOfMonth), limit(100)))
-      ];
-
-      if (kuttabName) {
-        queries.push(getDocs(query(collection(db, 'revisions'), where('kuttabName', '==', kuttabName), where('date', '>=', startOfMonth), where('date', '<=', endOfMonth), limit(100))));
-      }
-
-      const snapshots = await Promise.all(queries);
-
-      const combinedDocs = [] as any[];
-      snapshots.forEach(snap => {
-        snap.docs.forEach(doc => {
-          if (!combinedDocs.some(d => d.id === doc.id)) {
-            combinedDocs.push(doc);
-          }
-        });
-      });
-
-      const revisions = combinedDocs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Revision));
-
-      return revisions.sort((a, b) => {
-        const dateCompare = b.date.localeCompare(a.date);
-        if (dateCompare !== 0) return dateCompare;
-        const bTime = (b as any).timestamp?.toMillis?.() || 0;
-        const aTime = (a as any).timestamp?.toMillis?.() || 0;
-        return bTime - aTime;
-      });
-    } catch (error) {
-      return handleFirestoreError(error, OperationType.LIST, 'revisions');
-    }
-  },
-
   async approveNextRevision(nextRevision: NextRevision, qualityScore: number, notes: string = '') {
     try {
       const student = await this.getStudent(nextRevision.studentId);
       
       const revisionData: Omit<Revision, 'id'> = {
         studentId: nextRevision.studentId,
-        studentEmail: nextRevision.studentEmail || null,
+        studentEmail: (student.email || nextRevision.studentEmail || '').toLowerCase() || null,
         teacherId: nextRevision.teacherId,
         kuttabResponsibleId: nextRevision.kuttabResponsibleId || null,
         surahName: nextRevision.surahName,
@@ -1400,13 +1768,15 @@ export const dbService = {
   async addNextRevision(data: Omit<NextRevision, 'id' | 'createdAt' | 'updatedAt'>) {
     try {
       let kuttabName = data.kuttabName;
+      const student = await this.getStudent(data.studentId);
       if (!kuttabName) {
-        const student = await this.getStudent(data.studentId);
         kuttabName = student.kuttabName || null;
       }
+      const studentEmail = (data.studentEmail || student.email || '').toLowerCase() || null;
 
       const docRef = await addDoc(collection(db, 'next_revisions'), {
         ...data,
+        studentEmail,
         kuttabName,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -1484,20 +1854,104 @@ export const dbService = {
     }
   },
 
-  subscribeStudentNextRevisions(studentEmail: string, callback: (revisions: NextRevision[]) => void) {
+  subscribeStudentProfile(email: string, callback: (student: Student | null) => void) {
     const q = query(
-      collection(db, 'next_revisions'),
-      where('studentEmail', '==', studentEmail),
-      where('dueDate', '>=', new Date().toISOString().split('T')[0]),
-      orderBy('dueDate', 'asc'),
-      limit(50)
+      collection(db, 'students'),
+      where('email', '==', email.toLowerCase()),
+      limit(1)
     );
 
     return onSnapshot(q, (snapshot) => {
-      const revisions = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as NextRevision));
-      callback(revisions);
+      if (snapshot.empty) {
+        callback(null);
+      } else {
+        const doc = snapshot.docs[0];
+        callback({ id: doc.id, ...doc.data() } as Student);
+      }
+    }, (error) => {
+      console.error("Error subscribing to student profile:", error);
+    });
+  },
+
+  subscribeStudentNextRevisions(studentId: string, _studentEmail: string, callback: (revisions: NextRevision[]) => void) {
+    const q = query(
+      collection(db, 'next_revisions'),
+      where('studentId', '==', studentId),
+      limit(100)
+    );
+    
+    return onSnapshot(q, (snapshot) => {
+      const today = new Date().toISOString().split('T')[0];
+      const items = snapshot.docs
+        .map(doc => ({ id: doc.id, ...(doc.data() as object) } as NextRevision))
+        .filter(task => task.dueDate >= today)
+        .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+      callback(items);
     }, (error) => {
       console.error("Error subscribing to student next revisions:", error);
+    });
+  },
+
+  subscribeStudentAttendance(studentId: string, _studentEmail: string, callback: (attendance: Attendance[]) => void) {
+    const q = query(
+      collection(db, 'attendance'),
+      where('studentId', '==', studentId),
+      limit(100)
+    );
+    
+    return onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Attendance));
+      callback(data.sort((a, b) => {
+        const dateCompare = b.date.localeCompare(a.date);
+        if (dateCompare !== 0) return dateCompare;
+        const aTime = (a as any).timestamp?.toMillis?.() || 0;
+        const bTime = (b as any).timestamp?.toMillis?.() || 0;
+        return bTime - aTime;
+      }));
+    }, (error) => {
+      console.error("Error subscribing to student attendance:", error);
+    });
+  },
+
+  subscribeStudentEvaluations(studentId: string, _studentEmail: string, callback: (evaluations: Evaluation[]) => void) {
+    const q = query(
+      collection(db, 'evaluations'),
+      where('studentId', '==', studentId),
+      limit(100)
+    );
+    
+    return onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Evaluation));
+      callback(data.sort((a, b) => {
+        const dateCompare = b.date.localeCompare(a.date);
+        if (dateCompare !== 0) return dateCompare;
+        const aTime = (a as any).timestamp?.toMillis?.() || 0;
+        const bTime = (b as any).timestamp?.toMillis?.() || 0;
+        return bTime - aTime;
+      }));
+    }, (error) => {
+      console.error("Error subscribing to student evaluations:", error);
+    });
+  },
+
+  subscribeStudentRevisions(studentId: string, _studentEmail: string, callback: (revisions: Revision[]) => void) {
+    const q = query(
+      collection(db, 'revisions'),
+      where('studentId', '==', studentId),
+      limit(100)
+    );
+ 
+    return onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Revision));
+      callback(data.sort((a, b) => {
+        const dateCompare = b.date.localeCompare(a.date);
+        if (dateCompare !== 0) return dateCompare;
+        const aTime = (a as any).timestamp?.toMillis?.() || 0;
+        const bTime = (b as any).timestamp?.toMillis?.() || 0;
+        return bTime - aTime;
+      }));
+    }, (error) => {
+      console.error("Error subscribing to student revisions:", error);
     });
   },
 
@@ -1594,30 +2048,54 @@ export const dbService = {
   },
 
   async getStudentByEmail(email: string) {
-    const q = query(collection(db, 'students'), where('email', '==', email.toLowerCase()));
-    const snap = await getDocs(q);
-    if (snap.empty) return null;
-    return { id: snap.docs[0].id, ...snap.docs[0].data() } as Student;
+    try {
+      const q = query(
+        collection(db, 'students'), 
+        where('email', '==', email.toLowerCase()),
+        limit(1)
+      );
+      const snap = await getDocs(q);
+      if (snap.empty) return null;
+      return { id: snap.docs[0].id, ...snap.docs[0].data() } as Student;
+    } catch (error) {
+      return handleFirestoreError(error, OperationType.LIST, 'students');
+    }
   },
 
   async getStudentsByEmail(email: string) {
-    const q = query(collection(db, 'students'), where('email', '==', email.toLowerCase()));
-    const snap = await getDocs(q);
-    return snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Student));
+    try {
+      const q = query(collection(db, 'students'), where('email', '==', email.toLowerCase()));
+      const snap = await getDocs(q);
+      return snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Student));
+    } catch (error) {
+      return handleFirestoreError(error, OperationType.LIST, 'students');
+    }
   },
 
   async getUserByEmail(email: string) {
-    const q = query(collection(db, 'users'), where('email', '==', email.toLowerCase()));
-    const snap = await getDocs(q);
-    if (snap.empty) return null;
-    return { uid: snap.docs[0].id, ...snap.docs[0].data() } as UserProfile;
+    try {
+      const q = query(
+        collection(db, 'users'), 
+        where('email', '==', email.toLowerCase()),
+        limit(1)
+      );
+      const snap = await getDocs(q);
+      if (snap.empty) return null;
+      return { uid: snap.docs[0].id, ...snap.docs[0].data() } as UserProfile;
+    } catch (error) {
+      return handleFirestoreError(error, OperationType.LIST, 'users');
+    }
   },
 
   async getUserById(uid: string) {
-    const docRef = doc(db, 'users', uid);
-    const snap = await getDoc(docRef);
-    if (!snap.exists()) return null;
-    return { uid: snap.id, ...snap.data() } as UserProfile;
+    try {
+      const docRef = doc(db, 'users', uid);
+      const snap = await getDoc(docRef);
+      if (!snap.exists()) return null;
+      return { uid: snap.id, ...snap.data() } as UserProfile;
+    } catch (error) {
+      return handleFirestoreError(error, OperationType.GET, `users/${uid}`);
+    }
   },
 
   // User Management
@@ -1626,22 +2104,14 @@ export const dbService = {
     if (kuttabName) {
       q = query(
         collection(db, 'users'), 
-        where('role', 'in', ['teacher', 'admin']),
+        where('role', 'in', ['teacher', 'manager', 'admin']),
         where('kuttabName', '==', kuttabName)
       );
     } else {
-      q = query(collection(db, 'users'), where('role', 'in', ['teacher', 'admin']));
+      q = query(collection(db, 'users'), where('role', 'in', ['teacher', 'manager', 'admin']));
     }
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ ...(doc.data() as object), uid: doc.id } as UserProfile));
-  },
-
-  async updateTeacher(uid: string, data: Partial<UserProfile>) {
-    const userRef = doc(db, 'users', uid);
-    return await setDoc(userRef, {
-      ...data,
-      updatedAt: serverTimestamp()
-    }, { merge: true });
   },
 
   async deleteTeacher(uid: string) {
@@ -1650,17 +2120,51 @@ export const dbService = {
   },
 
   async addTeacher(data: Omit<UserProfile, 'uid'>) {
-    const q = query(collection(db, 'users'), where('email', '==', data.email.toLowerCase()));
-    const snap = await getDocs(q);
-    if (!snap.empty) {
-      throw new Error('A teacher with this email already exists.');
+    if (data.email) {
+      const emailLower = data.email.toLowerCase();
+      
+      // Check if student exists (keep strict: a primary student account shouldn't be a teacher entry)
+      const qStudents = query(collection(db, 'students'), where('email', '==', emailLower));
+      const snapStudents = await getDocs(qStudents);
+      if (!snapStudents.empty) {
+        throw new Error('email_already_exists_as_student');
+      }
+
+      // Check if user already exists in users collection
+      const qUsers = query(collection(db, 'users'), where('email', '==', emailLower));
+      const snapUsers = await getDocs(qUsers);
+      
+      if (!snapUsers.empty) {
+        // User exists, update them to the new role/kuttab instead of failing
+        const existingDoc = snapUsers.docs[0];
+        const userRef = doc(db, 'users', existingDoc.id);
+        await updateDoc(userRef, {
+          ...data,
+          role: data.role || 'teacher',
+          updatedAt: serverTimestamp()
+        });
+        return existingDoc.id;
+      }
     }
+
     const userRef = await addDoc(collection(db, 'users'), {
       ...data,
       role: data.role || 'teacher',
-      createdAt: serverTimestamp()
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
     });
     return userRef.id;
+  },
+
+  async updateTeacher(uid: string, data: Partial<UserProfile>) {
+    if (data.email) {
+      await this.checkEmailUniqueness(data.email, uid, 'users');
+    }
+    const userRef = doc(db, 'users', uid);
+    return await setDoc(userRef, {
+      ...data,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
   },
 
   async getStudentDataForPortal(studentId: string, teacherId: string) {

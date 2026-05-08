@@ -36,9 +36,11 @@ export default function TeacherProfile({ profile }: TeacherProfileProps) {
     const fetchTeacherData = async () => {
       if (!id) return;
       
-      // Permission Check: Only admin can view ANY teacher. 
+      const isSenior = profile?.role === 'admin' || profile?.role === 'manager';
+      
+      // Permission Check: Only admin or manager can view ANY teacher. 
       // Teachers can only view themselves.
-      if (profile?.role !== 'admin' && profile?.uid !== id) {
+      if (!isSenior && profile?.uid !== id) {
         setLoading(false);
         setTeacher(null);
         return;
@@ -142,7 +144,11 @@ export default function TeacherProfile({ profile }: TeacherProfileProps) {
                       {teacher.email}
                     </span>
                     <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                      teacher.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-emerald-100 text-emerald-700'
+                      teacher.role === 'admin' 
+                        ? 'bg-purple-100 text-purple-700' 
+                        : teacher.role === 'manager'
+                          ? 'bg-blue-100 text-blue-700'
+                          : 'bg-emerald-100 text-emerald-700'
                     }`}>
                       {t(`role_${teacher.role}`)}
                     </span>

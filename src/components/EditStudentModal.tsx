@@ -1,6 +1,6 @@
 import { useState, FormEvent, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Save, User, Hash, Mail, Building } from 'lucide-react';
+import { X, Save, User, Hash, Mail, Building, Calendar } from 'lucide-react';
 import { dbService } from '../services/db';
 import { auth } from '../lib/firebase';
 import type { Student, Kuttab, UserProfile } from '../types';
@@ -20,6 +20,7 @@ export default function EditStudentModal({ student, isOpen, onClose, onSave, pro
   const [gender, setGender] = useState<'male' | 'female'>(student.gender || 'male');
   const [age, setAge] = useState((student.age ?? '').toString());
   const [email, setEmail] = useState(student.email || '');
+  const [enrollmentDate, setEnrollmentDate] = useState(student.enrollmentDate ? new Date(student.enrollmentDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
   const [kuttabName, setKuttabName] = useState(student.kuttabName || '');
   const [kuttabs, setKuttabs] = useState<Kuttab[]>([]);
   const [loading, setLoading] = useState(false);
@@ -45,6 +46,7 @@ export default function EditStudentModal({ student, isOpen, onClose, onSave, pro
         gender,
         age: parseInt(age), 
         email: email.toLowerCase(),
+        enrollmentDate: new Date(enrollmentDate).toISOString(),
         kuttabName: isAdmin ? kuttabName : (student.kuttabName || profile?.kuttabName || '')
       });
       onClose();
@@ -141,6 +143,20 @@ export default function EditStudentModal({ student, isOpen, onClose, onSave, pro
                     className="w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-black font-medium"
                   />
                   <p className="text-[10px] text-gray-400 font-bold px-1 uppercase tracking-wider">{t('required_for_portal')}</p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-700 flex items-center gap-2 text-black">
+                    <Calendar className="w-4 h-4" />
+                    {t('enrollment_date')}
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={enrollmentDate}
+                    onChange={(e) => setEnrollmentDate(e.target.value)}
+                    className="w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-black font-medium"
+                  />
                 </div>
 
                 {isAdmin && (

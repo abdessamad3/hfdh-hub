@@ -16,7 +16,8 @@ export default function MemorizationGrid({ evaluations }: MemorizationGridProps)
   const thumnMistakes: number[][] = Array.from({ length: 61 }, () => Array(9).fill(0));
 
   // Sort evaluations by date ascending so later evaluations override earlier ones for the same unit
-  const sortedEvals = [...evaluations].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  // Use localeCompare for YYYY-MM-DD strings to avoid timezone issues with new Date()
+  const sortedEvals = [...evaluations].sort((a, b) => a.date.localeCompare(b.date));
 
   sortedEvals.forEach((ev) => {
     const h = ev.hizbNumber;

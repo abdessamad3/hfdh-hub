@@ -1,4 +1,5 @@
 import { useState, useEffect, FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Trash2, Home, MapPin, X, Building, Edit2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -13,6 +14,7 @@ interface KuttabManagementProps {
 
 export default function KuttabManagement({ profile }: KuttabManagementProps) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [kuttabs, setKuttabs] = useState<Kuttab[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -21,7 +23,7 @@ export default function KuttabManagement({ profile }: KuttabManagementProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  const isAdmin = profile?.role === 'admin';
+  const isSenior = profile?.role === 'admin' || profile?.role === 'manager';
 
   useEffect(() => {
     fetchKuttabs();
@@ -30,7 +32,7 @@ export default function KuttabManagement({ profile }: KuttabManagementProps) {
   const fetchKuttabs = async () => {
     if (!auth.currentUser || !profile) return;
     try {
-      const data = isAdmin 
+      const data = isSenior 
         ? await dbService.getAllKuttabs()
         : await dbService.getKuttabs(auth.currentUser.uid);
       setKuttabs(data);
@@ -116,7 +118,7 @@ export default function KuttabManagement({ profile }: KuttabManagementProps) {
           <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">{t('kuttabs_management')}</h2>
           <p className="text-gray-500 mt-1">{t('kuttabs_subtitle')}</p>
         </div>
-        {isAdmin && (
+        {isSenior && (
           <motion.button 
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -149,12 +151,15 @@ export default function KuttabManagement({ profile }: KuttabManagementProps) {
                 key={kuttab.id}
                 className="group p-6 flex items-center justify-between hover:bg-emerald-50/30 transition-all"
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-white border border-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center shadow-sm">
+                <div 
+                  onClick={() => navigate(`/kuttabs/${kuttab.id}`)}
+                  className="flex items-center gap-4 cursor-pointer group-hover:translate-x-1 transition-transform"
+                >
+                  <div className="w-12 h-12 bg-white border border-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center shadow-sm group-hover:bg-emerald-600 group-hover:text-white transition-colors">
                     <Home className="w-6 h-6" />
                   </div>
                   <div>
-                    <h4 className="font-bold text-gray-900 text-lg">{kuttab.name}</h4>
+                    <h4 className="font-bold text-gray-900 text-lg group-hover:text-emerald-700 transition-colors uppercase tracking-tight">{kuttab.name}</h4>
                     {kuttab.location && (
                       <p className="text-sm text-gray-500 flex items-center gap-1">
                         <MapPin className="w-3 h-3" />
@@ -164,7 +169,7 @@ export default function KuttabManagement({ profile }: KuttabManagementProps) {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {(isAdmin || kuttab.teacherId === auth.currentUser?.uid) && (
+                  {(isSenior || kuttab.teacherId === auth.currentUser?.uid) && (
                     <>
                       <button
                         onClick={() => handleOpenEdit(kuttab)}

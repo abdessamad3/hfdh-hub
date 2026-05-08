@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, User, Users, Home, X } from 'lucide-react';
+import { Search, User, Users, Home, X, Building } from 'lucide-react';
 import { dbService } from '../services/db';
-import { Student, UserProfile } from '../types';
+import { Student, UserProfile, Kuttab } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'motion/react';
@@ -13,9 +13,10 @@ interface AdminSearchBarProps {
 interface SearchResult {
   id: string;
   name: string;
-  email: string;
-  kuttab: string;
-  type: 'student' | 'teacher';
+  email?: string;
+  kuttab?: string;
+  location?: string;
+  type: 'student' | 'teacher' | 'kuttab';
 }
 
 export default function AdminSearchBar({ profile }: AdminSearchBarProps) {
@@ -27,21 +28,23 @@ export default function AdminSearchBar({ profile }: AdminSearchBarProps) {
   const [loading, setLoading] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
-  const [allData, setAllData] = useState<{ students: Student[], teachers: UserProfile[] }>({
+  const [allData, setAllData] = useState<{ students: Student[], teachers: UserProfile[], kuttabs: Kuttab[] }>({
     students: [],
-    teachers: []
+    teachers: [],
+    kuttabs: []
   });
 
   useEffect(() => {
-    if (profile?.role !== 'admin') return;
+    if (profile?.role !== 'admin' && profile?.role !== 'manager') return;
 
     const fetchData = async () => {
       try {
-        const [students, teachers] = await Promise.all([
+        const [students, teachers, kuttabs] = await Promise.all([
           dbService.getAllStudents(),
-          dbService.getTeachers()
+          dbService.getTeachers(),
+          dbService.getAllKuttabs()
         ]);
-        setAllData({ students, teachers });
+        setAllData({ students, teachers, kuttabs });
       } catch (err) {
         console.error('Error fetching search data:', err);
       }
@@ -83,7 +86,17 @@ export default function AdminSearchBar({ profile }: AdminSearchBarProps) {
       type: 'teacher' as const
     }));
 
-    setResults([...filteredTeachers, ...filteredStudents].slice(0, 8));
+    const filteredKuttabs = allData.kuttabs.filter(k => 
+      k.name.toLowerCase().includes(searchTerm) || 
+      (k.location && k.location.toLowerCase().includes(searchTerm))
+    ).map(k => ({
+      id: k.id,
+      name: k.name,
+      location: k.location || '',
+      type: 'kuttab' as const
+    }));
+
+    setResults([...filteredKuttabs, ...filteredTeachers, ...filteredStudents].slice(0, 8));
     setLoading(false);
   }, [query, allData]);
 
@@ -97,13 +110,15 @@ export default function AdminSearchBar({ profile }: AdminSearchBarProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  if (profile?.role !== 'admin') return null;
+  if (profile?.role !== 'admin' && profile?.role !== 'manager') return null;
 
   const handleSelect = (result: SearchResult) => {
     if (result.type === 'student') {
       navigate(`/students/${result.id}`);
-    } else {
+    } else if (result.type === 'teacher') {
       navigate(`/teachers/${result.id}`);
+    } else {
+      navigate(`/kuttabs/${result.id}`);
     }
     setQuery('');
     setIsOpen(false);
@@ -157,21 +172,34 @@ export default function AdminSearchBar({ profile }: AdminSearchBarProps) {
                     className="w-full flex items-center gap-4 p-3 hover:bg-emerald-50 rounded-2xl transition-colors text-start"
                   >
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                      result.type === 'teacher' ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'
+                      result.type === 'teacher' ? 'bg-blue-100 text-blue-600' : 
+                      result.type === 'kuttab' ? 'bg-amber-100 text-amber-600' :
+                      'bg-emerald-100 text-emerald-600'
                     }`}>
-                      {result.type === 'teacher' ? <Users className="w-5 h-5" /> : <User className="w-5 h-5" />}
+                      {result.type === 'teacher' ? <Users className="w-5 h-5" /> : 
+                       result.type === 'kuttab' ? <Building className="w-5 h-5" /> :
+                       <User className="w-5 h-5" />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 text-start">
                         <div className="text-sm font-bold text-gray-900 truncate tracking-tight">{result.name}</div>
                         {result.email && (
                           <div className="text-[10px] text-gray-400 truncate hidden sm:block">({result.email})</div>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <Home className="w-3 h-3 shrink-0" />
-                        <span className="truncate">{result.kuttab || t('no_kuttab')}</span>
-                        <span className="text-[10px] uppercase tracking-wider font-bold bg-gray-100 px-1.5 py-0.5 rounded-md ms-auto whitespace-nowrap">
+                      <div className="flex items-center gap-2 text-xs text-gray-500 text-start">
+                        {result.type === 'kuttab' ? (
+                          <>
+                            <Building className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{result.location || t('not_assigned')}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Home className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{result.kuttab || t('no_kuttab')}</span>
+                          </>
+                        )}
+                        <span className="text-[10px] uppercase tracking-wider font-black bg-gray-100 px-1.5 py-0.5 rounded-md ms-auto whitespace-nowrap">
                           {t(result.type)}
                         </span>
                       </div>

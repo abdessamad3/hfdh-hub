@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'teacher' | 'student';
+export type UserRole = 'admin' | 'manager' | 'teacher' | 'student';
 
 export interface UserProfile {
   uid: string;
@@ -15,6 +15,16 @@ export interface Kuttab {
   name: string;
   location?: string;
   teacherId: string;
+  schedule?: KuttabSchedule;
+}
+
+export interface KuttabSchedule {
+  lessons: {
+    [key: string]: { // Day of week (0-6) for recurring, or 'YYYY-MM-DD' for specific days
+      type: 'recurring' | 'specific';
+      lessons: string[]; // e.g., ["08:00", "14:00"] or just ["Lesson 1", "Lesson 2"]
+    };
+  };
 }
 
 export interface Student {
@@ -49,6 +59,19 @@ export interface Attendance {
   kuttabResponsibleId?: string;
   kuttabName?: string;
   date: string;
+  sessionIndex?: number; // 0 for morning, 1 for afternoon, etc.
+  status: 'present' | 'absent' | 'excused';
+  excuse?: string;
+}
+
+export interface TeacherAttendance {
+  id: string;
+  teacherId: string;
+  teacherEmail: string;
+  markedById: string;
+  kuttabName?: string;
+  date: string;
+  sessionIndex?: number;
   status: 'present' | 'absent' | 'excused';
   excuse?: string;
 }

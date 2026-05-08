@@ -1,7 +1,8 @@
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Save, AlertCircle, MessageCircle, Calendar } from 'lucide-react';
 import { dbService } from '../services/db';
+import { getDayIndex } from '../lib/dateUtils';
 import type { Evaluation } from '../types';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-hot-toast';
@@ -35,9 +36,46 @@ export default function EditEvaluationModal({ evaluation, isOpen, onClose, onSav
   const [notes, setNotes] = useState(evaluation.notes || '');
   const [date, setDate] = useState(evaluation.date);
   const [loading, setLoading] = useState(false);
+  const [kuttab, setKuttab] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchKuttab = async () => {
+      try {
+        const student = await dbService.getStudent(evaluation.studentId);
+        const kName = student?.kuttabName?.trim().toLowerCase();
+        if (kName) {
+          const kuttabsData = await dbService.getAllKuttabs();
+          const kData = kuttabsData.find(k => k.name.trim().toLowerCase() === kName);
+          setKuttab(kData);
+        }
+      } catch (err) {
+        console.error('Error fetching kuttab for session check:', err);
+      }
+    };
+    fetchKuttab();
+  }, [evaluation.studentId]);
+
+  const isSessionDay = () => {
+    const schedule = kuttab?.schedule?.lessons;
+    if (!schedule) return false;
+    
+    if (schedule[date]) {
+      return schedule[date].lessons.length > 0;
+    }
+
+    const dayIdx = getDayIndex(date);
+    const recurring = schedule[dayIdx.toString()];
+    return recurring && recurring.type === 'recurring' && recurring.lessons.length > 0;
+  };
+
+  const isValidSession = isSessionDay();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!isValidSession) {
+      toast.error(t('no_session_warning') || 'You cannot update an evaluation to a non-session day.');
+      return;
+    }
     setLoading(true);
     try {
       const hNumber = parseInt(hizbNumber) || 0;
@@ -230,8 +268,14 @@ export default function EditEvaluationModal({ evaluation, isOpen, onClose, onSav
                             required
                             value={date}
                             onChange={(e) => setDate(e.target.value)}
-                            className="w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
+                            className={`w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 ${!isValidSession ? 'border-red-300 focus:ring-red-500' : 'focus:ring-emerald-500'} font-medium`}
                         />
+                        {!isValidSession && (
+                            <p className="text-xs font-bold text-red-500 mt-1 flex items-center gap-1">
+                                <AlertCircle className="w-3 h-3" />
+                                {t('no_session')}
+                            </p>
+                        )}
                     </div>
                 </div>
 
@@ -249,7 +293,7 @@ export default function EditEvaluationModal({ evaluation, isOpen, onClose, onSav
 
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || !isValidSession}
                   className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-100 disabled:opacity-50"
                 >
                   {loading ? (

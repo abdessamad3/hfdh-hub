@@ -1,4 +1,4 @@
-import { Home, Users, Calendar, BookOpen, BarChart2, Award, LogOut, X, LayoutDashboard, Building, Globe, History, ClipboardList } from 'lucide-react';
+import { Home, Users, Calendar, BookOpen, BarChart2, Award, LogOut, X, LayoutDashboard, Building, Globe, History, ClipboardList, FileText } from 'lucide-react';
 import { NavLink, Link } from 'react-router-dom';
 import { auth } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
@@ -15,6 +15,8 @@ export default function Sidebar({ isOpen, onClose, profile }: SidebarProps) {
   const { t, i18n } = useTranslation();
   const isStudent = profile?.role === 'student';
   const isAdmin = profile?.role === 'admin';
+  const isManager = profile?.role === 'manager';
+  const isSenior = isAdmin || isManager;
   
   const teacherItems = [
     { icon: Home, label: t('dashboard'), path: '/' },
@@ -23,6 +25,7 @@ export default function Sidebar({ isOpen, onClose, profile }: SidebarProps) {
     { icon: Award, label: t('evaluations'), path: '/evaluation' },
     { icon: History, label: t('revision'), path: '/revision' },
     { icon: ClipboardList, label: t('next_revision_task'), path: '/next-revision' },
+    { icon: FileText, label: t('monthly_report'), path: '/monthly-report' },
     { icon: BarChart2, label: t('rankings'), path: '/ranking' },
   ];
 
@@ -31,21 +34,27 @@ export default function Sidebar({ isOpen, onClose, profile }: SidebarProps) {
     { icon: BarChart2, label: t('global_ranking'), path: '/ranking' },
   ];
   
+  const seniorItems = [
+    { icon: Home, label: t('dashboard'), path: '/' },
+    { icon: Building, label: t('kuttabs'), path: '/kuttabs' },
+    { icon: Users, label: t('teachers'), path: '/teachers' },
+    { icon: Users, label: t('students_list'), path: '/students' },
+    { icon: Calendar, label: t('attendance'), path: '/attendance' },
+    { icon: Award, label: t('evaluations'), path: '/evaluation' },
+    { icon: History, label: t('revision'), path: '/revision' },
+    { icon: ClipboardList, label: t('next_revision_task'), path: '/next-revision' },
+    { icon: FileText, label: t('monthly_report'), path: '/monthly-report' },
+    { icon: BarChart2, label: t('rankings'), path: '/ranking' },
+  ];
+
+  if (isAdmin) {
+    seniorItems.push({ icon: History, label: t('login_history'), path: '/login-history' });
+  }
+
   const navItems = isStudent 
     ? studentItems 
-    : (isAdmin 
-        ? [
-            { icon: Home, label: t('dashboard'), path: '/' },
-            { icon: Building, label: t('kuttabs'), path: '/kuttabs' },
-            { icon: Users, label: t('teachers'), path: '/teachers' },
-            { icon: Users, label: t('students_list'), path: '/students' },
-            { icon: Calendar, label: t('attendance'), path: '/attendance' },
-            { icon: Award, label: t('evaluations'), path: '/evaluation' },
-            { icon: History, label: t('revision'), path: '/revision' },
-            { icon: ClipboardList, label: t('next_revision_task'), path: '/next-revision' },
-            { icon: BarChart2, label: t('rankings'), path: '/ranking' },
-            { icon: History, label: t('login_history'), path: '/login-history' },
-          ]
+    : (isSenior 
+        ? seniorItems
         : teacherItems);
 
   return (
@@ -60,10 +69,13 @@ export default function Sidebar({ isOpen, onClose, profile }: SidebarProps) {
 
       {/* Sidebar Drawer */}
       <div className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-white border-r transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-auto h-screen flex flex-col overflow-y-auto
-        ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+        fixed inset-y-0 z-50 w-64 bg-white transition-transform duration-300 ease-in-out h-screen flex flex-col
+        ${i18n.language === 'ar' ? 'right-0 border-l' : 'left-0 border-r'}
+        ${isOpen 
+          ? 'translate-x-0' 
+          : (i18n.language === 'ar' ? 'translate-x-full lg:translate-x-0' : '-translate-x-full lg:translate-x-0')}
       `}>
-        <div className="p-6 flex items-center justify-between shrink-0">
+        <div className="p-6 flex items-center justify-between shrink-0 bg-white z-10">
           <h1 className="text-2xl font-black text-emerald-700 flex items-center gap-2">
             <BookOpen className="w-8 h-8" />
             {t('app_name')}
@@ -76,7 +88,7 @@ export default function Sidebar({ isOpen, onClose, profile }: SidebarProps) {
           </button>
         </div>
         
-        <nav className="flex-1 px-4 space-y-1.5 mt-4 shrink-0 px-2 pb-4">
+        <nav className="flex-1 px-4 space-y-1.5 mt-4 overflow-y-auto custom-scrollbar pb-6">
           {navItems.map((item) => (
             <NavLink
               key={item.path}
