@@ -817,16 +817,11 @@ export const dbService = {
       const snap = await getDocs(query(
         collection(db, 'attendance'), 
         where('date', '>=', dateStr),
-        limit(50)
+        orderBy('date', 'desc'),
+        limit(1000)
       ));
       const records = snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Attendance));
-      return records.sort((a, b) => {
-        const dateCompare = b.date.localeCompare(a.date);
-        if (dateCompare !== 0) return dateCompare;
-        const bTime = (b as any).timestamp?.toMillis?.() || 0;
-        const aTime = (a as any).timestamp?.toMillis?.() || 0;
-        return bTime - aTime;
-      });
+      return records;
     }
 
     let q;
@@ -835,7 +830,8 @@ export const dbService = {
         collection(db, 'attendance'), 
         where('kuttabName', '==', kuttabName), 
         where('date', '>=', dateStr),
-        limit(50)
+        orderBy('date', 'desc'),
+        limit(1000)
       );
     } else {
       q = query(
@@ -847,20 +843,13 @@ export const dbService = {
           ),
           where('date', '>=', dateStr)
         ),
-        limit(50)
+        orderBy('date', 'desc'),
+        limit(1000)
       );
     }
 
     const snap = await getDocs(q);
-    const records = snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Attendance));
-    
-    return records.sort((a, b) => {
-      const dateCompare = b.date.localeCompare(a.date);
-      if (dateCompare !== 0) return dateCompare;
-      const bTime = (b as any).timestamp?.toMillis?.() || 0;
-      const aTime = (a as any).timestamp?.toMillis?.() || 0;
-      return bTime - aTime;
-    });
+    return snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Attendance));
   },
 
   // Memorization
@@ -1048,12 +1037,14 @@ export const dbService = {
         getDocs(query(
           collection(db, 'attendance'), 
           where('studentId', '==', studentId),
-          limit(100)
+          orderBy('date', 'desc'),
+          limit(500)
         )),
         getDocs(query(
           collection(db, 'evaluations'), 
           where('studentId', '==', studentId),
-          limit(100)
+          orderBy('date', 'desc'),
+          limit(500)
         ))
       ]);
 
@@ -1062,9 +1053,16 @@ export const dbService = {
 
       // Attendance Rate
       let attendanceRate = 0;
+      let absentRate = 0;
       if (attendanceRecords.length > 0) {
         const presentCount = attendanceRecords.filter(r => r.status === 'present').length;
-        attendanceRate = Math.round((presentCount / attendanceRecords.length) * 100);
+        const absentCount = attendanceRecords.filter(r => r.status === 'absent').length;
+        const base = presentCount + absentCount;
+        
+        if (base > 0) {
+          attendanceRate = Math.round((presentCount / base) * 100);
+          absentRate = 100 - attendanceRate;
+        }
       }
 
       // Accuracy (Performance)
@@ -1109,10 +1107,19 @@ export const dbService = {
       const studentRef = doc(db, 'students', studentId);
       await updateDoc(studentRef, {
         attendanceRate,
+        absentRate,
         accuracy,
         memorizationProgress,
         totalHizbs,
         totalScore,
+        stats: {
+          attendanceRate,
+          absentRate,
+          accuracy,
+          memorizationProgress,
+          totalHizbs,
+          totalScore
+        },
         updatedAt: serverTimestamp()
       });
     } catch (err) {
@@ -1236,16 +1243,10 @@ export const dbService = {
         const snap = await getDocs(query(
           collection(db, 'evaluations'), 
           where('date', '>=', dateStr),
-          limit(50)
+          orderBy('date', 'desc'),
+          limit(1000)
         ));
-        const evaluations = snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Evaluation));
-        return evaluations.sort((a, b) => {
-          const dateCompare = b.date.localeCompare(a.date);
-          if (dateCompare !== 0) return dateCompare;
-          const bTime = (b as any).timestamp?.toMillis?.() || 0;
-          const aTime = (a as any).timestamp?.toMillis?.() || 0;
-          return bTime - aTime;
-        });
+        return snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Evaluation));
       }
 
       let q;
@@ -1254,7 +1255,8 @@ export const dbService = {
           collection(db, 'evaluations'), 
           where('kuttabName', '==', kuttabName), 
           where('date', '>=', dateStr),
-          limit(50)
+          orderBy('date', 'desc'),
+          limit(1000)
         );
       } else {
         q = query(
@@ -1266,22 +1268,13 @@ export const dbService = {
             ),
             where('date', '>=', dateStr)
           ),
-          limit(50)
+          orderBy('date', 'desc'),
+          limit(1000)
         );
       }
 
       const snap = await getDocs(q);
-      const evaluations = snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Evaluation));
-      
-      // Sort in-memory: Date descending, then Timestamp descending
-      return evaluations.sort((a, b) => {
-        const dateCompare = b.date.localeCompare(a.date);
-        if (dateCompare !== 0) return dateCompare;
-        
-        const bTime = (b as any).timestamp?.toMillis?.() || 0;
-        const aTime = (a as any).timestamp?.toMillis?.() || 0;
-        return bTime - aTime;
-      });
+      return snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Evaluation));
     } catch (error) {
       return handleFirestoreError(error, OperationType.LIST, 'evaluations');
     }
@@ -1469,16 +1462,10 @@ export const dbService = {
         const snap = await getDocs(query(
           collection(db, 'revisions'), 
           where('date', '>=', dateStr),
-          limit(50)
+          orderBy('date', 'desc'),
+          limit(1000)
         ));
-        const revisions = snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Revision));
-        return revisions.sort((a, b) => {
-          const dateCompare = b.date.localeCompare(a.date);
-          if (dateCompare !== 0) return dateCompare;
-          const bTime = (b as any).timestamp?.toMillis?.() || 0;
-          const aTime = (a as any).timestamp?.toMillis?.() || 0;
-          return bTime - aTime;
-        });
+        return snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Revision));
       }
 
       let q;
@@ -1487,7 +1474,8 @@ export const dbService = {
           collection(db, 'revisions'), 
           where('kuttabName', '==', kuttabName), 
           where('date', '>=', dateStr),
-          limit(50)
+          orderBy('date', 'desc'),
+          limit(1000)
         );
       } else {
         q = query(
@@ -1499,22 +1487,13 @@ export const dbService = {
             ),
             where('date', '>=', dateStr)
           ),
-          limit(50)
+          orderBy('date', 'desc'),
+          limit(1000)
         );
       }
 
       const snap = await getDocs(q);
-      const revisions = snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Revision));
-      
-      // Sort in-memory: Date descending, then Timestamp descending
-      return revisions.sort((a, b) => {
-        const dateCompare = b.date.localeCompare(a.date);
-        if (dateCompare !== 0) return dateCompare;
-        
-        const bTime = (b as any).timestamp?.toMillis?.() || 0;
-        const aTime = (a as any).timestamp?.toMillis?.() || 0;
-        return bTime - aTime;
-      });
+      return snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Revision));
     } catch (error) {
       return handleFirestoreError(error, OperationType.LIST, 'revisions');
     }

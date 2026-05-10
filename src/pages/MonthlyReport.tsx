@@ -107,12 +107,14 @@ export default function MonthlyReport({ profile }: MonthlyReportProps) {
     return students.map(student => {
       const rawStudentAttendance = attendance.filter(a => a.studentId === student.id);
       
-      // Deduplicate by date, prioritizing 'present' for legacy data consistency
+      // Deduplicate by date + sessionIndex for record integrity
       const attendanceMap: Record<string, Attendance> = {};
       rawStudentAttendance.forEach(a => {
-        const existing = attendanceMap[a.date];
-        if (!existing || (a.status === 'present' && existing.status !== 'present')) {
-          attendanceMap[a.date] = a;
+        const key = `${a.date}_${a.sessionIndex || 0}`;
+        // Prioritize more recent or higher priority status if multiple exist for same index?
+        // Usually deterministic ID prevents this, but safety first.
+        if (!attendanceMap[key] || (a.status === 'present' && attendanceMap[key].status !== 'present')) {
+          attendanceMap[key] = a;
         }
       });
       const studentAttendance = Object.values(attendanceMap);
@@ -129,6 +131,12 @@ export default function MonthlyReport({ profile }: MonthlyReportProps) {
         const studentKuttab = kuttabs.find(k => k.name.trim().toLowerCase() === kName);
         const dateStrKey = format(day, 'yyyy-MM-dd');
         
+        // Match day data: if multiple sessions, present takes visual priority in the grid
+        const sessionsForDay = studentAttendance.filter(a => a.date === dateStr);
+        const dayAttendance = sessionsForDay.length > 0
+          ? sessionsForDay.find(a => a.status === 'present') || sessionsForDay[0]
+          : undefined;
+
         let isSessionDay = false;
         const schedule = studentKuttab?.schedule?.lessons;
         if (schedule) {
@@ -145,7 +153,7 @@ export default function MonthlyReport({ profile }: MonthlyReportProps) {
 
         return {
           date: dateStr,
-          attendance: attendanceMap[dateStr],
+          attendance: dayAttendance,
           isSessionDay
         };
       });
@@ -153,6 +161,10 @@ export default function MonthlyReport({ profile }: MonthlyReportProps) {
       const presentCount = studentAttendance.filter(a => a.status === 'present').length;
       const absentCount = studentAttendance.filter(a => a.status === 'absent').length;
       const excusedCount = studentAttendance.filter(a => a.status === 'excused').length;
+      
+      const attBase = presentCount + absentCount;
+      const presentPercent = attBase > 0 ? Math.round((presentCount / attBase) * 100) : 0;
+      const absentPercent = attBase > 0 ? 100 - presentPercent : 0;
 
       return {
         ...student,
@@ -160,6 +172,8 @@ export default function MonthlyReport({ profile }: MonthlyReportProps) {
         presentCount,
         absentCount,
         excusedCount,
+        presentPercent,
+        absentPercent,
         evalCount: studentEvals.length,
         revCount: studentRevs.length,
       };
@@ -264,8 +278,14 @@ export default function MonthlyReport({ profile }: MonthlyReportProps) {
                 <th className="p-4 text-center font-black text-emerald-600 uppercase tracking-widest min-w-[60px] border-l bg-emerald-50/30">
                   P
                 </th>
+                <th className="p-2 text-[8px] text-center font-black text-emerald-500 bg-emerald-50/20">
+                  P%
+                </th>
                 <th className="p-4 text-center font-black text-red-600 uppercase tracking-widest min-w-[60px] bg-red-50/30">
                   A
+                </th>
+                <th className="p-2 text-[8px] text-center font-black text-red-500 bg-red-50/20">
+                  A%
                 </th>
                 <th className="p-4 text-center font-black text-blue-600 uppercase tracking-widest min-w-[60px] bg-blue-50/30">
                   E
@@ -308,8 +328,14 @@ export default function MonthlyReport({ profile }: MonthlyReportProps) {
                   <td className="p-2 text-center font-black text-emerald-700 bg-emerald-50/20 border-l">
                     {student.presentCount}
                   </td>
+                  <td className="p-1 text-[8px] text-center font-bold text-emerald-500 bg-emerald-50/10">
+                    {student.presentPercent}%
+                  </td>
                   <td className="p-2 text-center font-black text-red-700 bg-red-50/20">
                     {student.absentCount}
+                  </td>
+                  <td className="p-1 text-[8px] text-center font-bold text-red-500 bg-red-50/10">
+                    {student.absentPercent}%
                   </td>
                   <td className="p-2 text-center font-black text-blue-700 bg-blue-50/20">
                     {student.excusedCount}

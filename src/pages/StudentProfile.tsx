@@ -124,6 +124,15 @@ export default function StudentProfile({ profile }: StudentProfileProps) {
     });
   }, [nextRevisions, monthFrom, monthTo]);
 
+  const attendanceStats = useMemo(() => {
+    const present = filteredAttendance.filter(a => a.status === 'present').length;
+    const absent = filteredAttendance.filter(a => a.status === 'absent').length;
+    const base = present + absent;
+    const presentRate = base > 0 ? Math.round((present / base) * 100) : 0;
+    const absentRate = base > 0 ? 100 - presentRate : 0;
+    return { presentRate, absentRate };
+  }, [filteredAttendance]);
+
   useEffect(() => {
     fetchData();
   }, [id]);
@@ -355,9 +364,16 @@ export default function StudentProfile({ profile }: StudentProfileProps) {
               <BookOpen className="w-5 h-5" />
               {t('sessions_logged', { count: evaluations.length })}
             </div>
-            <div className="px-4 py-2 bg-amber-50 text-amber-700 rounded-xl font-bold flex items-center gap-2">
-              <Calendar className="w-5 h-5" />
-              {t('tracking_active')}
+          </div>
+
+          <div className="flex flex-wrap gap-4 mt-2">
+            <div className="px-4 py-3 bg-emerald-50 text-emerald-700 rounded-2xl border border-emerald-100 flex flex-col items-center min-w-[120px]">
+              <span className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-1">{t('present')} %</span>
+              <span className="text-xl font-black">{attendanceStats.presentRate}%</span>
+            </div>
+            <div className="px-4 py-3 bg-red-50 text-red-700 rounded-2xl border border-red-100 flex flex-col items-center min-w-[120px]">
+              <span className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-1">{t('absent')} %</span>
+              <span className="text-xl font-black">{attendanceStats.absentRate}%</span>
             </div>
           </div>
         </div>

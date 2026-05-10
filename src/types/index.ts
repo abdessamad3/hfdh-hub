@@ -36,6 +36,7 @@ export interface Student {
   enrollmentDate: string;
   teacherId: string;
   attendanceRate: number;
+  absentRate?: number;
   memorizationProgress: number;
   totalHizbs: number;
   accuracy: number;
@@ -44,6 +45,7 @@ export interface Student {
   kuttabResponsibleId?: string; // ID of the teacher responsible for the kuttab
   stats?: {
     attendanceRate: number;
+    absentRate?: number;
     memorizationProgress: number;
     totalHizbs: number;
     accuracy: number;
@@ -123,6 +125,7 @@ export interface Revision {
   quantityIdentifier?: string; // e.g. 't1', 'r2', etc.
   date: string;
   qualityScore: number;
+  mistakesCount?: number;
   notes: string;
 }
 

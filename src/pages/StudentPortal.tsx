@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { auth } from '../lib/firebase';
 import { dbService } from '../services/db';
 import { Student, Attendance, Evaluation, Revision, NextRevision, Kuttab } from '../types';
@@ -12,7 +12,8 @@ import {
   Star,
   History,
   ClipboardList,
-  ChevronRight
+  ChevronRight,
+  XCircle
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { 
@@ -52,6 +53,16 @@ export default function StudentPortal() {
     kuttabs: Kuttab[];
   } | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const attendanceStats = useMemo(() => {
+    if (!data) return { presentRate: 0, absentRate: 0 };
+    const present = data.attendance.filter(a => a.status === 'present').length;
+    const absent = data.attendance.filter(a => a.status === 'absent').length;
+    const base = present + absent;
+    const presentRate = base > 0 ? Math.round((present / base) * 100) : 0;
+    const absentRate = base > 0 ? 100 - presentRate : 0;
+    return { presentRate, absentRate };
+  }, [data?.attendance]);
 
   useEffect(() => {
     let unsubscribes: (() => void)[] = [];
@@ -175,10 +186,9 @@ export default function StudentPortal() {
   })).slice(-10);
 
   const stats = [
-    { label: t('attendance_rate'), value: `${student.attendanceRate}%`, icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { label: t('present_percentage'), value: `${attendanceStats.presentRate}%`, icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { label: t('absent_percentage'), value: `${attendanceStats.absentRate}%`, icon: XCircle, color: 'text-red-600', bg: 'bg-red-50' },
     { label: t('total_hizbs'), value: `${(student.totalHizbs || 0).toFixed(2)} ${t('hizbs')}`, icon: BookOpen, color: 'text-emerald-700', bg: 'bg-emerald-50' },
-    { label: t('memorization_progress'), value: `${student.memorizationProgress}%`, icon: TrendingUp, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { label: t('accuracy'), value: `${student.accuracy}%`, icon: Award, color: 'text-amber-600', bg: 'bg-amber-50' },
     { label: t('overall_rank'), value: `#${student.totalScore}`, icon: Star, color: 'text-purple-600', bg: 'bg-purple-50' },
   ];
 

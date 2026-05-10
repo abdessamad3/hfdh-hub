@@ -64,8 +64,10 @@ export default function Dashboard({ profile }: DashboardProps) {
       if (dayRecords.length === 0) return { name: label, rate: 0, present: 0 };
       
       const presentCount = dayRecords.filter(r => r.status === 'present').length;
-      const rate = Math.round((presentCount / dayRecords.length) * 100);
-      return { name: label, rate: isNaN(rate) ? 0 : rate, present: presentCount };
+      const absentCount = dayRecords.filter(r => r.status === 'absent').length;
+      const base = presentCount + absentCount;
+      const rate = base > 0 ? Math.round((presentCount / base) * 100) : 0;
+      return { name: label, rate: rate, present: presentCount };
     });
   }, [attendanceRecords, t]);
 
@@ -121,11 +123,11 @@ export default function Dashboard({ profile }: DashboardProps) {
 
   const avgAccuracy = performanceData.length > 0
     ? Math.round(performanceData.reduce((acc, curr) => acc + curr.accuracyScore, 0) / performanceData.length) + '%'
-    : 'N/A';
+    : '0%';
 
   const avgRevision = revisionData.length > 0
     ? Math.round(revisionData.reduce((acc, curr) => acc + curr.qualityScore, 0) / revisionData.length) + '%'
-    : 'N/A';
+    : '0%';
 
   const stats = [
     { label: t('total_students'), value: students.length.toString(), icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },

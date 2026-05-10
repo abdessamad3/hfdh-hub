@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Award, TrendingUp, Medal, Star, CheckCircle, Filter, X, Home, BookOpen } from 'lucide-react';
+import { Award, TrendingUp, Medal, Star, CheckCircle, Filter, X, Home, BookOpen, XCircle } from 'lucide-react';
 import { dbService } from '../services/db';
 import { auth } from '../lib/firebase';
 import type { Student, Kuttab, UserProfile } from '../types';
@@ -259,7 +259,11 @@ export default function RankingPage({ profile }: RankingPageProps) {
                       </p>
                       <p className="text-xs sm:text-sm text-gray-500 flex items-center gap-1 font-medium">
                         <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
-                        {student.attendanceRate || 0}% {t('attendance')}
+                        {student.attendanceRate ?? 0}% P
+                      </p>
+                      <p className="text-xs sm:text-sm text-gray-500 flex items-center gap-1 font-medium">
+                        <XCircle className="w-3.5 h-3.5 text-red-500" />
+                        {student.absentRate ?? (student.attendanceRate !== undefined ? 100 - student.attendanceRate : 0)}% A
                       </p>
                       <p className="text-xs sm:text-sm text-gray-500 flex items-center gap-1 font-bold text-emerald-700">
                         <BookOpen className="w-3.5 h-3.5" />

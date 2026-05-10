@@ -30,7 +30,15 @@ export default function RevisionEntry({ profile }: RevisionEntryProps) {
   const [surahName, setSurahName] = useState('');
   const [hizbNumber, setHizbNumber] = useState('');
   const [quantity, setQuantity] = useState('t1'); // distinct units
+  const [mistakes, setMistakes] = useState('0');
   const [qualityScore, setQualityScore] = useState('100');
+
+  useEffect(() => {
+    const mistakesCount = parseInt(mistakes) || 0;
+    const calculatedScore = Math.max(0, 100 - (mistakesCount * 25));
+    setQualityScore(calculatedScore.toString());
+  }, [mistakes]);
+
   const [notes, setNotes] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState(false);
@@ -101,6 +109,7 @@ export default function RevisionEntry({ profile }: RevisionEntryProps) {
     setSurahName('');
     setHizbNumber('');
     setQuantity('t1');
+    setMistakes('0');
     setQualityScore('100');
     setNotes('');
     setDate(new Date().toISOString().split('T')[0]);
@@ -123,6 +132,7 @@ export default function RevisionEntry({ profile }: RevisionEntryProps) {
     }
     
     setQualityScore(rev.qualityScore.toString());
+    setMistakes(rev.mistakesCount?.toString() || '0');
     setNotes(rev.notes);
     setDate(rev.date);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -191,7 +201,7 @@ export default function RevisionEntry({ profile }: RevisionEntryProps) {
         qUnit = 8;
       }
 
-      if (editingRevision) {
+          if (editingRevision) {
         await dbService.updateRevision(editingRevision.id, {
           studentId,
           date,
@@ -199,6 +209,7 @@ export default function RevisionEntry({ profile }: RevisionEntryProps) {
           quantity: qUnit,
           quantityIdentifier: quantity,
           qualityScore: parseInt(qualityScore),
+          mistakesCount: parseInt(mistakes),
           notes,
           surahName: surahName || undefined,
         }, studentId);
@@ -212,6 +223,7 @@ export default function RevisionEntry({ profile }: RevisionEntryProps) {
           quantity: qUnit,
           quantityIdentifier: quantity,
           qualityScore: parseInt(qualityScore),
+          mistakesCount: parseInt(mistakes),
           notes,
           surahName: surahName || '',
         };
@@ -343,19 +355,39 @@ export default function RevisionEntry({ profile }: RevisionEntryProps) {
 
           <div className="space-y-4 pt-4 border-t">
             <h3 className="font-bold text-gray-400 uppercase text-xs tracking-widest">{t('performance_assessment')}</h3>
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-gray-700 flex items-center justify-between">
-                <span>{t('quality_score')}</span>
-                <span className="text-blue-600 font-bold">{qualityScore}%</span>
-              </label>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-500" />
+                  {t('mistakes_count')}
+                </label>
+                <input 
+                  type="number"
+                  required
+                  min="0"
+                  value={mistakes}
+                  onChange={(e) => setMistakes(e.target.value)}
+                  className="w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700">{t('quality_score')}</label>
+                <div className="w-full p-4 bg-gray-100 border rounded-2xl font-bold text-blue-600">
+                  {qualityScore}%
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-2">
               <input 
                 type="range"
+                disabled
                 min="0"
                 max="100"
                 step="5"
                 value={qualityScore}
-                onChange={(e) => setQualityScore(e.target.value)}
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-not-allowed accent-blue-600 opacity-70"
               />
               <div className="flex justify-between text-[10px] text-gray-400 font-bold uppercase mt-1">
                 <span>{t('review')}</span>

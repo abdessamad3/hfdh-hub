@@ -123,19 +123,24 @@ export default function AttendancePage({ profile }: AttendancePageProps) {
   const getSessionsForStudent = (student: Student, dateStr: string, kuttabsLookup?: Record<string, any>) => {
     const lookup = kuttabsLookup || kuttabs;
     const kName = student.kuttabName?.trim().toLowerCase();
-    if (!kName || !lookup[kName]) return [];
+    
+    // If no kuttab name or kuttab not found, assume it's a general study day with one session
+    // This allows independent students to appear in the attendance list
+    if (!kName || !lookup[kName]) return ["Session"];
     
     const kuttab = lookup[kName];
     const schedule = kuttab.schedule?.lessons;
-    if (!schedule) return [];
+    if (!schedule) return ["Session"];
 
+    // Check for specific override first (YYYY-MM-DD)
     if (schedule[dateStr]) {
       return schedule[dateStr].lessons;
     }
 
+    // Check recurring schedule (0-6)
     const dayIdx = getDayIndex(dateStr);
     const recurring = schedule[dayIdx.toString()];
-    if (recurring && recurring.type === 'recurring') {
+    if (recurring && (recurring.type === 'recurring' || recurring.lessons)) {
       return recurring.lessons;
     }
     

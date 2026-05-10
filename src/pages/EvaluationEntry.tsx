@@ -34,6 +34,13 @@ export default function EvaluationEntry({ profile }: EvaluationEntryProps) {
   const [toAyah, setToAyah] = useState('');
   const [mistakes, setMistakes] = useState('0');
   const [accuracy, setAccuracy] = useState('100');
+
+  useEffect(() => {
+    const mistakesCount = parseInt(mistakes) || 0;
+    const calculatedAccuracy = Math.max(0, 100 - (mistakesCount * 25));
+    setAccuracy(calculatedAccuracy.toString());
+  }, [mistakes]);
+
   const [notes, setNotes] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState(false);
@@ -369,11 +376,11 @@ export default function EvaluationEntry({ profile }: EvaluationEntryProps) {
                 <input 
                   type="number"
                   required
+                  readOnly
                   min="0"
                   max="100"
                   value={accuracy}
-                  onChange={(e) => setAccuracy(e.target.value)}
-                  className="w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full p-4 bg-gray-100 border rounded-2xl outline-none cursor-not-allowed opacity-70"
                 />
               </div>
             </div>
