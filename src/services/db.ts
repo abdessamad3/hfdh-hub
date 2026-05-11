@@ -2093,6 +2093,10 @@ export const dbService = {
     return snapshot.docs.map(doc => ({ ...(doc.data() as object), uid: doc.id } as UserProfile));
   },
 
+  async getAllTeachers() {
+    return this.getTeachers();
+  },
+
   async deleteTeacher(uid: string) {
     await deleteDoc(doc(db, 'users', uid));
     return true;

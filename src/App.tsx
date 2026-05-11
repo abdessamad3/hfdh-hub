@@ -21,6 +21,7 @@ import TeacherProfile from './pages/TeacherProfile';
 import KuttabProfile from './pages/KuttabProfile';
 import LoginHistory from './pages/LoginHistory';
 import AdminSearchBar from './components/AdminSearchBar';
+import NextRevisionNotifier from './components/NextRevisionNotifier';
 import { BookOpen, AlertCircle, Chrome, Menu, Globe } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
@@ -37,6 +38,7 @@ function Layout({ children, profile }: { children: ReactNode; profile: UserProfi
 
   return (
     <div className={`flex bg-gray-50 min-h-screen ${i18n.language === 'ar' ? 'font-arabic' : ''}`}>
+      <NextRevisionNotifier profile={profile} />
       <Sidebar 
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)} 
