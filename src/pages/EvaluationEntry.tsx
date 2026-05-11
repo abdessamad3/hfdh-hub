@@ -20,7 +20,7 @@ export default function EvaluationEntry({ profile }: EvaluationEntryProps) {
       if (identifier.startsWith('t')) return t(`thumun_${identifier.substring(1)}`);
       if (identifier.startsWith('r')) return t(`rubu_${identifier.substring(1)}`);
       if (identifier.startsWith('n')) return t(`nisf_${identifier.substring(1)}`);
-      if (identifier === 'h1') return t('hizb') + ' 1';
+      if (identifier === 'h1') return t('hizb');
     }
     if (q >= 1 && q <= 8) return t(`thumun_${q}`);
     return q > 0 ? `${q} ${t('unit_thumn')}` : '';

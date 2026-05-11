@@ -17,6 +17,15 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { 
+  subDays, 
+  startOfMonth, 
+  endOfMonth, 
+  subMonths, 
+  isWithinInterval, 
+  parseISO,
+  startOfDay
+} from 'date-fns';
+import { 
   AreaChart, 
   Area, 
   XAxis, 
@@ -39,7 +48,7 @@ export default function StudentPortal() {
       if (identifier.startsWith('t')) return t(`thumun_${identifier.substring(1)}`);
       if (identifier.startsWith('r')) return t(`rubu_${identifier.substring(1)}`);
       if (identifier.startsWith('n')) return t(`nisf_${identifier.substring(1)}`);
-      if (identifier === 'h1') return t('hizb') + ' 1';
+      if (identifier === 'h1') return t('hizb');
     }
     if (q >= 1 && q <= 8) return t(`thumun_${q}`);
     return q > 0 ? `${q} ${t('unit_thumn')}` : '';
@@ -53,16 +62,54 @@ export default function StudentPortal() {
     kuttabs: Kuttab[];
   } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [filterPeriod, setFilterPeriod] = useState<'all' | '7days' | '30days' | 'thisMonth' | 'lastMonth'>('all');
+
+  const filteredData = useMemo(() => {
+    if (!data) return { attendance: [], evaluations: [], revisions: [] };
+    
+    const now = new Date();
+    const today = startOfDay(now);
+    let start: Date | null = null;
+    let end: Date = now;
+
+    if (filterPeriod === '7days') {
+      start = subDays(today, 7);
+    } else if (filterPeriod === '30days') {
+      start = subDays(today, 30);
+    } else if (filterPeriod === 'thisMonth') {
+      start = startOfMonth(today);
+      end = endOfMonth(today);
+    } else if (filterPeriod === 'lastMonth') {
+      const lastMonthDate = subMonths(today, 1);
+      start = startOfMonth(lastMonthDate);
+      end = endOfMonth(lastMonthDate);
+    }
+
+    const filterFn = (dateStr: string) => {
+      if (!start) return true;
+      try {
+        const d = parseISO(dateStr);
+        return isWithinInterval(d, { start, end });
+      } catch (e) {
+        return false;
+      }
+    };
+
+    return {
+      attendance: data.attendance.filter(a => filterFn(a.date)),
+      evaluations: data.evaluations.filter(e => filterFn(e.date)),
+      revisions: data.revisions.filter(r => filterFn(r.date)),
+    };
+  }, [data, filterPeriod]);
 
   const attendanceStats = useMemo(() => {
-    if (!data) return { presentRate: 0, absentRate: 0 };
-    const present = data.attendance.filter(a => a.status === 'present').length;
-    const absent = data.attendance.filter(a => a.status === 'absent').length;
+    const present = filteredData.attendance.filter(a => a.status === 'present').length;
+    const absent = filteredData.attendance.filter(a => a.status === 'absent').length;
     const base = present + absent;
     const presentRate = base > 0 ? Math.round((present / base) * 100) : 0;
     const absentRate = base > 0 ? 100 - presentRate : 0;
     return { presentRate, absentRate };
-  }, [data?.attendance]);
+  }, [filteredData.attendance]);
 
   useEffect(() => {
     let unsubscribes: (() => void)[] = [];
@@ -176,14 +223,15 @@ export default function StudentPortal() {
   }
 
   const { student, attendance, evaluations, revisions } = data;
+  const { attendance: filteredAttendance, evaluations: filteredEvaluations } = filteredData;
   
   const todaysRevisions = revisions.filter(r => isToday(r.date));
-  const recentRevisions = revisions.filter(r => !isToday(r.date)).slice(0, 5);
+  const recentRevisions = revisions.filter(r => !isToday(r.date)).slice(0, 8);
 
-  const chartData = [...evaluations].reverse().map(e => ({
+  const chartData = [...filteredEvaluations].reverse().map(e => ({
     date: formatDate(e.date),
     score: e.accuracyScore
-  })).slice(-10);
+  }));
 
   const stats = [
     { label: t('present_percentage'), value: `${attendanceStats.presentRate}%`, icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' },
@@ -194,7 +242,7 @@ export default function StudentPortal() {
 
   return (
     <div className="p-4 sm:p-8 space-y-8 max-w-6xl mx-auto text-black">
-      <header className="space-y-2">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-center gap-3">
            <div className="w-12 h-12 bg-emerald-600 text-white rounded-2xl flex items-center justify-center shadow-lg">
              <TrendingUp className="w-6 h-6" />
@@ -203,6 +251,22 @@ export default function StudentPortal() {
              <h2 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">{t('salaam_name', { name: student.name.split(' ')[0] })}</h2>
              <p className="text-gray-500 font-medium">{t('portal_welcome')}</p>
            </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 bg-gray-50 p-1.5 rounded-2xl border border-gray-100">
+          {(['all', '7days', '30days', 'thisMonth', 'lastMonth'] as const).map((period) => (
+            <button
+              key={period}
+              onClick={() => setFilterPeriod(period)}
+              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                filterPeriod === period 
+                  ? 'bg-white text-emerald-600 shadow-sm border border-emerald-100' 
+                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              {t(period === 'all' ? 'all_time' : period === '7days' ? 'last_7_days' : period === '30days' ? 'last_30_days' : period === 'thisMonth' ? 'this_month' : 'last_month')}
+            </button>
+          ))}
         </div>
       </header>
 
@@ -223,6 +287,43 @@ export default function StudentPortal() {
             <h4 className="text-xl sm:text-3xl font-black text-gray-900 mt-1">{stat.value}</h4>
           </motion.div>
         ))}
+      </div>
+
+      {/* Attendance Log */}
+      <div className="bg-white p-6 sm:p-8 border rounded-[32px] shadow-sm mt-8">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h3 className="text-xl font-black text-gray-900">{t('attendance_mirror')}</h3>
+            <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">
+              {filterPeriod === 'all' ? t('your_daily_logs') : t(filterPeriod === '7days' ? 'last_7_days' : filterPeriod === '30days' ? 'last_30_days' : filterPeriod === 'thisMonth' ? 'this_month' : 'last_month')}
+            </p>
+          </div>
+          <Calendar className="w-6 h-6 text-emerald-500" />
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4">
+          {[...filteredAttendance].slice(0, 14).map((record) => (
+            <div key={record.id} className="p-4 bg-gray-50 rounded-2xl border flex flex-col items-center gap-2 text-center">
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                {new Date(record.date).toLocaleDateString(undefined, { weekday: 'short' })}
+              </span>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                record.status === 'present' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-200' :
+                record.status === 'absent' ? 'bg-red-500 text-white shadow-lg shadow-red-200' :
+                'bg-blue-500 text-white shadow-lg shadow-blue-200'
+              }`}>
+                {record.status === 'present' ? <CheckCircle className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
+              </div>
+              <span className="text-xs font-bold text-gray-700">{formatDate(record.date)}</span>
+              <span className={`text-[8px] font-black uppercase tracking-tighter ${
+                record.status === 'present' ? 'text-emerald-500' :
+                record.status === 'absent' ? 'text-red-500' :
+                'text-blue-500'
+              }`}>
+                {t(record.status)}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {data.kuttabs.length > 0 && (
@@ -306,7 +407,9 @@ export default function StudentPortal() {
         <div className="bg-white p-6 sm:p-8 border rounded-[32px] shadow-sm space-y-6">
           <div className="flex items-center justify-between">
             <h3 className="text-xl font-black text-gray-900">{t('accuracy_trend')}</h3>
-            <span className="px-3 py-1 bg-gray-50 text-gray-400 text-[10px] font-black uppercase tracking-widest rounded-full border">{t('last_10_sessions')}</span>
+            <span className="px-3 py-1 bg-gray-50 text-gray-400 text-[10px] font-black uppercase tracking-widest rounded-full border">
+              {filterPeriod === 'all' ? t('all_time') : t(filterPeriod === '7days' ? 'last_7_days' : filterPeriod === '30days' ? 'last_30_days' : filterPeriod === 'thisMonth' ? 'this_month' : 'last_month')}
+            </span>
           </div>
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -338,9 +441,9 @@ export default function StudentPortal() {
               <Award className="w-5 h-5 text-amber-500" />
             </div>
             <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 scrollbar-thin">
-              {evaluations.length === 0 ? (
+              {filteredEvaluations.length === 0 ? (
                 <p className="text-center py-8 text-gray-400 font-medium italic">{t('no_evals_recorded')}</p>
-              ) : evaluations.map((evalRecord) => (
+              ) : filteredEvaluations.slice(0, 10).map((evalRecord) => (
                 <div key={evalRecord.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-between group hover:bg-white hover:shadow-md transition-all">
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 bg-white border rounded-xl flex items-center justify-center font-bold text-amber-600 shadow-sm">
@@ -350,10 +453,16 @@ export default function StudentPortal() {
                       <h5 className="font-bold text-gray-900 truncate max-w-[150px]">
                         {evalRecord.surahName ? `${t('surah')} ${evalRecord.surahName}` : `${t('hizb')} ${evalRecord.hizbNumber}`}
                       </h5>
-                      <p className="text-[10px] text-gray-400 flex items-center gap-1 font-bold uppercase tracking-wider">
-                        <Calendar className="w-3 h-3" />
-                        {formatDate(evalRecord.date)}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">
+                          {getPortionLabel(evalRecord.quantity, evalRecord.quantityIdentifier)}
+                        </span>
+                        <span className="text-gray-300">•</span>
+                        <p className="text-[10px] text-gray-400 flex items-center gap-1 font-bold uppercase tracking-wider">
+                          <Calendar className="w-3 h-3" />
+                          {formatDate(evalRecord.date)}
+                        </p>
+                      </div>
                     </div>
                   </div>
                   <div className="text-right">
@@ -373,27 +482,40 @@ export default function StudentPortal() {
             </div>
             <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 scrollbar-thin">
               {todaysRevisions.length === 0 ? (
-                <p className="text-center py-8 text-gray-400 font-medium italic">{t('no_eval_data')}</p>
+                <p className="text-center py-8 text-gray-400 font-medium italic">{t('no_revisions_month')}</p>
               ) : todaysRevisions.map((rev) => (
-                <div key={rev.id} className="p-4 bg-emerald-50 border-emerald-100 rounded-2xl border flex items-center justify-between group hover:bg-white hover:shadow-md transition-all">
+                <div key={rev.id} className="p-4 bg-blue-50 border-blue-100 rounded-2xl border flex items-center justify-between group hover:bg-white hover:shadow-md transition-all">
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 bg-white border rounded-xl flex items-center justify-center font-bold text-blue-600 shadow-sm">
                       {rev.qualityScore}
                     </div>
                     <div>
-                      <h5 className="font-bold text-gray-900 truncate max-w-[150px]">
-                        {rev.surahName ? `${t('surah')} ${rev.surahName}` : `${t('hizb')} ${rev.hizbNumber}`}
+                      <h5 className="font-bold text-gray-900 truncate max-w-[250px]">
+                        {rev.surahName 
+                          ? `${t('surah')} ${rev.surahName} (${t('hizb')} ${rev.hizbNumber})` 
+                          : `${t('hizb')} ${rev.hizbNumber}`}
                       </h5>
-                      <p className="text-[10px] text-emerald-600 flex items-center gap-1 font-bold uppercase tracking-wider">
-                        <CheckCircle className="w-3 h-3" />
-                        {t('today')}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-blue-600 font-bold uppercase tracking-wider">
+                          {getPortionLabel(rev.quantity, rev.quantityIdentifier)}
+                        </span>
+                        <span className="text-gray-300">•</span>
+                        <p className="text-[10px] text-blue-600 flex items-center gap-1 font-bold uppercase tracking-wider">
+                          <CheckCircle className="w-3 h-3" />
+                          {t('today')}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-[10px] uppercase font-black px-2 py-0.5 rounded-full mt-1 bg-blue-100 text-blue-700">
+                  <div className="text-right flex flex-col items-end">
+                    <div className="text-[10px] uppercase font-black px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
                       {rev.qualityScore}%
                     </div>
+                    {rev.mistakesCount !== undefined && rev.mistakesCount > 0 && (
+                      <span className="text-[8px] text-red-500 font-bold mt-1">
+                        {rev.mistakesCount} {t('mistakes')}
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}
@@ -410,12 +532,26 @@ export default function StudentPortal() {
                            {rev.qualityScore}
                          </div>
                          <div>
-                           <p className="text-xs font-bold text-gray-900 truncate max-w-[120px]">
-                             {rev.surahName ? `${t('surah')} ${rev.surahName}` : `${t('hizb')} ${rev.hizbNumber}`}
-                           </p>
-                           <p className="text-[8px] text-gray-400 font-bold uppercase tracking-wider">
-                             {formatDate(rev.date)}
-                           </p>
+                            <p className="text-xs font-bold text-gray-900 truncate max-w-[220px]">
+                              {rev.surahName 
+                                ? `${t('surah')} ${rev.surahName} (${t('hizb')} ${rev.hizbNumber})` 
+                                : `${t('hizb')} ${rev.hizbNumber}`}
+                            </p>
+                            <div className="flex items-center gap-1 text-[8px] font-bold uppercase tracking-wider">
+                              <span className="text-blue-600">
+                                {getPortionLabel(rev.quantity, rev.quantityIdentifier)}
+                              </span>
+                              <span className="text-gray-300 mx-1">•</span>
+                              <span className="text-gray-400">
+                                {formatDate(rev.date)}
+                              </span>
+                              {rev.mistakesCount !== undefined && rev.mistakesCount > 0 && (
+                                <>
+                                  <span className="text-gray-300 mx-1">•</span>
+                                  <span className="text-red-500">{rev.mistakesCount} ERR</span>
+                                </>
+                              )}
+                            </div>
                          </div>
                       </div>
                       <div className="text-[8px] px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-black">
@@ -427,41 +563,6 @@ export default function StudentPortal() {
               </div>
             )}
           </div>
-        </div>
-      </div>
-
-      {/* Attendance Log */}
-      <div className="bg-white p-6 sm:p-8 border rounded-[32px] shadow-sm">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h3 className="text-xl font-black text-gray-900">{t('attendance_mirror')}</h3>
-            <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">{t('your_daily_logs')}</p>
-          </div>
-          <Calendar className="w-6 h-6 text-emerald-500" />
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4">
-          {[...attendance].slice(0, 7).map((record) => (
-            <div key={record.id} className="p-4 bg-gray-50 rounded-2xl border flex flex-col items-center gap-2 text-center">
-              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                {new Date(record.date).toLocaleDateString(undefined, { weekday: 'short' })}
-              </span>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                record.status === 'present' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-200' :
-                record.status === 'absent' ? 'bg-red-500 text-white shadow-lg shadow-red-200' :
-                'bg-blue-500 text-white shadow-lg shadow-blue-200'
-              }`}>
-                {record.status === 'present' ? <CheckCircle className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
-              </div>
-              <span className="text-xs font-bold text-gray-700">{formatDate(record.date)}</span>
-              <span className={`text-[8px] font-black uppercase tracking-tighter ${
-                record.status === 'present' ? 'text-emerald-500' :
-                record.status === 'absent' ? 'text-red-500' :
-                'text-blue-500'
-              }`}>
-                {t(record.status)}
-              </span>
-            </div>
-          ))}
         </div>
       </div>
     </div>

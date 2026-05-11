@@ -20,7 +20,7 @@ export default function RevisionEntry({ profile }: RevisionEntryProps) {
       if (identifier.startsWith('t')) return t(`thumun_${identifier.substring(1)}`);
       if (identifier.startsWith('r')) return t(`rubu_${identifier.substring(1)}`);
       if (identifier.startsWith('n')) return t(`nisf_${identifier.substring(1)}`);
-      if (identifier === 'h1') return t('hizb') + ' 1';
+      if (identifier === 'h1') return t('hizb');
     }
     if (q >= 1 && q <= 8) return t(`thumun_${q}`);
     return q > 0 ? `${q} ${t('unit_thumn')}` : '';
@@ -346,7 +346,7 @@ export default function RevisionEntry({ profile }: RevisionEntryProps) {
                     <option value="n2">{t('nisf_2')}</option>
                   </optgroup>
                   <optgroup label={t('hizb')}>
-                    <option value="h1">{t('hizb')} 1</option>
+                    <option value="h1">{t('hizb')}</option>
                   </optgroup>
                 </select>
               </div>

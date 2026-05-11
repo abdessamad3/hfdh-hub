@@ -33,6 +33,14 @@ service cloud.firestore {
       );
     }
 
+    function hasProfile() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
     // Default deny
     match /{document=**} {
       allow read, write: if false;
@@ -83,10 +91,7 @@ service cloud.firestore {
     // Students
     match /students/{studentId} {
       allow get: if isSignedIn() && canAccessStudent(resource.data);
-      allow list: if isSignedIn() && (
-        isTeacher() || 
-        (resource.data.get('email', '').lower() == request.auth.token.email.lower())
-      );
+      allow list: if isSignedIn();
       allow create: if isTeacher();
       allow update: if isManager() || (isTeacher() && canAccessStudent(resource.data));
       allow delete: if isAdmin();

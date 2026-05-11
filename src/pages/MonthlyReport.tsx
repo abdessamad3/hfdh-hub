@@ -497,7 +497,7 @@ export default function MonthlyReport({ profile }: MonthlyReportProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-white z-[999] overflow-auto"
+            className="fixed inset-0 bg-white z-[999] overflow-auto print-overlay"
           >
             {/* Toolbar */}
             <div className="sticky top-0 left-0 right-0 bg-gray-50/95 backdrop-blur-sm border-b px-8 py-4 flex justify-between items-center no-print z-50">
@@ -637,29 +637,53 @@ export default function MonthlyReport({ profile }: MonthlyReportProps) {
 
       <style>{`
         @media print {
-          .no-print { display: none !important; }
-          body { background: white !important; margin: 0 !important; padding: 0 !important; }
+          /* Hide everything by default */
+          body * {
+            visibility: hidden;
+          }
+          
+          /* Only show the report content and its contents */
+          .print-overlay,
+          .print-overlay *,
+          #report-content, 
+          #report-content * { 
+            visibility: visible !important; 
+          }
+
+          /* Position report content at the top left of the printed page */
           #report-content { 
-            position: absolute; 
-            top: 0; 
-            left: 0; 
+            position: absolute !important; 
+            top: 0 !important; 
+            left: 0 !important; 
             width: 100% !important; 
             max-width: none !important; 
             padding: 0 !important; 
             margin: 0 !important;
-            visibility: visible !important;
+            background: white !important;
+            z-index: 9999 !important;
           }
-          #report-content * {
-            visibility: visible !important;
+
+          /* Hide the toolbar/overlay background during print */
+          .no-print, 
+          .print-overlay { 
+            background: transparent !important;
+            border: none !important;
           }
-          /* Hide everything else */
-          body > :not(#report-content) {
-            display: none !important;
+          .no-print { display: none !important; }
+
+          table { 
+            width: 100% !important;
+            table-layout: fixed;
+            page-break-inside: auto; 
+            border-collapse: collapse !important;
           }
-          table { page-break-inside: auto; }
           tr { page-break-inside: avoid; page-break-after: auto; }
           thead { display: table-header-group; }
           tfoot { display: table-footer-group; }
+          
+          /* Remove shadows and rounded corners for print */
+          .shadow-sm, .shadow-xl, .shadow-lg, .shadow-2xl { box-shadow: none !important; }
+          .rounded-xl, .rounded-2xl, .rounded-[32px], .rounded-none { border-radius: 0 !important; }
         }
       `}</style>
     </div>
