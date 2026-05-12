@@ -4,6 +4,7 @@ import { auth } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
 import { UserProfile } from '../types';
 import { useTranslation } from 'react-i18next';
+import logo from '../assets/logo.png';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -77,8 +78,8 @@ export default function Sidebar({ isOpen, onClose, profile }: SidebarProps) {
       `}>
         <div className="p-6 flex items-center justify-between shrink-0 bg-white z-10">
           <h1 className="text-2xl font-black text-emerald-700 flex items-center gap-2">
-            <BookOpen className="w-8 h-8" />
-            {t('app_name')}
+            <img className="w-50 h-30 text-emerald-600" src={logo} alt="Logo"  />
+            {/* {t('app_name')} */}
           </h1>
           <button 
             onClick={onClose}

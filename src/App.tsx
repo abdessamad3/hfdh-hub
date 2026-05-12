@@ -25,6 +25,7 @@ import NextRevisionNotifier from './components/NextRevisionNotifier';
 import { BookOpen, AlertCircle, Chrome, Menu, Globe } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
+import logo from './assets/logo.png';
 
 function Layout({ children, profile }: { children: ReactNode; profile: UserProfile | null }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -259,7 +260,7 @@ export default function App() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
         <div className="flex flex-col items-center gap-4">
-          <BookOpen className="w-12 h-12 text-emerald-600 animate-bounce" />
+          <img className="w-35 h-20 text-emerald-600 animate-bounce" src={logo} alt="Logo" />
           <div className="w-32 h-1 bg-gray-100 rounded-full overflow-hidden">
             <div className="w-1/2 h-full bg-emerald-600 animate-progress origin-left" />
           </div>
