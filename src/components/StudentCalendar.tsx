@@ -102,29 +102,28 @@ export default function StudentCalendar({ attendance = [], evaluations = [], rev
     : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   return (
-    <div className="bg-white border rounded-3xl shadow-sm overflow-hidden text-black">
-      <div className="p-6 border-b flex items-center justify-between bg-gray-50">
+    <div className="text-black space-y-6">
+      <div className="flex items-center justify-between pb-6 border-b">
         <div>
           <h3 className="text-xl font-bold text-gray-900">{monthYearLabel}</h3>
-          <p className="text-sm text-gray-500 font-medium">{t('monthly_progress_overview')}</p>
         </div>
         <div className="flex gap-2">
           <button 
             onClick={prevMonth}
-            className="p-2 hover:bg-gray-200 rounded-xl transition-colors text-gray-600"
+            className="p-2 bg-gray-50 hover:bg-gray-100 border rounded-xl transition-colors text-gray-600"
           >
             {i18n.language === 'ar' ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
           </button>
           <button 
             onClick={nextMonth}
-            className="p-2 hover:bg-gray-200 rounded-xl transition-colors text-gray-600"
+            className="p-2 bg-gray-50 hover:bg-gray-100 border rounded-xl transition-colors text-gray-600"
           >
             {i18n.language === 'ar' ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
           </button>
         </div>
       </div>
 
-      <div className="p-6">
+      <div>
         <div className="grid grid-cols-7 mb-4">
           {weekDays.map((day, idx) => {
             const isToday = new Date().getDay() === idx;

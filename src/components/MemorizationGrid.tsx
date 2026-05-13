@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Evaluation } from '../types';
 import { Check } from 'lucide-react';
 import { getCoveredThumns } from '../lib/quranUtils';
+import { QURAN_HIZBS } from '../constants/quranMetadata';
 
 interface MemorizationGridProps {
   evaluations: Evaluation[];
@@ -41,7 +42,7 @@ export default function MemorizationGrid({ evaluations }: MemorizationGridProps)
   const getCellStyles = (hizb: number, thumn: number) => {
     if (!memorized[hizb][thumn]) {
       return { 
-        className: 'bg-gray-100 scale-95',
+        className: 'opacity-0 pointer-events-none',
         style: {} 
       };
     }
@@ -63,7 +64,7 @@ export default function MemorizationGrid({ evaluations }: MemorizationGridProps)
   const thumnLabels = ['1/8', '2/8', '3/8', '4/8', '5/8', '6/8', '7/8', '8/8'];
 
   return (
-    <div className="bg-white border rounded-3xl shadow-sm overflow-hidden flex flex-col h-[600px]">
+    <div className="bg-white border rounded-3xl shadow-sm overflow-hidden flex flex-col min-h-[300px] max-h-[800px]">
       <div className="p-6 bg-gray-50 border-b flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0">
         <div>
           <h3 className="font-bold text-lg text-gray-900">{t('memorization_tracker', 'Memorization Tracker')}</h3>
@@ -91,56 +92,83 @@ export default function MemorizationGrid({ evaluations }: MemorizationGridProps)
             <span className="text-gray-500 font-bold">4+</span>
           </div>
           <div className="w-px h-3 bg-gray-300 mx-1" />
-          <div className="flex items-center gap-1">
-            <div className="w-2.5 h-2.5 bg-gray-100 rounded-sm border" />
-            <span className="text-gray-500 font-bold">{t('remaining')}</span>
-          </div>
         </div>
       </div>
       
-      <div className="flex-1 overflow-auto">
-        <table className="w-full border-collapse min-w-[600px]">
+      <div className="overflow-x-auto overflow-y-auto">
+        <table className="w-full border-collapse min-w-[900px] table-fixed">
           <thead className="sticky top-0 bg-white shadow-sm z-10">
             <tr>
-              <th className="p-3 text-start bg-gray-50 border-b border-r sticky left-0 z-20 w-24">
+              <th className="p-3 text-start bg-gray-50 border-b border-r sticky left-0 z-20 w-16">
                 <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{t('hizb')}</span>
               </th>
+              <th className="p-3 text-start bg-gray-50 border-b border-r w-24">
+                <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{t('surah', 'Surah')}</span>
+              </th>
+              <th className="p-3 text-start bg-gray-50 border-b border-r w-16">
+                <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{t('page', 'Page')}</span>
+              </th>
+              <th className="p-3 text-start bg-gray-50 border-b border-r w-48">
+                <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{t('start_phrase', 'Start')}</span>
+              </th>
               {thumnLabels.map((label, i) => (
-                <th key={i} className="p-2 border-b text-center min-w-[60px]">
+                <th key={i} className="p-2 border-b text-center">
                   <span className="text-[10px] font-bold text-gray-500">{label}</span>
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y">
-            {Array.from({ length: 60 }, (_, i) => i + 1).map((hizb) => (
-              <tr key={hizb} className="hover:bg-gray-50/50 transition-colors text-xs">
-                <td className="p-3 text-start bg-gray-50 font-black text-gray-700 border-r sticky left-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
-                  {hizb}
-                </td>
-                {Array.from({ length: 8 }, (_, i) => i + 1).map((thumn) => {
-                  const styles = getCellStyles(hizb, thumn);
-                  return (
-                    <td key={thumn} className="p-1 border text-center">
-                      <div 
-                        className={`w-full aspect-square rounded-lg flex flex-col items-center justify-center transition-all duration-300 ${styles.className}`}
-                        style={styles.style}
-                        title={memorized[hizb][thumn] ? `${thumnMistakes[hizb][thumn]} mistakes` : ''}
-                      >
-                        {memorized[hizb][thumn] ? (
-                          <>
-                            {thumnMistakes[hizb][thumn] === 0 ? <Check className="w-3 h-3" /> : <span className="font-black text-[10px]">{thumnMistakes[hizb][thumn]}</span>}
-                          </>
-                        ) : null}
-                      </div>
+          <tbody className="divide-y relative">
+            {Array.from({ length: 60 }, (_, i) => i + 1)
+              .filter(hizb => memorized[hizb].some(m => m))
+              .map((hizb) => {
+                const meta = QURAN_HIZBS[hizb];
+                return (
+                  <tr key={hizb} className="hover:bg-gray-50/50 transition-colors text-xs">
+                    <td className="p-3 text-start bg-gray-50 font-black text-gray-700 border-r sticky left-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
+                      {hizb}
                     </td>
-                  );
-                })}
+                    <td className="p-3 text-start border-r bg-white font-bold text-gray-900 truncate">
+                      {meta?.surah}
+                    </td>
+                    <td className="p-3 text-start border-r bg-white text-gray-600 font-medium">
+                      {meta?.page}
+                    </td>
+                    <td className="p-3 text-start border-r bg-white text-gray-400 text-[10px] italic truncate font-arabic" dir="rtl">
+                      {meta?.startPhrase}
+                    </td>
+                    {Array.from({ length: 8 }, (_, i) => i + 1).map((thumn) => {
+                      const styles = getCellStyles(hizb, thumn);
+                      return (
+                        <td key={thumn} className="p-1.5 border border-gray-50 text-center">
+                          <div 
+                            className={`w-full aspect-square max-w-[48px] mx-auto rounded-lg flex flex-col items-center justify-center transition-all duration-300 ${styles.className}`}
+                            style={styles.style}
+                            title={memorized[hizb][thumn] ? `${thumnMistakes[hizb][thumn]} mistakes` : ''}
+                          >
+                            {memorized[hizb][thumn] ? (
+                              <>
+                                {thumnMistakes[hizb][thumn] === 0 ? <Check className="w-3.5 h-3.5" /> : <span className="font-black text-[10px]">{thumnMistakes[hizb][thumn]}</span>}
+                              </>
+                            ) : null}
+                          </div>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            {evaluations.length === 0 && (
+              <tr>
+                <td colSpan={12} className="p-20 text-center text-gray-400 font-medium italic">
+                  {t('no_progress_recorded', 'No memorization progress recorded yet')}
+                </td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
       </div>
     </div>
   );
 }
+

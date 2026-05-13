@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { auth } from '../lib/firebase';
 import { dbService } from '../services/db';
+import { Link } from 'react-router-dom';
 import { Student, Attendance, Evaluation, Revision, NextRevision, Kuttab } from '../types';
 import { 
   BookOpen, 
@@ -38,7 +39,6 @@ import { useTranslation } from 'react-i18next';
 import { formatDate, isToday } from '../lib/dateUtils';
 import { formatQuranProgress } from '../lib/quranUtils';
 import MemorizationGrid from '../components/MemorizationGrid';
-import StudentCalendar from '../components/StudentCalendar';
 import KuttabWeeklyOverview from '../components/KuttabWeeklyOverview';
 
 export default function StudentPortal() {
@@ -249,7 +249,6 @@ export default function StudentPortal() {
            </div>
            <div>
              <h2 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">{t('salaam_name', { name: student.name.split(' ')[0] })}</h2>
-             <p className="text-gray-500 font-medium">{t('portal_welcome')}</p>
            </div>
         </div>
 
@@ -270,7 +269,115 @@ export default function StudentPortal() {
         </div>
       </header>
 
-      {/* Quick Stats */}
+      {/* 1. Next Revision (First) */}
+      {data.nextTasks && data.nextTasks.length > 0 && (
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-[32px] p-6 sm:p-10 text-white shadow-xl shadow-indigo-100 relative overflow-hidden group"
+        >
+          <div className="absolute top-0 right-0 p-16 bg-white/10 rounded-bl-[120px] -z-0 opacity-20 group-hover:scale-110 transition-transform" />
+          <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
+            <div className="space-y-6 flex-1">
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-md rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10">
+                <ClipboardList className="w-4 h-4" />
+                {t('todays_revision_plan')}
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-3xl sm:text-5xl font-black tracking-tight">{data.nextTasks[0].surahName || `${t('hizb')} ${data.nextTasks[0].hizbNumber}`}</h3>
+                <div className="flex flex-wrap items-center gap-4 text-indigo-50 font-bold text-lg opacity-90">
+                  <span className="flex items-center gap-2 px-3 py-1 bg-white/10 rounded-lg">
+                    <BookOpen className="w-5 h-5" />
+                    {t('hizb')} {data.nextTasks[0].hizbNumber}
+                  </span>
+                  <span className="flex items-center gap-2 px-3 py-1 bg-white/10 rounded-lg">
+                    <TrendingUp className="w-5 h-5" />
+                    {getPortionLabel(data.nextTasks[0].quantity, data.nextTasks[0].quantityIdentifier)}
+                  </span>
+                  <span className="flex items-center gap-2 px-3 py-1 bg-white/10 rounded-lg text-indigo-200">
+                    <Clock className="w-5 h-5" />
+                    {data.nextTasks[0].dueDate}
+                  </span>
+                </div>
+              </div>
+              {data.nextTasks[0].notes && (
+                <div className="p-5 bg-black/10 rounded-2xl border border-white/10 backdrop-blur-sm">
+                  <p className="text-sm text-indigo-50 font-medium leading-relaxed italic">"{data.nextTasks[0].notes}"</p>
+                </div>
+              )}
+            </div>
+            <div className="w-full md:w-auto">
+              <Link
+                to="/calendar"
+                className="w-full md:w-auto px-8 py-4 bg-white text-indigo-600 rounded-2xl flex items-center justify-center gap-2 font-black shadow-lg shadow-indigo-900/20 hover:bg-indigo-50 transition-all active:scale-95"
+              >
+                <Calendar className="w-5 h-5" />
+                {t('open_calendar')}
+              </Link>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* 2. Ranking of Kuttab (Second) */}
+      {data.kuttabs.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <KuttabWeeklyOverview kuttabs={data.kuttabs} />
+        </motion.div>
+      )}
+
+      {/* 3. Last 3 Evaluations (Third) */}
+      <div className="bg-white p-6 sm:p-8 border rounded-[32px] shadow-sm">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h3 className="text-xl font-black text-gray-900">{t('recent_evaluations')}</h3>
+            <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">
+              {t('your_latest_achievements')}
+            </p>
+          </div>
+          <Award className="w-6 h-6 text-amber-500" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {evaluations.length === 0 ? (
+            <div className="md:col-span-3 text-center py-12 bg-gray-50 rounded-3xl border border-dashed">
+              <p className="text-gray-400 font-medium italic">{t('no_evals_recorded')}</p>
+            </div>
+          ) : evaluations.slice(0, 3).map((evalRecord, idx) => (
+            <motion.div 
+              key={evalRecord.id}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.2 + (idx * 0.1) }}
+              className="p-5 bg-gray-50 rounded-2xl border border-gray-100 flex items-center gap-4 group hover:bg-white hover:shadow-xl hover:shadow-amber-100/50 transition-all"
+            >
+              <div className="w-14 h-14 bg-white border rounded-2xl flex items-center justify-center font-black text-xl text-amber-600 shadow-sm group-hover:scale-110 transition-transform">
+                {evalRecord.accuracyScore}<span className="text-[10px] ml-0.5">%</span>
+              </div>
+              <div className="min-w-0">
+                <h5 className="font-black text-gray-900 truncate">
+                  {evalRecord.surahName ? `${t('surah')} ${evalRecord.surahName}` : `${t('hizb')} ${evalRecord.hizbNumber}`}
+                </h5>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">
+                    {getPortionLabel(evalRecord.quantity, evalRecord.quantityIdentifier)}
+                  </span>
+                  <span className="text-gray-300">•</span>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                    <Calendar className="w-3 h-3" />
+                    {formatDate(evalRecord.date)}
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+
+      {/* Stats and other sections moved down */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         {stats.map((stat, i) => (
           <motion.div
@@ -290,7 +397,7 @@ export default function StudentPortal() {
       </div>
 
       {/* Attendance Log */}
-      <div className="bg-white p-6 sm:p-8 border rounded-[32px] shadow-sm mt-8">
+      <div className="bg-white p-6 sm:p-8 border rounded-[32px] shadow-sm">
         <div className="flex items-center justify-between mb-8">
           <div>
             <h3 className="text-xl font-black text-gray-900">{t('attendance_mirror')}</h3>
@@ -298,7 +405,9 @@ export default function StudentPortal() {
               {filterPeriod === 'all' ? t('your_daily_logs') : t(filterPeriod === '7days' ? 'last_7_days' : filterPeriod === '30days' ? 'last_30_days' : filterPeriod === 'thisMonth' ? 'this_month' : 'last_month')}
             </p>
           </div>
-          <Calendar className="w-6 h-6 text-emerald-500" />
+          <Link to="/attendance" className="p-2 hover:bg-emerald-50 rounded-xl transition-colors group">
+            <CheckCircle className="w-6 h-6 text-emerald-500 group-hover:scale-110 transition-transform" />
+          </Link>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4">
           {[...filteredAttendance].slice(0, 14).map((record) => (
@@ -326,80 +435,17 @@ export default function StudentPortal() {
         </div>
       </div>
 
-      {data.kuttabs.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="mt-8"
-        >
-          <KuttabWeeklyOverview kuttabs={data.kuttabs} />
-        </motion.div>
-      )}
-
-      {data.nextTasks && data.nextTasks.length > 0 && (
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-[32px] p-6 sm:p-10 text-white shadow-xl shadow-emerald-100 relative overflow-hidden group mt-8"
-        >
-          <div className="absolute top-0 right-0 p-16 bg-white/10 rounded-bl-[120px] -z-0 opacity-20 group-hover:scale-110 transition-transform" />
-          <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
-            <div className="space-y-6 flex-1">
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-md rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10">
-                <ClipboardList className="w-4 h-4" />
-                {t('todays_revision_plan')}
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-3xl sm:text-5xl font-black tracking-tight">{data.nextTasks[0].surahName || `${t('hizb')} ${data.nextTasks[0].hizbNumber}`}</h3>
-                <div className="flex flex-wrap items-center gap-4 text-emerald-50 font-bold text-lg opacity-90">
-                  <span className="flex items-center gap-2 px-3 py-1 bg-white/10 rounded-lg">
-                    <BookOpen className="w-5 h-5" />
-                    {t('hizb')} {data.nextTasks[0].hizbNumber}
-                  </span>
-                  <span className="flex items-center gap-2 px-3 py-1 bg-white/10 rounded-lg">
-                    <TrendingUp className="w-5 h-5" />
-                    {getPortionLabel(data.nextTasks[0].quantity, data.nextTasks[0].quantityIdentifier)}
-                  </span>
-                  <span className="flex items-center gap-2 px-3 py-1 bg-white/10 rounded-lg text-emerald-200">
-                    <Clock className="w-5 h-5" />
-                    {data.nextTasks[0].dueDate}
-                  </span>
-                </div>
-              </div>
-              {data.nextTasks[0].notes && (
-                <div className="p-5 bg-black/10 rounded-2xl border border-white/10 backdrop-blur-sm">
-                  <p className="text-sm text-emerald-50 font-medium leading-relaxed italic">"{data.nextTasks[0].notes}"</p>
-                </div>
-              )}
-            </div>
-            <div className="w-full md:w-auto">
-              <button 
-                onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}
-                className="w-full md:w-auto px-8 py-4 bg-white text-emerald-600 rounded-2xl font-black shadow-lg shadow-emerald-900/20 hover:bg-emerald-50 transition-all active:scale-95"
-              >
-                {t('view_history')}
-              </button>
-            </div>
-          </div>
-        </motion.div>
-      )}
-
       <div className="mt-8">
+        <div className="flex items-center justify-between mb-6 px-2">
+          <h3 className="font-bold text-2xl flex items-center gap-2 text-gray-900">
+            <BookOpen className="w-8 h-8 text-indigo-600" />
+            {t('memorization_progress')}
+          </h3>
+          <Link to="/progress" className="text-sm font-black text-indigo-600 bg-indigo-50 px-4 py-2 rounded-xl hover:bg-indigo-100 transition-colors">
+            {t('view_details')}
+          </Link>
+        </div>
         <MemorizationGrid evaluations={evaluations} />
-      </div>
-
-      <div className="mt-8">
-        <h3 className="font-bold text-2xl flex items-center gap-2 text-gray-900 mb-6 px-2">
-          <Calendar className="w-8 h-8 text-emerald-600" />
-          {t('attendance_eval_timeline')}
-        </h3>
-        <StudentCalendar 
-          attendance={attendance} 
-          evaluations={evaluations} 
-          revisions={revisions} 
-          nextRevisions={data.nextTasks} 
-        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -433,135 +479,46 @@ export default function StudentPortal() {
           </div>
         </div>
 
-        {/* Evaluation & Revision History */}
-        <div className="space-y-8">
-          <div className="bg-white p-6 sm:p-8 border rounded-[32px] shadow-sm flex flex-col h-fit">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-black text-gray-900">{t('recent_evaluations')}</h3>
-              <Award className="w-5 h-5 text-amber-500" />
-            </div>
-            <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 scrollbar-thin">
-              {filteredEvaluations.length === 0 ? (
-                <p className="text-center py-8 text-gray-400 font-medium italic">{t('no_evals_recorded')}</p>
-              ) : filteredEvaluations.slice(0, 10).map((evalRecord) => (
-                <div key={evalRecord.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-between group hover:bg-white hover:shadow-md transition-all">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-white border rounded-xl flex items-center justify-center font-bold text-amber-600 shadow-sm">
-                      {evalRecord.accuracyScore}
-                    </div>
-                    <div>
-                      <h5 className="font-bold text-gray-900 truncate max-w-[150px]">
-                        {evalRecord.surahName ? `${t('surah')} ${evalRecord.surahName}` : `${t('hizb')} ${evalRecord.hizbNumber}`}
-                      </h5>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">
-                          {getPortionLabel(evalRecord.quantity, evalRecord.quantityIdentifier)}
-                        </span>
-                        <span className="text-gray-300">•</span>
-                        <p className="text-[10px] text-gray-400 flex items-center gap-1 font-bold uppercase tracking-wider">
-                          <Calendar className="w-3 h-3" />
-                          {formatDate(evalRecord.date)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-[10px] uppercase font-black px-2 py-0.5 rounded-full mt-1 bg-emerald-100 text-emerald-700">
-                      {evalRecord.accuracyScore}%
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+        {/* Revision Historry */}
+        <div className="bg-white p-6 sm:p-8 border rounded-[32px] shadow-sm flex flex-col h-fit">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-black text-gray-900">{t('todays_revisions')}</h3>
+            <History className="w-5 h-5 text-blue-500" />
           </div>
-
-          <div className="bg-white p-6 sm:p-8 border rounded-[32px] shadow-sm flex flex-col h-fit">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-black text-gray-900">{t('todays_revisions')}</h3>
-              <History className="w-5 h-5 text-blue-500" />
-            </div>
-            <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 scrollbar-thin">
-              {todaysRevisions.length === 0 ? (
-                <p className="text-center py-8 text-gray-400 font-medium italic">{t('no_revisions_month')}</p>
-              ) : todaysRevisions.map((rev) => (
-                <div key={rev.id} className="p-4 bg-blue-50 border-blue-100 rounded-2xl border flex items-center justify-between group hover:bg-white hover:shadow-md transition-all">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-white border rounded-xl flex items-center justify-center font-bold text-blue-600 shadow-sm">
-                      {rev.qualityScore}
-                    </div>
-                    <div>
-                      <h5 className="font-bold text-gray-900 truncate max-w-[250px]">
-                        {rev.surahName 
-                          ? `${t('surah')} ${rev.surahName} (${t('hizb')} ${rev.hizbNumber})` 
-                          : `${t('hizb')} ${rev.hizbNumber}`}
-                      </h5>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-blue-600 font-bold uppercase tracking-wider">
-                          {getPortionLabel(rev.quantity, rev.quantityIdentifier)}
-                        </span>
-                        <span className="text-gray-300">•</span>
-                        <p className="text-[10px] text-blue-600 flex items-center gap-1 font-bold uppercase tracking-wider">
-                          <CheckCircle className="w-3 h-3" />
-                          {t('today')}
-                        </p>
-                      </div>
-                    </div>
+          <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 scrollbar-thin">
+            {todaysRevisions.length === 0 ? (
+              <p className="text-center py-8 text-gray-400 font-medium italic">{t('no_revisions_month')}</p>
+            ) : todaysRevisions.map((rev) => (
+              <div key={rev.id} className="p-4 bg-blue-50 border-blue-100 rounded-2xl border flex items-center justify-between group hover:bg-white hover:shadow-md transition-all">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-white border rounded-xl flex items-center justify-center font-bold text-blue-600 shadow-sm">
+                    {rev.qualityScore}
                   </div>
-                  <div className="text-right flex flex-col items-end">
-                    <div className="text-[10px] uppercase font-black px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                      {rev.qualityScore}%
-                    </div>
-                    {rev.mistakesCount !== undefined && rev.mistakesCount > 0 && (
-                      <span className="text-[8px] text-red-500 font-bold mt-1">
-                        {rev.mistakesCount} {t('mistakes')}
+                  <div>
+                    <h5 className="font-bold text-gray-900 truncate max-w-[250px]">
+                      {rev.surahName 
+                        ? `${t('surah')} ${rev.surahName} (${t('hizb')} ${rev.hizbNumber})` 
+                        : `${t('hizb')} ${rev.hizbNumber}`}
+                    </h5>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-blue-600 font-bold uppercase tracking-wider">
+                        {getPortionLabel(rev.quantity, rev.quantityIdentifier)}
                       </span>
-                    )}
+                      <span className="text-gray-300">•</span>
+                      <p className="text-[10px] text-blue-600 flex items-center gap-1 font-bold uppercase tracking-wider">
+                        <CheckCircle className="w-3 h-3" />
+                        {t('today')}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
-            
-            {recentRevisions.length > 0 && (
-              <div className="mt-6 pt-6 border-t">
-                <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">{t('recent_revisions')}</h4>
-                <div className="space-y-3">
-                  {recentRevisions.map((rev) => (
-                    <div key={rev.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
-                      <div className="flex items-center gap-3">
-                         <div className="w-8 h-8 bg-white border rounded-lg flex items-center justify-center text-[10px] font-bold text-blue-500">
-                           {rev.qualityScore}
-                         </div>
-                         <div>
-                            <p className="text-xs font-bold text-gray-900 truncate max-w-[220px]">
-                              {rev.surahName 
-                                ? `${t('surah')} ${rev.surahName} (${t('hizb')} ${rev.hizbNumber})` 
-                                : `${t('hizb')} ${rev.hizbNumber}`}
-                            </p>
-                            <div className="flex items-center gap-1 text-[8px] font-bold uppercase tracking-wider">
-                              <span className="text-blue-600">
-                                {getPortionLabel(rev.quantity, rev.quantityIdentifier)}
-                              </span>
-                              <span className="text-gray-300 mx-1">•</span>
-                              <span className="text-gray-400">
-                                {formatDate(rev.date)}
-                              </span>
-                              {rev.mistakesCount !== undefined && rev.mistakesCount > 0 && (
-                                <>
-                                  <span className="text-gray-300 mx-1">•</span>
-                                  <span className="text-red-500">{rev.mistakesCount} ERR</span>
-                                </>
-                              )}
-                            </div>
-                         </div>
-                      </div>
-                      <div className="text-[8px] px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-black">
-                        {rev.qualityScore}%
-                      </div>
-                    </div>
-                  ))}
+                <div className="text-right flex flex-col items-end">
+                  <div className="text-[10px] uppercase font-black px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                    {rev.qualityScore}%
+                  </div>
                 </div>
               </div>
-            )}
+            ))}
           </div>
         </div>
       </div>

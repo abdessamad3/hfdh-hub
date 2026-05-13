@@ -13,6 +13,9 @@ import MonthlyReport from './pages/MonthlyReport';
 import EvaluationEntry from './pages/EvaluationEntry';
 import RankingPage from './pages/RankingPage';
 import StudentPortal from './pages/StudentPortal';
+import StudentCalendarPage from './pages/StudentCalendarPage';
+import StudentAttendancePage from './pages/StudentAttendancePage';
+import StudentProgressPage from './pages/StudentProgressPage';
 import RevisionEntry from './pages/RevisionEntry';
 import NextRevisionTask from './pages/NextRevisionTask';
 import KuttabManagement from './pages/KuttabManagement';
@@ -25,7 +28,6 @@ import NextRevisionNotifier from './components/NextRevisionNotifier';
 import { BookOpen, AlertCircle, Chrome, Menu, Globe } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
-import logo from './assets/logo.png';
 
 function Layout({ children, profile }: { children: ReactNode; profile: UserProfile | null }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -260,7 +262,7 @@ export default function App() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
         <div className="flex flex-col items-center gap-4">
-          <img className="w-35 h-20 text-emerald-600 animate-bounce" src={logo} alt="Logo" />
+          <BookOpen className="w-12 h-12 text-emerald-600 animate-bounce" />
           <div className="w-32 h-1 bg-gray-100 rounded-full overflow-hidden">
             <div className="w-1/2 h-full bg-emerald-600 animate-progress origin-left" />
           </div>
@@ -282,6 +284,9 @@ export default function App() {
           {isStudent ? (
             <>
               <Route path="/" element={<StudentPortal />} />
+              <Route path="/calendar" element={<StudentCalendarPage />} />
+              <Route path="/attendance" element={<StudentAttendancePage />} />
+              <Route path="/progress" element={<StudentProgressPage />} />
               <Route path="/ranking" element={<RankingPage profile={profile} />} />
               <Route path="*" element={<Navigate to="/" />} />
             </>
