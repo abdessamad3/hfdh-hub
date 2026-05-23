@@ -1,3 +1,145 @@
+import { QURAN_HIZBS } from '../constants/quranMetadata';
+
+export const SURAH_NAME_MAP: Record<string, string> = {
+  "al-fatihah": "الفاتحة",
+  "al-baqarah": "البقرة",
+  "aal-e-imran": "آل عمران",
+  "al-imran": "آل عمران",
+  "an-nisa": "النساء",
+  "al-ma'idah": "المائدة",
+  "al-an'am": "الأنعام",
+  "al-a'raf": "الأعراف",
+  "al-anfal": "الأنفال",
+  "at-tawbah": "التوبة",
+  "yunus": "يونس",
+  "hud": "هود",
+  "yusuf": "يوسف",
+  "ar-ra'd": "الرعد",
+  "ibrahim": "إبراهيم",
+  "al-hijr": "الحجر",
+  "an-nahl": "النحل",
+  "al-isra": "الإسراء",
+  "al-kahf": "الكهف",
+  "maryam": "مريم",
+  "taha": "طه",
+  "al-anbiya": "الأنبياء",
+  "al-hajj": "الحج",
+  "al-mu'minun": "المؤمنون",
+  "an-nur": "النور",
+  "al-furqan": "الفرقان",
+  "ash-shu'ara": "الشعراء",
+  "an-naml": "النمل",
+  "al-qasas": "القصص",
+  "al-ankabut": "العنكبوت",
+  "ar-rum": "الروم",
+  "luqman": "لقمان",
+  "as-sajdah": "السجدة",
+  "al-ahzab": "الأحزاب",
+  "saba": "سبأ",
+  "fatir": "فاطر",
+  "ya-sin": "يس",
+  "as-saffat": "الصافات",
+  "sad": "ص",
+  "az-zumar": "الزمر",
+  "ghafir": "غافر",
+  "fussilat": "فصلت",
+  "ash-shura": "الشورى",
+  "az-zukhruf": "الزخرف",
+  "ad-dukhan": "الدخان",
+  "al-jathiyah": "الجاثية",
+  "al-ahqaf": "الأحقاف",
+  "muhammad": "محمد",
+  "al-fath": "الفتح",
+  "al-hujurat": "الحجرات",
+  "qaf": "ق",
+  "adh-dhariyat": "الذاريات",
+  "at-tur": "الطور",
+  "an-najm": "النجم",
+  "al-qamar": "القمر",
+  "ar-rahman": "الرحمن",
+  "al-waqi'ah": "الواقعة",
+  "al-hadid": "الحديد",
+  "al-mujadilah": "المجادلة",
+  "al-hashr": "الحشر",
+  "al-mumtahanah": "الممتحنة",
+  "as-saff": "الصف",
+  "al-jum'ah": "الجمعة",
+  "al-munafiqun": "المنافقون",
+  "at-taghabun": "التغابن",
+  "at-talaq": "الطلاق",
+  "at-tahrim": "التحريم",
+  "al-mulk": "الملك",
+  "al-qalam": "القلم",
+  "al-haqqah": "الحاقة",
+  "al-ma'ariij": "المعارج",
+  "nuh": "نوح",
+  "al-jinn": "الجن",
+  "al-muzzammil": "المزمل",
+  "al-muddaththir": "المدثر",
+  "al-qiyamah": "القيامة",
+  "al-insan": "الإنسان",
+  "al-mursalat": "المرسلات",
+  "an-naba": "النبأ",
+  "an-nazi'at": "النازعات",
+  "abasa": "عبس",
+  "at-takwir": "التكوير",
+  "al-infitar": "الانفطار",
+  "al-mutaffifin": "المطففين",
+  "al-inshiqaq": "الانشقاق",
+  "al-buruj": "البروج",
+  "at-tariq": "الطارق",
+  "al-a'la": "الأعلى",
+  "al-ghashiyah": "الغاشية",
+  "al-fajr": "الفجر",
+  "al-balad": "البلد",
+  "ash-shams": "الشمس",
+  "al-layl": "الليل",
+  "ad-duha": "الضحى",
+  "ash-sharh": "الشرح",
+  "at-tin": "التين",
+  "al-alaq": "العلق",
+  "al-qadr": "القدر",
+  "al-bayyinah": "البينة",
+  "az-zalzalah": "الزلزلة",
+  "al-adiyat": "العاديات",
+  "al-qari'ah": "القارعة",
+  "at-takathur": "التكاثر",
+  "al-asr": "العصر",
+  "al-humazah": "الهمزة",
+  "al-fil": "الفيل",
+  "quraysh": "قريش",
+  "al-ma'un": "الماعون",
+  "al-kawthar": "الكوثر",
+  "al-kafirun": "الكافرون",
+  "an-nasr": "النصر",
+  "al-masad": "المسد",
+  "al-ikhlas": "الإخلاص",
+  "al-falaq": "الفلق",
+  "an-nas": "الناس"
+};
+
+export const getHizbNumberForSurah = (surahName: string): number => {
+  if (!surahName) return 1;
+  const normalized = surahName.trim().toLowerCase();
+  const arabicSurahName = SURAH_NAME_MAP[normalized] || surahName;
+  
+  // Find first matching Hizb in QURAN_HIZBS
+  for (const [hizbNumStr, meta] of Object.entries(QURAN_HIZBS)) {
+    if (meta.surah === arabicSurahName || meta.surah === surahName) {
+      return parseInt(hizbNumStr, 10);
+    }
+  }
+  
+  // Fuzzy fallback: check if Surah name contains or is contained in meta.surah
+  for (const [hizbNumStr, meta] of Object.entries(QURAN_HIZBS)) {
+    if (meta.surah.includes(arabicSurahName) || arabicSurahName.includes(meta.surah)) {
+      return parseInt(hizbNumStr, 10);
+    }
+  }
+
+  return 1; // Default fallback to Hizb 1
+};
+
 export const formatQuranProgress = (totalHizbs: number, t: any) => {
   const totalUnits = Math.round(totalHizbs * 8);
   if (totalUnits === 0) return `0 ${t('hizbs')}`;

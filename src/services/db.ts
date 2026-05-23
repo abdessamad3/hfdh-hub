@@ -23,7 +23,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import type { Student, Attendance, Memorization, Evaluation, Revision, UserProfile, UserRole, Kuttab, KuttabSchedule, NextRevision, TeacherAttendance } from '../types';
-import { getCoveredThumns } from '../lib/quranUtils';
+import { getCoveredThumns, getHizbNumberForSurah } from '../lib/quranUtils';
 import { getDayIndex } from '../lib/dateUtils';
 
 enum OperationType {
@@ -552,20 +552,25 @@ export const dbService = {
           throw new Error('Attendance can only be marked on scheduled session days.');
         }
 
-        const student = await this.getStudent(record.studentId);
         const id = `${record.studentId}_${record.date}_${record.sessionIndex || 0}`;
         const docRef = doc(db, 'attendance', id);
+
+        if (!record.status) {
+          await deleteDoc(docRef);
+          return;
+        }
+
+        const student = await this.getStudent(record.studentId);
         
         let finalStatus = record.status;
         let finalExcuse = record.excuse;
 
         if (finalStatus !== 'present') {
-           const [evals, revs, memos] = await Promise.all([
+           const [evals, revs] = await Promise.all([
              getDocs(query(collection(db, 'evaluations'), where('studentId', '==', record.studentId), where('date', '==', record.date), limit(1))),
-             getDocs(query(collection(db, 'revisions'), where('studentId', '==', record.studentId), where('date', '==', record.date), limit(1))),
-             getDocs(query(collection(db, 'memorizations'), where('studentId', '==', record.studentId), where('date', '==', record.date), limit(1)))
+             getDocs(query(collection(db, 'revisions'), where('studentId', '==', record.studentId), where('date', '==', record.date), limit(1)))
            ]);
-           if (!evals.empty || !revs.empty || !memos.empty) {
+           if (!evals.empty || !revs.empty) {
              finalStatus = 'present';
              finalExcuse = undefined;
            }
@@ -860,11 +865,14 @@ export const dbService = {
     }
 
     const student = await this.getStudent(record.studentId);
-    const docRef = await addDoc(collection(db, 'memorizations'), {
+    const docRef = await addDoc(collection(db, 'evaluations'), {
       ...record,
       studentEmail: student.email ? student.email.toLowerCase() : null,
       kuttabResponsibleId: student.kuttabResponsibleId || null,
       kuttabName: student.kuttabName || null,
+      mistakesCount: 0,
+      accuracyScore: 100,
+      notes: 'Logged directly as passed memorization',
       timestamp: serverTimestamp()
     });
 
@@ -877,43 +885,74 @@ export const dbService = {
 
   async getMemorizationsByDate(teacherId: string, kuttabName: string | undefined, date: string, isAdmin: boolean = false) {
     try {
-      if (isAdmin) {
-        const snap = await getDocs(query(collection(db, 'memorizations'), where('date', '==', date), limit(100)));
-        return snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Memorization));
-      }
-
-      const q = query(
-        collection(db, 'memorizations'),
-        and(
-          or(
-            where('teacherId', '==', teacherId),
-            where('kuttabResponsibleId', '==', teacherId),
-            ...(kuttabName ? [where('kuttabName', '==', kuttabName)] : [])
+      const q = isAdmin ? 
+        query(collection(db, 'evaluations'), where('date', '==', date), limit(100)) :
+        query(
+          collection(db, 'evaluations'),
+          and(
+            or(
+              where('teacherId', '==', teacherId),
+              where('kuttabResponsibleId', '==', teacherId),
+              ...(kuttabName ? [where('kuttabName', '==', kuttabName)] : [])
+            ),
+            where('date', '==', date)
           ),
-          where('date', '==', date)
-        ),
-        limit(100)
-      );
+          limit(100)
+        );
 
       const snap = await getDocs(q);
-      return snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Memorization));
+      return snap.docs.map(doc => {
+        const ev = doc.data() as Evaluation;
+        return {
+          id: doc.id,
+          studentId: ev.studentId,
+          studentEmail: ev.studentEmail,
+          teacherId: ev.teacherId,
+          kuttabResponsibleId: ev.kuttabResponsibleId,
+          kuttabName: ev.kuttabName,
+          surahName: ev.surahName || '',
+          fromAyah: ev.fromAyah || 0,
+          toAyah: ev.toAyah || 0,
+          hizbNumber: ev.hizbNumber,
+          quantity: ev.quantity,
+          quantityIdentifier: ev.quantityIdentifier,
+          date: ev.date
+        } as Memorization;
+      });
     } catch (error) {
-      return handleFirestoreError(error, OperationType.LIST, 'memorizations');
+      return handleFirestoreError(error, OperationType.LIST, 'evaluations');
     }
   },
 
   async getMemorizations(studentId: string) {
     try {
       const q = query(
-        collection(db, 'memorizations'),
+        collection(db, 'evaluations'),
         where('studentId', '==', studentId),
         orderBy('date', 'desc'),
-        limit(50)
+        limit(100)
       );
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Memorization));
+      return snapshot.docs.map(doc => {
+        const ev = doc.data() as Evaluation;
+        return {
+          id: doc.id,
+          studentId: ev.studentId,
+          studentEmail: ev.studentEmail,
+          teacherId: ev.teacherId,
+          kuttabResponsibleId: ev.kuttabResponsibleId,
+          kuttabName: ev.kuttabName,
+          surahName: ev.surahName || '',
+          fromAyah: ev.fromAyah || 0,
+          toAyah: ev.toAyah || 0,
+          hizbNumber: ev.hizbNumber,
+          quantity: ev.quantity,
+          quantityIdentifier: ev.quantityIdentifier,
+          date: ev.date
+        } as Memorization;
+      });
     } catch (error) {
-      return handleFirestoreError(error, OperationType.LIST, 'memorizations');
+      return handleFirestoreError(error, OperationType.LIST, 'evaluations');
     }
   },
 
@@ -1037,19 +1076,21 @@ export const dbService = {
         getDocs(query(
           collection(db, 'attendance'), 
           where('studentId', '==', studentId),
-          orderBy('date', 'desc'),
           limit(500)
         )),
         getDocs(query(
           collection(db, 'evaluations'), 
           where('studentId', '==', studentId),
-          orderBy('date', 'desc'),
           limit(500)
         ))
       ]);
 
       const attendanceRecords = attendanceSnap.docs.map(d => d.data() as Attendance);
       const evaluationRecords = evaluationSnap.docs.map(d => d.data() as Evaluation);
+
+      // Sort records in-memory by date (descending)
+      attendanceRecords.sort((a, b) => b.date.localeCompare(a.date));
+      evaluationRecords.sort((a, b) => b.date.localeCompare(a.date));
 
       // Attendance Rate
       let attendanceRate = 0;
@@ -1078,6 +1119,7 @@ export const dbService = {
       if (evaluationRecords.length > 0) {
         // Track unique units across all evaluations
         const uniqueUnits = new Set<string>();
+        
         evaluationRecords.forEach(ev => {
           const covered = getCoveredThumns(ev.hizbNumber, ev.quantityIdentifier || '');
           covered.forEach(unit => {
@@ -1225,6 +1267,46 @@ export const dbService = {
       callback(evaluations);
     }, (error) => {
       console.error("Error subscribing to evaluations:", error);
+    });
+  },
+
+  subscribeAllEvaluations(teacherId: string, kuttabName: string | undefined, isAdmin: boolean, callback: (evaluations: Evaluation[]) => void) {
+    let q;
+    if (isAdmin) {
+      q = query(
+        collection(db, 'evaluations'),
+        orderBy('date', 'desc'),
+        limit(300)
+      );
+    } else {
+      const teacherConditions: QueryFilterConstraint[] = [
+        where('teacherId', '==', teacherId),
+        where('kuttabResponsibleId', '==', teacherId)
+      ];
+      if (kuttabName) {
+        teacherConditions.push(where('kuttabName', '==', kuttabName));
+      }
+
+      q = query(
+        collection(db, 'evaluations'),
+        or(...teacherConditions),
+        orderBy('date', 'desc'),
+        limit(300)
+      );
+    }
+    
+    return onSnapshot(q, (snapshot) => {
+      let evaluations = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as Evaluation));
+      evaluations.sort((a, b) => {
+        const dateCompare = b.date.localeCompare(a.date);
+        if (dateCompare !== 0) return dateCompare;
+        const bTime = (b as any).timestamp?.toMillis?.() || 0;
+        const aTime = (a as any).timestamp?.toMillis?.() || 0;
+        return bTime - aTime;
+      });
+      callback(evaluations);
+    }, (error) => {
+      console.error("Error subscribing to all evaluations:", error);
     });
   },
 
@@ -1934,6 +2016,44 @@ export const dbService = {
     });
   },
 
+  subscribeStudentMemorizations(studentId: string, _studentEmail: string, callback: (memorizations: Memorization[]) => void) {
+    const q = query(
+      collection(db, 'evaluations'),
+      where('studentId', '==', studentId),
+      limit(100)
+    );
+    
+    return onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => {
+        const ev = doc.data() as Evaluation;
+        return {
+          id: doc.id,
+          studentId: ev.studentId,
+          studentEmail: ev.studentEmail,
+          teacherId: ev.teacherId,
+          kuttabResponsibleId: ev.kuttabResponsibleId,
+          kuttabName: ev.kuttabName,
+          surahName: ev.surahName || '',
+          fromAyah: ev.fromAyah || 0,
+          toAyah: ev.toAyah || 0,
+          hizbNumber: ev.hizbNumber,
+          quantity: ev.quantity,
+          quantityIdentifier: ev.quantityIdentifier,
+          date: ev.date
+        } as Memorization;
+      });
+      callback(data.sort((a, b) => {
+        const dateCompare = b.date.localeCompare(a.date);
+        if (dateCompare !== 0) return dateCompare;
+        const aTime = (a as any).timestamp?.toMillis?.() || 0;
+        const bTime = (b as any).timestamp?.toMillis?.() || 0;
+        return bTime - aTime;
+      }));
+    }, (error) => {
+      console.error("Error subscribing to student memorizations from evaluations:", error);
+    });
+  },
+
   // User Profiles & Roles
   async logSignIn(uid: string, email: string, displayName: string) {
     try {
@@ -2206,6 +2326,37 @@ export const dbService = {
       };
     } catch (error) {
       return handleFirestoreError(error, OperationType.GET, `portal/${studentId}`);
+    }
+  },
+
+  async listCustomQuestions() {
+    try {
+      const snap = await getDocs(query(collection(db, 'smart_questions'), limit(250)));
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch (error) {
+      return handleFirestoreError(error, OperationType.GET, 'smart_questions');
+    }
+  },
+
+  async addCustomQuestion(data: any) {
+    try {
+      const docRef = await addDoc(collection(db, 'smart_questions'), {
+        ...data,
+        createdAt: serverTimestamp()
+      });
+      return docRef.id;
+    } catch (error) {
+      return handleFirestoreError(error, OperationType.CREATE, 'smart_questions');
+    }
+  },
+
+  async deleteCustomQuestion(id: string) {
+    try {
+      const docRef = doc(db, 'smart_questions', id);
+      await deleteDoc(docRef);
+      return true;
+    } catch (error) {
+      return handleFirestoreError(error, OperationType.DELETE, `smart_questions/${id}`);
     }
   }
 };

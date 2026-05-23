@@ -28,6 +28,8 @@ export default function AttendancePage({ profile }: AttendancePageProps) {
   const [studentsWithActivity, setStudentsWithActivity] = useState<Record<string, boolean>>({});
   const [kuttabs, setKuttabs] = useState<Record<string, any>>({});
   const [kuttabsLoaded, setKuttabsLoaded] = useState(false);
+  const [kuttabList, setKuttabList] = useState<any[]>([]);
+  const [selectedKuttab, setSelectedKuttab] = useState<string>(profile?.kuttabName || 'all');
   
   const [saving, setSaving] = useState(false);
 
@@ -43,6 +45,7 @@ export default function AttendancePage({ profile }: AttendancePageProps) {
     try {
       // Fetch kuttabs first to ensure session checks work during initialization
       const kuttabsData = await dbService.getAllKuttabs();
+      setKuttabList(kuttabsData);
       const kuttabsMap = Object.fromEntries(kuttabsData.map(k => [k.name.trim().toLowerCase(), k]));
       setKuttabs(kuttabsMap);
       setKuttabsLoaded(true);
@@ -67,7 +70,7 @@ export default function AttendancePage({ profile }: AttendancePageProps) {
               if (record) {
                 initialMap[s.id][idx] = { status: record.status, excuse: record.excuse || '' };
               } else {
-                initialMap[s.id][idx] = { status: 'present' };
+                initialMap[s.id][idx] = { status: undefined as any };
               }
             });
           }
@@ -160,19 +163,25 @@ export default function AttendancePage({ profile }: AttendancePageProps) {
         toast.error(t('no_session_warning') || 'No session scheduled for this student.');
         return;
       }
+      const currentVal = studentAttendance[id]?.[sessionIndex]?.status;
+      const newStatus = currentVal === status ? undefined as any : status;
+      
       setStudentAttendance(prev => ({
         ...prev,
         [id]: { 
           ...prev[id], 
-          [sessionIndex]: { ...(prev[id]?.[sessionIndex] || {}), status }
+          [sessionIndex]: { ...(prev[id]?.[sessionIndex] || {}), status: newStatus }
         }
       }));
     } else {
+      const currentVal = teacherAttendance[id]?.[sessionIndex]?.status;
+      const newStatus = currentVal === status ? undefined as any : status;
+      
       setTeacherAttendance(prev => ({
         ...prev,
         [id]: { 
           ...prev[id], 
-          [sessionIndex]: { ...(prev[id]?.[sessionIndex] || {}), status }
+          [sessionIndex]: { ...(prev[id]?.[sessionIndex] || {}), status: newStatus }
         }
       }));
     }
@@ -264,27 +273,54 @@ export default function AttendancePage({ profile }: AttendancePageProps) {
   const displayList = activeTab === 'students' 
     ? students.filter(s => isSessionDayForStudent(s, date))
     : teachers;
+
+  const filteredDisplayList = displayList.filter(item => {
+    if (selectedKuttab === 'all') return true;
+    const itemKuttab = activeTab === 'students' 
+      ? (item as Student).kuttabName 
+      : (item as UserProfile).kuttabName;
+    return itemKuttab?.trim().toLowerCase() === selectedKuttab.trim().toLowerCase();
+  });
+
   const currentAttendance = activeTab === 'students' ? studentAttendance : teacherAttendance;
 
   return (
     <div className="p-4 sm:p-8 max-w-4xl mx-auto space-y-8">
-      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-black">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 text-black">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">{t('daily_attendance')}</h2>
           <p className="text-gray-500 mt-1 text-sm sm:text-base">{t('mark_attendance')} {formatDate(date)}</p>
         </div>
-        <div className={`w-full sm:w-auto flex items-center gap-3 bg-white border px-4 py-2.5 rounded-xl shadow-sm transition-all ${
-          date === new Date().toLocaleDateString('en-CA') 
-            ? 'border-emerald-500 ring-2 ring-emerald-50' 
-            : 'border-gray-100'
-        }`}>
-          <CalendarIcon className="w-5 h-5 text-emerald-500" />
-          <input 
-            type="date" 
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="flex-1 sm:flex-none outline-none bg-transparent font-bold text-gray-700"
-          />
+        
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+          {/* Kuttab Filter Select Dropdown */}
+          <div className="flex items-center gap-2 bg-white border border-gray-100 px-4 py-2.5 rounded-xl shadow-sm">
+            <span className="text-xs font-black text-gray-400 uppercase tracking-wider">{t('kuttab') || 'Kuttab'}:</span>
+            <select
+              value={selectedKuttab}
+              onChange={(e) => setSelectedKuttab(e.target.value)}
+              className="outline-none bg-transparent font-bold text-gray-700 text-sm cursor-pointer"
+            >
+              <option value="all">{t('all') || 'All'}</option>
+              {kuttabList.map(k => (
+                <option key={k.id} value={k.name}>{k.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className={`flex items-center gap-3 bg-white border px-4 py-2.5 rounded-xl shadow-sm transition-all ${
+            date === new Date().toLocaleDateString('en-CA') 
+              ? 'border-emerald-500 ring-2 ring-emerald-50' 
+              : 'border-gray-100'
+          }`}>
+            <CalendarIcon className="w-5 h-5 text-emerald-500" />
+            <input 
+              type="date" 
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="outline-none bg-transparent font-bold text-gray-700"
+            />
+          </div>
         </div>
       </header>
 
@@ -321,12 +357,12 @@ export default function AttendancePage({ profile }: AttendancePageProps) {
             {activeTab === 'students' ? t('student_list') : t('teacher_list')}
           </h3>
           <div className="flex w-full sm:w-auto gap-2">
-            {displayList.length > 0 && (
+            {filteredDisplayList.length > 0 && (
               <>
                 <button 
                   onClick={() => {
                     const updated = { ...currentAttendance };
-                    displayList.forEach(item => {
+                    filteredDisplayList.forEach(item => {
                       const id = activeTab === 'students' ? (item as Student).id : (item as UserProfile).uid;
                       const sessions = activeTab === 'students' ? getSessionsForStudent(item as Student, date) : ["Default"];
                       
@@ -347,7 +383,7 @@ export default function AttendancePage({ profile }: AttendancePageProps) {
                 <button 
                   onClick={() => {
                     const updated = { ...currentAttendance };
-                    displayList.forEach(item => {
+                    filteredDisplayList.forEach(item => {
                       const id = activeTab === 'students' ? (item as Student).id : (item as UserProfile).uid;
                       const sessions = activeTab === 'students' ? getSessionsForStudent(item as Student, date) : ["Default"];
                       
@@ -374,7 +410,7 @@ export default function AttendancePage({ profile }: AttendancePageProps) {
           <div className="p-12 text-center text-gray-500 font-medium">
             {activeTab === 'students' ? t('loading_students') : t('loading_teachers_attendance')}
           </div>
-        ) : displayList.length === 0 ? (
+        ) : filteredDisplayList.length === 0 ? (
           <div className="p-12 text-center text-gray-500 font-medium italic">
             {activeTab === 'students' 
               ? (students.length > 0 ? t('no_students_with_sessions') : t('no_students_enrolled'))
@@ -392,7 +428,7 @@ export default function AttendancePage({ profile }: AttendancePageProps) {
               </div>
             )}
             
-            {displayList.map((item, i) => {
+            {filteredDisplayList.map((item, i) => {
               const id = activeTab === 'students' ? (item as Student).id : (item as UserProfile).uid;
               const name = activeTab === 'students' ? (item as Student).name : ((item as UserProfile).displayName || (item as UserProfile).email.split('@')[0]);
               const path = activeTab === 'students' ? `/students/${id}` : `/teachers/${id}`;
@@ -562,7 +598,7 @@ export default function AttendancePage({ profile }: AttendancePageProps) {
           </div>
         )}
 
-        {displayList.length > 0 && (
+        {filteredDisplayList.length > 0 && (
           <div className="p-6 sm:p-8 bg-emerald-50 border-t flex justify-center sm:justify-end">
             <button
               onClick={handleSave}

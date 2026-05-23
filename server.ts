@@ -1,11 +1,7 @@
 import express from "express";
 import path from "path";
-import { fileURLToPath } from "url";
 import cors from "cors";
 import fs from "fs";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
@@ -32,10 +28,9 @@ async function startServer() {
   });
 
   const distPath = path.join(process.cwd(), 'dist');
-  const isProduction = fs.existsSync(path.join(distPath, 'index.html'));
 
   // Vite middleware for development
-  if (!isProduction) {
+  if (process.env.NODE_ENV !== "production") {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },

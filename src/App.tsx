@@ -23,6 +23,9 @@ import TeachersList from './pages/TeachersList';
 import TeacherProfile from './pages/TeacherProfile';
 import KuttabProfile from './pages/KuttabProfile';
 import LoginHistory from './pages/LoginHistory';
+import QuranDatabase from './pages/QuranDatabase';
+import SmartChallengePage from './pages/SmartChallengePage';
+import ManageSmartQuestionsPage from './pages/ManageSmartQuestionsPage';
 import AdminSearchBar from './components/AdminSearchBar';
 import NextRevisionNotifier from './components/NextRevisionNotifier';
 import { BookOpen, AlertCircle, Chrome, Menu, Globe } from 'lucide-react';
@@ -275,7 +278,7 @@ export default function App() {
     return <Login externalError={authError} />;
   }
 
-  const isStudent = profile?.role === 'student';
+  const isStudent = profile?.role === 'student' || (!profile?.role && user && !authError);
 
   return (
     <Router>
@@ -285,14 +288,16 @@ export default function App() {
             <>
               <Route path="/" element={<StudentPortal />} />
               <Route path="/calendar" element={<StudentCalendarPage />} />
-              <Route path="/attendance" element={<StudentAttendancePage />} />
               <Route path="/progress" element={<StudentProgressPage />} />
               <Route path="/ranking" element={<RankingPage profile={profile} />} />
+              <Route path="/smart-challenge" element={<SmartChallengePage profile={profile} />} />
+              <Route path="/quran-database" element={<QuranDatabase profile={profile} />} />
               <Route path="*" element={<Navigate to="/" />} />
             </>
           ) : (
             <>
               <Route path="/" element={<Dashboard profile={profile} />} />
+              <Route path="/quran-database" element={<QuranDatabase profile={profile} />} />
               <Route path="/teachers/:id" element={<TeacherProfile profile={profile} />} />
               <Route path="/kuttabs/:id" element={<KuttabProfile profile={profile} />} />
               {(profile?.role === 'admin' || profile?.role === 'manager') && (
@@ -302,7 +307,10 @@ export default function App() {
                 </>
               )}
               {profile?.role === 'admin' && (
-                <Route path="/login-history" element={<LoginHistory profile={profile} />} />
+                <>
+                  <Route path="/login-history" element={<LoginHistory profile={profile} />} />
+                  <Route path="/admin/smart-questions" element={<ManageSmartQuestionsPage profile={profile} />} />
+                </>
               )}
               <Route path="/students" element={<StudentsList profile={profile} />} />
               <Route path="/students/:id" element={<StudentProfile profile={profile} />} />

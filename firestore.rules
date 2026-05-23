@@ -132,5 +132,11 @@ service cloud.firestore {
       allow get, list: if isSignedIn();
       allow create, update, delete: if isTeacher();
     }
+
+    // Smart Questions (Admin managed)
+    match /smart_questions/{id} {
+      allow read, list: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
   }
 }

@@ -1,8 +1,9 @@
 import { useTranslation } from 'react-i18next';
-import { Evaluation } from '../types';
+import { Evaluation, Memorization } from '../types';
 import { Check } from 'lucide-react';
-import { getCoveredThumns } from '../lib/quranUtils';
+import { getCoveredThumns, getHizbNumberForSurah } from '../lib/quranUtils';
 import { QURAN_HIZBS } from '../constants/quranMetadata';
+import { formatDate } from '../lib/dateUtils';
 
 interface MemorizationGridProps {
   evaluations: Evaluation[];
@@ -10,16 +11,18 @@ interface MemorizationGridProps {
 
 export default function MemorizationGrid({ evaluations }: MemorizationGridProps) {
   const { t, i18n } = useTranslation();
+  const isRtl = i18n.language === 'ar';
 
   // Initialize a 60x8 grid (1-indexed for convenience in logic)
   // memorized[hizb][thumn]
   const memorized: boolean[][] = Array.from({ length: 61 }, () => Array(9).fill(false));
   const thumnMistakes: number[][] = Array.from({ length: 61 }, () => Array(9).fill(0));
+  const thumnDates: string[][] = Array.from({ length: 61 }, () => Array(9).fill(''));
 
-  // Sort evaluations by date ascending so later evaluations override earlier ones for the same unit
-  // Use localeCompare for YYYY-MM-DD strings to avoid timezone issues with new Date()
+  // Sort evaluations by date ascending so later records override earlier ones
   const sortedEvals = [...evaluations].sort((a, b) => a.date.localeCompare(b.date));
 
+  // Process evaluations next (so they can refine/update mistake details on already memorized parts)
   sortedEvals.forEach((ev) => {
     const h = ev.hizbNumber;
     if (h < 1 || h > 60) return;
@@ -28,6 +31,7 @@ export default function MemorizationGrid({ evaluations }: MemorizationGridProps)
     covered.forEach(unit => {
       memorized[h][unit] = true;
       thumnMistakes[h][unit] = ev.mistakesCount || 0;
+      thumnDates[h][unit] = ev.date;
     });
 
     // Fallback for older data with only numerical quantity
@@ -35,6 +39,7 @@ export default function MemorizationGrid({ evaluations }: MemorizationGridProps)
       for (let i = 1; i <= Math.min(8, ev.quantity); i++) {
         memorized[h][i] = true;
         thumnMistakes[h][i] = ev.mistakesCount || 0;
+        thumnDates[h][i] = ev.date;
       }
     }
   });
@@ -96,59 +101,72 @@ export default function MemorizationGrid({ evaluations }: MemorizationGridProps)
       </div>
       
       <div className="overflow-x-auto overflow-y-auto">
-        <table className="w-full border-collapse min-w-[900px] table-fixed">
-          <thead className="sticky top-0 bg-white shadow-sm z-10">
-            <tr>
-              <th className="p-3 text-start bg-gray-50 border-b border-r sticky left-0 z-20 w-16">
-                <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{t('hizb')}</span>
+        <table className="w-full border-collapse min-w-[1000px] table-fixed">
+          <thead className="sticky top-0 bg-white/80 backdrop-blur-md shadow-sm z-20">
+            <tr className="border-b-2 border-gray-100">
+              <th className="p-5 text-start bg-gray-50/30 w-20">
+                <span className="text-[11px] font-black uppercase text-gray-500 tracking-widest">{t('hizb')}</span>
               </th>
-              <th className="p-3 text-start bg-gray-50 border-b border-r w-24">
-                <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{t('surah', 'Surah')}</span>
+              <th className="p-5 text-start bg-gray-50/30 w-32">
+                <span className="text-[11px] font-black uppercase text-gray-500 tracking-widest">{t('surah')}</span>
               </th>
-              <th className="p-3 text-start bg-gray-50 border-b border-r w-16">
-                <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{t('page', 'Page')}</span>
-              </th>
-              <th className="p-3 text-start bg-gray-50 border-b border-r w-48">
-                <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{t('start_phrase', 'Start')}</span>
+              <th className="p-5 text-start bg-gray-50/30 w-48">
+                <span className="text-[11px] font-black uppercase text-gray-500 tracking-widest">{t('progress')}</span>
               </th>
               {thumnLabels.map((label, i) => (
-                <th key={i} className="p-2 border-b text-center">
-                  <span className="text-[10px] font-bold text-gray-500">{label}</span>
+                <th key={i} className="p-2 text-center w-16">
+                  <span className="text-[10px] font-black text-gray-400">{label}</span>
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y relative">
+          <tbody className="divide-y divide-gray-50 relative">
             {Array.from({ length: 60 }, (_, i) => i + 1)
               .filter(hizb => memorized[hizb].some(m => m))
-              .map((hizb) => {
+              .map((hizb, idx) => {
                 const meta = QURAN_HIZBS[hizb];
+                const hizbMemorizedCount = memorized[hizb].filter(m => m).length;
+                const percentage = (hizbMemorizedCount / 8) * 100;
+                
                 return (
-                  <tr key={hizb} className="hover:bg-gray-50/50 transition-colors text-xs">
-                    <td className="p-3 text-start bg-gray-50 font-black text-gray-700 border-r sticky left-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
-                      {hizb}
+                  <tr key={hizb} className={`transition-all group ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30 hover:bg-emerald-50/10'}`}>
+                    <td className="p-5 text-start font-black text-gray-900 border-r border-gray-50">
+                      <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-all transform group-hover:rotate-6">
+                        {hizb}
+                      </div>
                     </td>
-                    <td className="p-3 text-start border-r bg-white font-bold text-gray-900 truncate">
-                      {meta?.surah}
+                    <td className="p-5 text-start border-r border-gray-50">
+                      <p className="font-black text-gray-900 text-sm">{meta?.surah}</p>
+                      <p className="text-[10px] text-gray-400 font-bold mt-0.5">{t('page')} {meta?.page}</p>
                     </td>
-                    <td className="p-3 text-start border-r bg-white text-gray-600 font-medium">
-                      {meta?.page}
-                    </td>
-                    <td className="p-3 text-start border-r bg-white text-gray-400 text-[10px] italic truncate font-arabic" dir="rtl">
-                      {meta?.startPhrase}
+                    <td className="p-5 text-start border-r border-gray-50">
+                       <div className="space-y-2">
+                         <div className="flex items-center justify-between">
+                            <span className={`text-[10px] font-black uppercase tracking-widest ${percentage === 100 ? 'text-emerald-600' : 'text-gray-400'}`}>
+                              {percentage === 100 ? t('mastered') : `${Math.round(percentage)}%`}
+                            </span>
+                            {percentage === 100 && <Check className="w-3.5 h-3.5 text-emerald-500" />}
+                         </div>
+                         <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden shadow-inner">
+                           <div 
+                             className={`h-full rounded-full transition-all duration-1000 ${percentage === 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`} 
+                             style={{ width: `${percentage}%` }} 
+                           />
+                         </div>
+                       </div>
                     </td>
                     {Array.from({ length: 8 }, (_, i) => i + 1).map((thumn) => {
                       const styles = getCellStyles(hizb, thumn);
                       return (
-                        <td key={thumn} className="p-1.5 border border-gray-50 text-center">
+                        <td key={thumn} className="p-2 text-center border-l border-gray-50/50">
                           <div 
-                            className={`w-full aspect-square max-w-[48px] mx-auto rounded-lg flex flex-col items-center justify-center transition-all duration-300 ${styles.className}`}
+                            className={`w-10 h-10 aspect-square mx-auto rounded-xl flex flex-col items-center justify-center transition-all duration-500 shadow-sm ${styles.className} ${memorized[hizb][thumn] ? 'hover:scale-110 hover:-rotate-3' : ''}`}
                             style={styles.style}
-                            title={memorized[hizb][thumn] ? `${thumnMistakes[hizb][thumn]} mistakes` : ''}
+                            title={memorized[hizb][thumn] ? `${isRtl ? 'التاريخ' : 'Date'}: ${thumnDates[hizb][thumn] ? formatDate(thumnDates[hizb][thumn]) : '---'} | ${isRtl ? 'الأخطاء' : 'Mistakes'}: ${thumnMistakes[hizb][thumn]}` : ''}
                           >
                             {memorized[hizb][thumn] ? (
                               <>
-                                {thumnMistakes[hizb][thumn] === 0 ? <Check className="w-3.5 h-3.5" /> : <span className="font-black text-[10px]">{thumnMistakes[hizb][thumn]}</span>}
+                                {thumnMistakes[hizb][thumn] === 0 ? <Check className="w-4 h-4" /> : <span className="font-black text-[11px]">{thumnMistakes[hizb][thumn]}</span>}
                               </>
                             ) : null}
                           </div>

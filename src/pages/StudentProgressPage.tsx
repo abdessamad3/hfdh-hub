@@ -60,7 +60,7 @@ export default function StudentProgressPage() {
     );
   }
 
-  const progressValue = student?.hizbCount || 0;
+  const progressValue = student?.totalHizbs || 0;
   const percentage = Math.round((progressValue / 60) * 100);
 
   return (
@@ -126,7 +126,7 @@ export default function StudentProgressPage() {
               </div>
               <div>
                 <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">{t('completed')}</p>
-                <h4 className="text-xl font-black text-gray-900">{student?.hizbCount || 0} {t('ahzab')}</h4>
+                <h4 className="text-xl font-black text-gray-900">{(student?.totalHizbs || 0).toFixed(2)} {t('ahzab')}</h4>
               </div>
             </div>
             <div className="p-6 bg-emerald-50/50 rounded-3xl border border-emerald-100 flex items-center gap-4">
@@ -148,7 +148,7 @@ export default function StudentProgressPage() {
               </div>
               <div>
                 <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">{t('remaining')}</p>
-                <h4 className="text-xl font-black text-gray-900">{60 - (student?.hizbCount || 0)} {t('ahzab')}</h4>
+                <h4 className="text-xl font-black text-gray-900">{(60 - (student?.totalHizbs || 0)).toFixed(2)} {t('ahzab')}</h4>
               </div>
             </div>
           </div>
