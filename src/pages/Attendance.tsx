@@ -30,6 +30,7 @@ export default function AttendancePage({ profile }: AttendancePageProps) {
   const [kuttabsLoaded, setKuttabsLoaded] = useState(false);
   const [kuttabList, setKuttabList] = useState<any[]>([]);
   const [selectedKuttab, setSelectedKuttab] = useState<string>(profile?.kuttabName || 'all');
+  const [selectedShift, setSelectedShift] = useState<'all' | 'morning' | 'afternoon'>('all');
   
   const [saving, setSaving] = useState(false);
 
@@ -275,11 +276,28 @@ export default function AttendancePage({ profile }: AttendancePageProps) {
     : teachers;
 
   const filteredDisplayList = displayList.filter(item => {
-    if (selectedKuttab === 'all') return true;
-    const itemKuttab = activeTab === 'students' 
-      ? (item as Student).kuttabName 
-      : (item as UserProfile).kuttabName;
-    return itemKuttab?.trim().toLowerCase() === selectedKuttab.trim().toLowerCase();
+    // 1. Kuttab Filter
+    if (selectedKuttab !== 'all') {
+      const itemKuttab = activeTab === 'students' 
+        ? (item as Student).kuttabName 
+        : (item as UserProfile).kuttabName;
+      if (itemKuttab?.trim().toLowerCase() !== selectedKuttab.trim().toLowerCase()) {
+        return false;
+      }
+    }
+
+    // 2. Shift Filter (only applicable to students)
+    if (activeTab === 'students' && selectedShift !== 'all') {
+      const sessions = getSessionsForStudent(item as Student, date);
+      if (selectedShift === 'morning' && !sessions[0]) {
+        return false;
+      }
+      if (selectedShift === 'afternoon' && !sessions[1]) {
+        return false;
+      }
+    }
+
+    return true;
   });
 
   const currentAttendance = activeTab === 'students' ? studentAttendance : teacherAttendance;
@@ -307,6 +325,22 @@ export default function AttendancePage({ profile }: AttendancePageProps) {
               ))}
             </select>
           </div>
+
+          {/* Shift Filter Select Dropdown (Only for students) */}
+          {activeTab === 'students' && (
+            <div className="flex items-center gap-2 bg-white border border-gray-100 px-4 py-2.5 rounded-xl shadow-sm">
+              <span className="text-xs font-black text-gray-400 uppercase tracking-wider">{t('shift', 'Shift') || 'Shift'}:</span>
+              <select
+                value={selectedShift}
+                onChange={(e) => setSelectedShift(e.target.value as any)}
+                className="outline-none bg-transparent font-bold text-gray-700 text-sm cursor-pointer"
+              >
+                <option value="all">{t('all') || 'All'}</option>
+                <option value="morning">{t('morning') || 'Morning'}</option>
+                <option value="afternoon">{t('afternoon') || 'Evening'}</option>
+              </select>
+            </div>
+          )}
 
           <div className={`flex items-center gap-3 bg-white border px-4 py-2.5 rounded-xl shadow-sm transition-all ${
             date === new Date().toLocaleDateString('en-CA') 
@@ -422,9 +456,13 @@ export default function AttendancePage({ profile }: AttendancePageProps) {
             {/* Headers for two columns logic */}
             {activeTab === 'students' && (
               <div className="hidden sm:grid grid-cols-12 px-6 py-3 bg-gray-50 text-[10px] uppercase font-black text-gray-400 tracking-widest border-b">
-                <div className="col-span-4">{t('student')}</div>
-                <div className="col-span-4 text-center border-x border-gray-100">{t('morning')}</div>
-                <div className="col-span-4 text-center">{t('afternoon')}</div>
+                <div className={selectedShift === 'all' ? "col-span-4" : "col-span-6"}>{t('student')}</div>
+                {selectedShift !== 'afternoon' && (
+                  <div className={`${selectedShift === 'all' ? "col-span-4 border-x border-gray-100" : "col-span-6"} text-center`}>{t('morning')}</div>
+                )}
+                {selectedShift !== 'morning' && (
+                  <div className={`${selectedShift === 'all' ? "col-span-4" : "col-span-6"} text-center`}>{t('afternoon')}</div>
+                )}
               </div>
             )}
             
@@ -444,7 +482,7 @@ export default function AttendancePage({ profile }: AttendancePageProps) {
                   transition={{ delay: i * 0.05 }}
                   className={`px-6 py-4 flex flex-col sm:grid sm:grid-cols-12 items-center hover:bg-gray-50 transition-colors gap-4 relative ${!isSession ? 'opacity-60 grayscale-[0.5]' : ''}`}
                 >
-                  <div className="flex items-center gap-4 min-w-0 col-span-4 w-full">
+                  <div className={`flex items-center gap-4 min-w-0 ${activeTab === 'students' && selectedShift !== 'all' ? 'col-span-6' : 'col-span-4'} w-full`}>
                     <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-sm flex-shrink-0 ${
                       !isSession ? 'bg-gray-200 text-gray-400' :
                       Object.values(currentAttendance[id] || {}).every((s: any) => s.status === 'present') 
@@ -473,81 +511,85 @@ export default function AttendancePage({ profile }: AttendancePageProps) {
                   {activeTab === 'students' ? (
                     <>
                       {/* Session 0 Column */}
-                      <div className="col-span-4 w-full flex flex-col items-center gap-2 border-r-0 sm:border-r border-gray-100 px-2 min-h-[60px] justify-center">
-                        {sessions[0] && (
-                          <>
-                            <div className={`flex w-full bg-gray-100 rounded-xl p-1 gap-1 ${!isSession ? 'pointer-events-none opacity-40' : ''}`}>
-                              {['present', 'absent', 'excused'].map((status) => {
-                                const isActive = currentAttendance[id]?.[0]?.status === status;
-                                const color = status === 'present' ? 'emerald' : status === 'absent' ? 'red' : 'blue';
-                                
-                                return (
-                                  <button
-                                    key={status}
-                                    onClick={() => setStatus(id, status as AttendanceStatus, 0)}
-                                    className={`flex-1 flex items-center justify-center p-1.5 rounded-lg transition-all ${
-                                      isActive 
-                                        ? 'bg-white shadow-sm' 
-                                        : 'text-gray-400 hover:text-gray-600'
-                                    }`}
-                                  >
-                                    {status === 'present' ? <Check className={`w-4 h-4 ${isActive ? 'text-emerald-600' : ''}`} /> : 
-                                     status === 'absent' ? <X className={`w-4 h-4 ${isActive ? 'text-red-600' : ''}`} /> :
-                                     <Clock className={`w-4 h-4 ${isActive ? 'text-blue-600' : ''}`} />}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                            {currentAttendance[id]?.[0]?.status === 'excused' && (
-                              <input
-                                type="text"
-                                placeholder={t('reason_for_excuse')}
-                                value={currentAttendance[id]?.[0]?.excuse || ''}
-                                onChange={(e) => setExcuse(id, e.target.value, 0)}
-                                className="text-[10px] bg-transparent border-b border-blue-200 outline-none focus:border-blue-500 text-blue-600 pb-0.5 placeholder:text-blue-300 w-full text-center"
-                              />
-                            )}
-                          </>
-                        )}
-                      </div>
+                      {selectedShift !== 'afternoon' && (
+                        <div className={`${selectedShift === 'all' ? 'col-span-4 border-r-0 sm:border-r border-gray-100' : 'col-span-6'} w-full flex flex-col items-center gap-2 px-2 min-h-[60px] justify-center`}>
+                          {sessions[0] && (
+                            <>
+                              <div className={`flex w-full bg-gray-100 rounded-xl p-1 gap-1 ${!isSession ? 'pointer-events-none opacity-40' : ''}`}>
+                                {['present', 'absent', 'excused'].map((status) => {
+                                  const isActive = currentAttendance[id]?.[0]?.status === status;
+                                  const color = status === 'present' ? 'emerald' : status === 'absent' ? 'red' : 'blue';
+                                  
+                                  return (
+                                    <button
+                                      key={status}
+                                      onClick={() => setStatus(id, status as AttendanceStatus, 0)}
+                                      className={`flex-1 flex items-center justify-center p-1.5 rounded-lg transition-all ${
+                                        isActive 
+                                          ? 'bg-white shadow-sm' 
+                                          : 'text-gray-400 hover:text-gray-600'
+                                      }`}
+                                    >
+                                      {status === 'present' ? <Check className={`w-4 h-4 ${isActive ? 'text-emerald-600' : ''}`} /> : 
+                                       status === 'absent' ? <X className={`w-4 h-4 ${isActive ? 'text-red-600' : ''}`} /> :
+                                       <Clock className={`w-4 h-4 ${isActive ? 'text-blue-600' : ''}`} />}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              {currentAttendance[id]?.[0]?.status === 'excused' && (
+                                <input
+                                  type="text"
+                                  placeholder={t('reason_for_excuse')}
+                                  value={currentAttendance[id]?.[0]?.excuse || ''}
+                                  onChange={(e) => setExcuse(id, e.target.value, 0)}
+                                  className="text-[10px] bg-transparent border-b border-blue-200 outline-none focus:border-blue-500 text-blue-600 pb-0.5 placeholder:text-blue-300 w-full text-center"
+                                />
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
                       {/* Session 1 Column */}
-                      <div className="col-span-4 w-full flex flex-col items-center gap-2 px-2 min-h-[60px] justify-center">
-                        {sessions[1] && (
-                          <>
-                            <div className={`flex w-full bg-gray-100 rounded-xl p-1 gap-1 ${!isSession ? 'pointer-events-none opacity-40' : ''}`}>
-                              {['present', 'absent', 'excused'].map((status) => {
-                                const isActive = currentAttendance[id]?.[1]?.status === status;
-                                const color = status === 'present' ? 'emerald' : status === 'absent' ? 'red' : 'blue';
-                                
-                                return (
-                                  <button
-                                    key={status}
-                                    onClick={() => setStatus(id, status as AttendanceStatus, 1)}
-                                    className={`flex-1 flex items-center justify-center p-1.5 rounded-lg transition-all ${
-                                      isActive 
-                                        ? 'bg-white shadow-sm' 
-                                        : 'text-gray-400 hover:text-gray-600'
-                                    }`}
-                                  >
-                                    {status === 'present' ? <Check className={`w-4 h-4 ${isActive ? 'text-emerald-600' : ''}`} /> : 
-                                     status === 'absent' ? <X className={`w-4 h-4 ${isActive ? 'text-red-600' : ''}`} /> :
-                                     <Clock className={`w-4 h-4 ${isActive ? 'text-blue-600' : ''}`} />}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                            {currentAttendance[id]?.[1]?.status === 'excused' && (
-                              <input
-                                type="text"
-                                placeholder={t('reason_for_excuse')}
-                                value={currentAttendance[id]?.[1]?.excuse || ''}
-                                onChange={(e) => setExcuse(id, e.target.value, 1)}
-                                className="text-[10px] bg-transparent border-b border-blue-200 outline-none focus:border-blue-500 text-blue-600 pb-0.5 placeholder:text-blue-300 w-full text-center"
-                              />
-                            )}
-                          </>
-                        )}
-                      </div>
+                      {selectedShift !== 'morning' && (
+                        <div className={`${selectedShift === 'all' ? 'col-span-4' : 'col-span-6'} w-full flex flex-col items-center gap-2 px-2 min-h-[60px] justify-center`}>
+                          {sessions[1] && (
+                            <>
+                              <div className={`flex w-full bg-gray-100 rounded-xl p-1 gap-1 ${!isSession ? 'pointer-events-none opacity-40' : ''}`}>
+                                {['present', 'absent', 'excused'].map((status) => {
+                                  const isActive = currentAttendance[id]?.[1]?.status === status;
+                                  const color = status === 'present' ? 'emerald' : status === 'absent' ? 'red' : 'blue';
+                                  
+                                  return (
+                                    <button
+                                      key={status}
+                                      onClick={() => setStatus(id, status as AttendanceStatus, 1)}
+                                      className={`flex-1 flex items-center justify-center p-1.5 rounded-lg transition-all ${
+                                        isActive 
+                                          ? 'bg-white shadow-sm' 
+                                          : 'text-gray-400 hover:text-gray-600'
+                                      }`}
+                                    >
+                                      {status === 'present' ? <Check className={`w-4 h-4 ${isActive ? 'text-emerald-600' : ''}`} /> : 
+                                       status === 'absent' ? <X className={`w-4 h-4 ${isActive ? 'text-red-600' : ''}`} /> :
+                                       <Clock className={`w-4 h-4 ${isActive ? 'text-blue-600' : ''}`} />}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              {currentAttendance[id]?.[1]?.status === 'excused' && (
+                                <input
+                                  type="text"
+                                  placeholder={t('reason_for_excuse')}
+                                  value={currentAttendance[id]?.[1]?.excuse || ''}
+                                  onChange={(e) => setExcuse(id, e.target.value, 1)}
+                                  className="text-[10px] bg-transparent border-b border-blue-200 outline-none focus:border-blue-500 text-blue-600 pb-0.5 placeholder:text-blue-300 w-full text-center"
+                                />
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
                     </>
                   ) : (
                     <div className="col-span-8 w-full flex items-center justify-center gap-3">
