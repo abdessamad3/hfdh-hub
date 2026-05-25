@@ -269,7 +269,7 @@ export default function SmartChallengePage({ profile }: SmartChallengePageProps)
               }
             } as any,
             surahName: customQ.surahName,
-            options: customQ.options,
+            options: [...(customQ.options || [])].sort(() => 0.5 - Math.random()),
             correctAnswer: customQ.correctAnswer
           }));
           const shuffledCustom = mappedDbQs.sort(() => 0.5 - Math.random());

@@ -29,8 +29,10 @@ async function startServer() {
 
   const distPath = path.join(process.cwd(), 'dist');
 
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
+  const isProduction = process.env.NODE_ENV === "production" && fs.existsSync(path.join(distPath, 'index.html'));
+
+  // Vite middleware for development or fallback
+  if (!isProduction) {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
