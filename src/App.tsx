@@ -18,6 +18,7 @@ import StudentAttendancePage from './pages/StudentAttendancePage';
 import StudentProgressPage from './pages/StudentProgressPage';
 import RevisionEntry from './pages/RevisionEntry';
 import NextRevisionTask from './pages/NextRevisionTask';
+import NextEvaluationTask from './pages/NextEvaluationTask';
 import KuttabManagement from './pages/KuttabManagement';
 import TeachersList from './pages/TeachersList';
 import TeacherProfile from './pages/TeacherProfile';
@@ -319,6 +320,7 @@ export default function App() {
               <Route path="/evaluation" element={<EvaluationEntry profile={profile} />} />
               <Route path="/revision" element={<RevisionEntry profile={profile} />} />
               <Route path="/next-revision" element={<NextRevisionTask profile={profile} />} />
+              <Route path="/next-evaluation" element={<NextEvaluationTask profile={profile} />} />
               <Route path="/ranking" element={<RankingPage profile={profile} />} />
               <Route path="*" element={<Navigate to="/" />} />
             </>

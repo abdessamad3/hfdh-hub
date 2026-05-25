@@ -39,6 +39,7 @@ export default function MonthlyReport({ profile }: MonthlyReportProps) {
 
   const isSenior = profile?.role === 'admin' || profile?.role === 'manager';
   const isAdmin = profile?.role === 'admin';
+  const isRtl = i18n.language === 'ar';
 
   // Find active kuttab
   const activeKuttab = useMemo(() => {
@@ -81,6 +82,37 @@ export default function MonthlyReport({ profile }: MonthlyReportProps) {
       return recurring && (recurring.type === 'recurring' || recurring.lessons) && recurring.lessons.length > 0;
     });
   }, [selectedYear, selectedMonth, activeKuttab]);
+
+  const doubleSessionDays = useMemo(() => {
+    const doubleDays = new Set<string>();
+    
+    studyDays.forEach(day => {
+      const dateStr = format(day, 'yyyy-MM-dd');
+      
+      // 1. Check schedule
+      let isDouble = false;
+      if (activeKuttab?.schedule?.lessons) {
+        const schedule = activeKuttab.schedule.lessons;
+        const dayIdx = day.getDay();
+        
+        if (schedule[dateStr]) {
+          isDouble = schedule[dateStr].lessons.length >= 2;
+        } else {
+          const recurring = schedule[dayIdx.toString()];
+          isDouble = !!(recurring && (recurring.type === 'recurring' || recurring.lessons) && recurring.lessons.length >= 2);
+        }
+      }
+      
+      // 2. Check if any student has an evening (sessionIndex === 1) attendance
+      const hasEveningAttendance = attendance.some(a => a.date === dateStr && a.sessionIndex === 1);
+      
+      if (isDouble || hasEveningAttendance) {
+        doubleDays.add(dateStr);
+      }
+    });
+    
+    return doubleDays;
+  }, [studyDays, activeKuttab, attendance]);
 
   useEffect(() => {
     if (!auth.currentUser || !profile) return;
@@ -167,8 +199,13 @@ export default function MonthlyReport({ profile }: MonthlyReportProps) {
       const daysData = studyDays.map(day => {
         const dateStr = format(day, 'yyyy-MM-dd');
         
-        // Match day data: if multiple sessions, present takes visual priority in the grid
         const sessionsForDay = studentAttendance.filter(a => a.date === dateStr);
+        const morningAttendance = sessionsForDay.find(a => a.sessionIndex === 0 || a.sessionIndex === undefined);
+        const eveningAttendance = sessionsForDay.find(a => a.sessionIndex === 1);
+        
+        const isDoubleSession = doubleSessionDays.has(dateStr);
+        
+        // Single session fallback
         const dayAttendance = sessionsForDay.length > 0
           ? sessionsForDay.find(a => a.status === 'present') || sessionsForDay[0]
           : undefined;
@@ -176,13 +213,38 @@ export default function MonthlyReport({ profile }: MonthlyReportProps) {
         return {
           date: dateStr,
           attendance: dayAttendance,
+          morningAttendance,
+          eveningAttendance,
+          isDoubleSession,
           isSessionDay: true
         };
       });
 
-      const presentCount = daysData.filter(d => d.attendance?.status === 'present').length;
-      const absentCount = daysData.filter(d => d.attendance?.status === 'absent').length;
-      const excusedCount = daysData.filter(d => d.attendance?.status === 'excused').length;
+      let presentCount = 0;
+      let absentCount = 0;
+      let excusedCount = 0;
+
+      daysData.forEach(d => {
+        if (d.isDoubleSession) {
+          if (d.morningAttendance) {
+            if (d.morningAttendance.status === 'present') presentCount++;
+            else if (d.morningAttendance.status === 'absent') absentCount++;
+            else if (d.morningAttendance.status === 'excused') excusedCount++;
+          }
+          if (d.eveningAttendance) {
+            if (d.eveningAttendance.status === 'present') presentCount++;
+            else if (d.eveningAttendance.status === 'absent') absentCount++;
+            else if (d.eveningAttendance.status === 'excused') excusedCount++;
+          }
+        } else {
+          const singleAtt = d.attendance;
+          if (singleAtt) {
+            if (singleAtt.status === 'present') presentCount++;
+            else if (singleAtt.status === 'absent') absentCount++;
+            else if (singleAtt.status === 'excused') excusedCount++;
+          }
+        }
+      });
       
       const attBase = presentCount + absentCount;
       const presentPercent = attBase > 0 ? Math.round((presentCount / attBase) * 100) : 0;
@@ -200,7 +262,7 @@ export default function MonthlyReport({ profile }: MonthlyReportProps) {
         revCount: studentRevs.length,
       };
     }).sort((a, b) => a.name.localeCompare(b.name, i18n.language));
-  }, [students, attendance, evaluations, revisions, studyDays, i18n.language]);
+  }, [students, attendance, evaluations, revisions, studyDays, doubleSessionDays, i18n.language]);
 
   // Helper to get day statistics
   const getDayStats = (dateStr: string) => {
@@ -336,6 +398,7 @@ export default function MonthlyReport({ profile }: MonthlyReportProps) {
                   const dateStr = format(day, 'yyyy-MM-dd');
                   const isToday = isSameDay(day, new Date());
                   const dayStats = getDayStats(dateStr);
+                  const isDouble = doubleSessionDays.has(dateStr);
                   
                   return (
                     <th key={day.toISOString()} className={`p-2 text-center font-black border-r min-w-[100px] ${isToday ? 'bg-emerald-50/50' : 'text-gray-400'}`}>
@@ -346,14 +409,17 @@ export default function MonthlyReport({ profile }: MonthlyReportProps) {
                         </div>
                         
                         <div className="flex flex-col items-center py-1 border-y w-full border-gray-100">
-                          <span className="text-[8px] font-bold text-gray-400">{format(day, 'EEE')}</span>
-                          <span className="text-sm font-black text-gray-900">{format(day, 'd')}</span>
+                           <span className="text-[8px] font-bold text-gray-400">{format(day, 'EEE')}</span>
+                           <span className="text-sm font-black text-gray-900">{format(day, 'd')}</span>
                         </div>
                         
                         <div className="flex flex-col gap-0.5 items-center w-full mt-1">
                           <div className="flex items-center gap-1 text-emerald-600 text-[8px]">
                             <CheckCircle2 className="w-2 h-2" />
                             <span>{dayStats.present}</span>
+                            {isDouble && (
+                              <span className="text-amber-600 font-extrabold text-[7px] bg-amber-50 px-1 rounded border border-amber-200">2x</span>
+                            )}
                           </div>
                           <div className="flex items-center gap-1 text-gray-400 text-[7px] tracking-tighter">
                             <Clock className="w-1.5 h-1.5" />
@@ -399,18 +465,63 @@ export default function MonthlyReport({ profile }: MonthlyReportProps) {
                   {student.daysData.map(day => (
                     <td key={day.date} className={`p-1 border-r text-center transition-colors ${!day.isSessionDay ? 'bg-gray-50/80 saturate-0 opacity-40' : ''}`}>
                       <div className="flex flex-col gap-0.5 items-center justify-center min-h-[32px]">
-                        {day.attendance ? (
-                          <div className={`p-0.5 rounded-full ${
-                            day.attendance.status === 'present' ? 'text-emerald-500' :
-                            day.attendance.status === 'absent' ? 'text-red-500' : 'text-blue-500'
-                          }`}>
-                            {day.attendance.status === 'present' ? <CheckCircle2 className="w-4 h-4" /> :
-                             day.attendance.status === 'absent' ? <XCircle className="w-4 h-4" /> :
-                             <Clock className="w-4 h-4" />}
+                        {day.isDoubleSession ? (
+                          <div className="flex items-center gap-1.5 justify-center py-0.5">
+                            {/* Morning Session */}
+                            <div className="flex flex-col items-center">
+                              <span className="text-[6px] text-gray-400 font-bold scale-90 mb-0.5">
+                                {isRtl ? 'ص' : 'M'}
+                              </span>
+                              {day.morningAttendance ? (
+                                <div className={`p-0.5 ${
+                                  day.morningAttendance.status === 'present' ? 'text-emerald-500' :
+                                  day.morningAttendance.status === 'absent' ? 'text-red-500' : 'text-blue-500'
+                                }`} title={`${t('morning')}: ${t(day.morningAttendance.status)}`}>
+                                  {day.morningAttendance.status === 'present' ? <CheckCircle2 className="w-3.5 h-3.5" /> :
+                                   day.morningAttendance.status === 'absent' ? <XCircle className="w-3.5 h-3.5" /> :
+                                   <Clock className="w-3.5 h-3.5" />}
+                                </div>
+                              ) : (
+                                <div className="w-3.5 h-3.5 flex items-center justify-center text-gray-300 text-[10px]">-</div>
+                              )}
+                            </div>
+
+                            {/* Separator */}
+                            <span className="text-gray-200 text-[10px] font-light self-end pb-0.5">|</span>
+
+                            {/* Evening Session */}
+                            <div className="flex flex-col items-center">
+                              <span className="text-[6px] text-gray-400 font-bold scale-90 mb-0.5">
+                                {isRtl ? 'م' : 'E'}
+                              </span>
+                              {day.eveningAttendance ? (
+                                <div className={`p-0.5 ${
+                                  day.eveningAttendance.status === 'present' ? 'text-emerald-500' :
+                                  day.eveningAttendance.status === 'absent' ? 'text-red-500' : 'text-blue-500'
+                                }`} title={`${t('afternoon') || 'Evening'}: ${t(day.eveningAttendance.status)}`}>
+                                  {day.eveningAttendance.status === 'present' ? <CheckCircle2 className="w-3.5 h-3.5" /> :
+                                   day.eveningAttendance.status === 'absent' ? <XCircle className="w-3.5 h-3.5" /> :
+                                   <Clock className="w-3.5 h-3.5" />}
+                                </div>
+                              ) : (
+                                <div className="w-3.5 h-3.5 flex items-center justify-center text-gray-300 text-[10px]">-</div>
+                              )}
+                            </div>
                           </div>
-                        ) : !day.isSessionDay ? (
-                          <div className="w-1 h-1 rounded-full bg-gray-300" />
-                        ) : null}
+                        ) : (
+                          day.attendance ? (
+                            <div className={`p-0.5 rounded-full ${
+                              day.attendance.status === 'present' ? 'text-emerald-500' :
+                              day.attendance.status === 'absent' ? 'text-red-500' : 'text-blue-500'
+                            }`}>
+                              {day.attendance.status === 'present' ? <CheckCircle2 className="w-4 h-4" /> :
+                               day.attendance.status === 'absent' ? <XCircle className="w-4 h-4" /> :
+                               <Clock className="w-4 h-4" />}
+                            </div>
+                          ) : !day.isSessionDay ? (
+                            <div className="w-1 h-1 rounded-full bg-gray-300" />
+                          ) : null
+                        )}
                       </div>
                     </td>
                   ))}
@@ -573,6 +684,7 @@ export default function MonthlyReport({ profile }: MonthlyReportProps) {
                       {studyDays.map(day => {
                         const dateStr = format(day, 'yyyy-MM-dd');
                         const dayStats = getDayStats(dateStr);
+                        const isDouble = doubleSessionDays.has(dateStr);
                         return (
                           <th key={day.toISOString()} className="p-1 text-center font-black border-b border-r min-w-[60px]">
                             <div className="flex flex-col gap-0.5">
@@ -580,6 +692,9 @@ export default function MonthlyReport({ profile }: MonthlyReportProps) {
                               <span className="text-[10px] text-gray-900">{format(day, 'd')}</span>
                               <div className="flex items-center justify-center gap-1 text-emerald-600 mt-0.5">
                                 <span className="text-[8px]">{dayStats.present}</span>
+                                {isDouble && (
+                                  <span className="text-amber-600 font-extrabold text-[6px] bg-amber-50 px-0.5 rounded leading-none">2x</span>
+                                )}
                               </div>
                               <span className="text-[6px] text-gray-400 truncate">{dayStats.timeInfo}</span>
                             </div>
@@ -601,15 +716,43 @@ export default function MonthlyReport({ profile }: MonthlyReportProps) {
                         {student.daysData.map(day => (
                           <td key={day.date} className="p-1 border-b border-r text-center">
                             <div className="flex items-center justify-center min-h-[20px]">
-                              {day.attendance ? (
-                                <div className={`text-[12px] font-bold ${
-                                  day.attendance.status === 'present' ? 'text-emerald-500' :
-                                  day.attendance.status === 'absent' ? 'text-red-500' : 'text-blue-500'
-                                }`}>
-                                  {day.attendance.status === 'present' ? 'P' :
-                                   day.attendance.status === 'absent' ? 'A' : 'E'}
+                              {day.isDoubleSession ? (
+                                <div className="flex items-center gap-1 text-[9px] font-bold">
+                                  {/* Morning */}
+                                  <span className={
+                                    day.morningAttendance?.status === 'present' ? 'text-emerald-500 font-extrabold' :
+                                    day.morningAttendance?.status === 'absent' ? 'text-red-500 font-extrabold' :
+                                    day.morningAttendance?.status === 'excused' ? 'text-blue-500 font-extrabold' : 'text-gray-300 font-light'
+                                  }>
+                                    {day.morningAttendance?.status === 'present' ? 'P' :
+                                     day.morningAttendance?.status === 'absent' ? 'A' :
+                                     day.morningAttendance?.status === 'excused' ? 'E' : '—'}
+                                  </span>
+                                  
+                                  <span className="text-gray-300 font-light scale-75">|</span>
+                                  
+                                  {/* Evening */}
+                                  <span className={
+                                    day.eveningAttendance?.status === 'present' ? 'text-emerald-500 font-extrabold' :
+                                    day.eveningAttendance?.status === 'absent' ? 'text-red-500 font-extrabold' :
+                                    day.eveningAttendance?.status === 'excused' ? 'text-blue-500 font-extrabold' : 'text-gray-300 font-light'
+                                  }>
+                                    {day.eveningAttendance?.status === 'present' ? 'P' :
+                                     day.eveningAttendance?.status === 'absent' ? 'A' :
+                                     day.eveningAttendance?.status === 'excused' ? 'E' : '—'}
+                                  </span>
                                 </div>
-                              ) : null}
+                              ) : (
+                                day.attendance ? (
+                                  <div className={`text-[12px] font-bold ${
+                                    day.attendance.status === 'present' ? 'text-emerald-500' :
+                                    day.attendance.status === 'absent' ? 'text-red-500' : 'text-blue-500'
+                                  }`}>
+                                    {day.attendance.status === 'present' ? 'P' :
+                                     day.attendance.status === 'absent' ? 'A' : 'E'}
+                                  </div>
+                                ) : null
+                              )}
                             </div>
                           </td>
                         ))}

@@ -22,7 +22,7 @@ import {
   type QueryFilterConstraint
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
-import type { Student, Attendance, Memorization, Evaluation, Revision, UserProfile, UserRole, Kuttab, KuttabSchedule, NextRevision, TeacherAttendance } from '../types';
+import type { Student, Attendance, Memorization, Evaluation, Revision, UserProfile, UserRole, Kuttab, KuttabSchedule, NextRevision, NextEvaluation, TeacherAttendance } from '../types';
 import { getCoveredThumns, getHizbNumberForSurah } from '../lib/quranUtils';
 import { getDayIndex } from '../lib/dateUtils';
 
@@ -1773,6 +1773,87 @@ export const dbService = {
     }
   },
 
+  async approveNextEvaluation(nextEvaluation: NextEvaluation, accuracyScore: number, mistakesCount: number, notes: string = '') {
+    try {
+      const student = await this.getStudent(nextEvaluation.studentId);
+      
+      const evaluationData: Omit<Evaluation, 'id'> = {
+        studentId: nextEvaluation.studentId,
+        studentEmail: (student.email || nextEvaluation.studentEmail || '').toLowerCase() || null,
+        teacherId: nextEvaluation.teacherId,
+        kuttabResponsibleId: nextEvaluation.kuttabResponsibleId || null,
+        kuttabName: nextEvaluation.kuttabName,
+        surahName: nextEvaluation.surahName,
+        hizbNumber: nextEvaluation.hizbNumber,
+        quantity: nextEvaluation.quantity,
+        quantityIdentifier: nextEvaluation.quantityIdentifier || null,
+        date: new Date().toISOString().split('T')[0], // Today is completion date
+        accuracyScore,
+        mistakesCount,
+        notes: notes || nextEvaluation.notes || ''
+      };
+
+      // Add to evaluations
+      await this.addEvaluation(evaluationData);
+      
+      // Delete from next_evaluations
+      await this.deleteNextEvaluation(nextEvaluation.id);
+      
+      return true;
+    } catch (error) {
+      return handleFirestoreError(error, OperationType.WRITE, 'evaluationApproval');
+    }
+  },
+
+  async handleNextEvaluationOverdue(nextEvaluation: NextEvaluation) {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      if (nextEvaluation.dueDate < today) {
+        await this.deleteNextEvaluation(nextEvaluation.id);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error handling overdue evaluation task:', error);
+      return false;
+    }
+  },
+
+  async checkAndCleanupOverdueEvaluationTasks(teacherId: string, isAdmin: boolean, kuttabName?: string) {
+    try {
+      let q;
+      if (isAdmin) {
+        q = query(collection(db, 'next_evaluations'), limit(100));
+      } else {
+        const teacherConditions: QueryFilterConstraint[] = [
+          where('teacherId', '==', teacherId),
+          where('kuttabResponsibleId', '==', teacherId)
+        ];
+        if (kuttabName) {
+          teacherConditions.push(where('kuttabName', '==', kuttabName));
+        }
+
+        q = query(
+          collection(db, 'next_evaluations'),
+          or(...teacherConditions),
+          limit(50)
+        );
+      }
+
+      const snapshot = await getDocs(q);
+      const evaluationsByTeacher = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as NextEvaluation));
+      
+      const today = new Date().toISOString().split('T')[0];
+      for (const ev of evaluationsByTeacher) {
+        if (ev.dueDate < today) {
+          await this.handleNextEvaluationOverdue(ev);
+        }
+      }
+    } catch (error) {
+      console.error("Error cleaning up overdue evaluation tasks:", error);
+    }
+  },
+
   async handleNextRevisionOverdue(nextRevision: NextRevision) {
     try {
       const today = new Date().toISOString().split('T')[0];
@@ -1868,6 +1949,49 @@ export const dbService = {
     }
   },
 
+  // Next Evaluations
+  async addNextEvaluation(data: Omit<NextEvaluation, 'id' | 'createdAt' | 'updatedAt'>) {
+    try {
+      let kuttabName = data.kuttabName;
+      const student = await this.getStudent(data.studentId);
+      if (!kuttabName) {
+        kuttabName = student.kuttabName || null;
+      }
+      const studentEmail = (data.studentEmail || student.email || '').toLowerCase() || null;
+
+      const docRef = await addDoc(collection(db, 'next_evaluations'), {
+        ...data,
+        studentEmail,
+        kuttabName,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      return docRef.id;
+    } catch (error) {
+      return handleFirestoreError(error, OperationType.CREATE, 'next_evaluations');
+    }
+  },
+
+  async updateNextEvaluation(id: string, data: Partial<Omit<NextEvaluation, 'id' | 'createdAt' | 'updatedAt'>>) {
+    try {
+      const docRef = doc(db, 'next_evaluations', id);
+      await setDoc(docRef, {
+        ...data,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    } catch (error) {
+      return handleFirestoreError(error, OperationType.UPDATE, `next_evaluations/${id}`);
+    }
+  },
+
+  async deleteNextEvaluation(id: string) {
+    try {
+      await deleteDoc(doc(db, 'next_evaluations', id));
+    } catch (error) {
+      return handleFirestoreError(error, OperationType.DELETE, `next_evaluations/${id}`);
+    }
+  },
+
   subscribeNextRevisions(teacherId: string, kuttabName: string | undefined, isAdmin: boolean, callback: (revisions: NextRevision[]) => void) {
     let q;
     if (isAdmin) {
@@ -1901,6 +2025,39 @@ export const dbService = {
     });
   },
 
+  subscribeNextEvaluations(teacherId: string, kuttabName: string | undefined, isAdmin: boolean, callback: (evaluations: NextEvaluation[]) => void) {
+    let q;
+    if (isAdmin) {
+      q = query(
+        collection(db, 'next_evaluations'),
+        orderBy('dueDate', 'asc'),
+        limit(50)
+      );
+    } else {
+      const teacherConditions: QueryFilterConstraint[] = [
+        where('teacherId', '==', teacherId),
+        where('kuttabResponsibleId', '==', teacherId)
+      ];
+      if (kuttabName) {
+        teacherConditions.push(where('kuttabName', '==', kuttabName));
+      }
+
+      q = query(
+        collection(db, 'next_evaluations'),
+        or(...teacherConditions),
+        orderBy('dueDate', 'asc'),
+        limit(50)
+      );
+    }
+
+    return onSnapshot(q, (snapshot) => {
+      const evaluations = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as object) } as NextEvaluation));
+      callback(evaluations);
+    }, (error) => {
+      console.error("Error subscribing to next evaluations:", error);
+    });
+  },
+
   async getStudentNextRevisions(studentId: string) {
     try {
       const q = query(
@@ -1912,6 +2069,20 @@ export const dbService = {
       return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as NextRevision));
     } catch (error) {
       return handleFirestoreError(error, OperationType.LIST, 'next_revisions');
+    }
+  },
+
+  async getStudentNextEvaluations(studentId: string) {
+    try {
+      const q = query(
+        collection(db, 'next_evaluations'), 
+        where('studentId', '==', studentId),
+        limit(50)
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as NextEvaluation));
+    } catch (error) {
+      return handleFirestoreError(error, OperationType.LIST, 'next_evaluations');
     }
   },
 
@@ -1950,6 +2121,25 @@ export const dbService = {
       callback(items);
     }, (error) => {
       console.error("Error subscribing to student next revisions:", error);
+    });
+  },
+
+  subscribeStudentNextEvaluations(studentId: string, _studentEmail: string, callback: (evaluations: NextEvaluation[]) => void) {
+    const q = query(
+      collection(db, 'next_evaluations'),
+      where('studentId', '==', studentId),
+      limit(100)
+    );
+    
+    return onSnapshot(q, (snapshot) => {
+      const today = new Date().toISOString().split('T')[0];
+      const items = snapshot.docs
+        .map(doc => ({ id: doc.id, ...(doc.data() as object) } as NextEvaluation))
+        .filter(task => task.dueDate >= today)
+        .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+      callback(items);
+    }, (error) => {
+      console.error("Error subscribing to student next evaluations:", error);
     });
   },
 

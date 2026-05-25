@@ -148,6 +148,25 @@
         "notes": { "type": "string" }
       },
       "required": ["studentId", "dueDate"]
+    },
+    "NextEvaluation": {
+      "title": "Next Evaluation",
+      "description": "A scheduled upcoming core memorization evaluation task",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string" },
+        "studentEmail": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "kuttabResponsibleId": { "type": "string" },
+        "kuttabName": { "type": "string" },
+        "surahName": { "type": "string" },
+        "hizbNumber": { "type": "number" },
+        "quantity": { "type": "number" },
+        "quantityIdentifier": { "type": "string" },
+        "dueDate": { "type": "string", "format": "date" },
+        "notes": { "type": "string" }
+      },
+      "required": ["studentId", "dueDate"]
     }
   },
   "firestore": {
@@ -158,6 +177,7 @@
     "/evaluations/{evalId}": { "schema": "Evaluation", "description": "Evaluation sessions" },
     "/revisions/{revId}": { "schema": "Revision", "description": "Revision history" },
     "/next_revisions/{id}": { "schema": "NextRevision", "description": "Scheduled revision tasks" },
+    "/next_evaluations/{id}": { "schema": "NextEvaluation", "description": "Scheduled evaluation tasks" },
     "/kuttabs/{kuttabId}": { "schema": "Kuttab", "description": "List of learning institutions" },
     "/login_history/{id}": { "schema": "LoginHistory", "description": "Log of user sessions" }
   }

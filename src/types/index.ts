@@ -145,3 +145,20 @@ export interface NextRevision {
   createdAt: any;
   updatedAt: any;
 }
+
+export interface NextEvaluation {
+  id: string;
+  studentId: string;
+  studentEmail?: string;
+  teacherId: string;
+  kuttabResponsibleId?: string;
+  kuttabName?: string;
+  surahName?: string;
+  hizbNumber: number;
+  quantity: number;
+  quantityIdentifier?: string;
+  notes: string;
+  dueDate: string;
+  createdAt: any;
+  updatedAt: any;
+}

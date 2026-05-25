@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { auth } from '../lib/firebase';
 import { dbService } from '../services/db';
 import { Link } from 'react-router-dom';
-import { Student, Attendance, Evaluation, Revision, NextRevision, Kuttab, Memorization } from '../types';
+import { Student, Attendance, Evaluation, Revision, NextRevision, NextEvaluation, Kuttab, Memorization } from '../types';
 import { 
   BookOpen, 
   CheckCircle, 
@@ -75,6 +75,7 @@ export default function StudentPortal() {
     evaluations: Evaluation[];
     revisions: Revision[];
     nextTasks: NextRevision[];
+    nextEvaluations: NextEvaluation[];
     memorizations: Memorization[];
     kuttabs: Kuttab[];
   } | null>(null);
@@ -109,6 +110,7 @@ export default function StudentPortal() {
             evaluations: [], 
             revisions: [], 
             nextTasks: [],
+            nextEvaluations: [],
             memorizations: [],
             kuttabs: []
           });
@@ -127,6 +129,10 @@ export default function StudentPortal() {
           
           subUnsubscribes.push(dbService.subscribeStudentNextRevisions(studentId, email, (tasks) => {
             setData(prev => prev ? { ...prev, nextTasks: tasks } : null);
+          }));
+
+          subUnsubscribes.push(dbService.subscribeStudentNextEvaluations(studentId, email, (evs) => {
+            setData(prev => prev ? { ...prev, nextEvaluations: evs } : null);
           }));
 
           subUnsubscribes.push(dbService.subscribeStudentAttendance(studentId, email, (attendance) => {
@@ -357,6 +363,48 @@ export default function StudentPortal() {
       notes: ''
     };
   }, [data?.nextTasks, isRtl]);
+
+  // Next Evaluation task helper
+  const nextEvaluationInfo = useMemo(() => {
+    const tasks = data?.nextEvaluations || [];
+    if (tasks.length > 0) {
+      const task = tasks[0];
+      const now = startOfDay(new Date());
+      let daysDecimal = null;
+      try {
+        const due = startOfDay(parseISO(task.dueDate));
+        const diff = due.getTime() - now.getTime();
+        daysDecimal = Math.ceil(diff / (1000 * 60 * 60 * 24));
+      } catch (e) {}
+
+      let priority: 'High' | 'Medium' | 'Low' = 'Low';
+      if (daysDecimal !== null) {
+        if (daysDecimal <= 0) priority = 'High';
+        else if (daysDecimal <= 2) priority = 'Medium';
+      }
+
+      return {
+        hasTask: true,
+        dueDate: formatDate(task.dueDate),
+        hizb: task.hizbNumber,
+        surahName: task.surahName || (isRtl ? `الحزب ${task.hizbNumber}` : `Hizb ${task.hizbNumber}`),
+        quantityLabel: getPortionLabel(task.quantity, task.quantityIdentifier),
+        remainingDays: daysDecimal,
+        priority,
+        notes: task.notes || (isRtl ? 'بانتظار التقييم المجدول' : 'Pending scheduled evaluation')
+      };
+    }
+    return {
+      hasTask: false,
+      dueDate: '',
+      hizb: 0,
+      surahName: '',
+      quantityLabel: '',
+      remainingDays: null,
+      priority: 'Low' as const,
+      notes: ''
+    };
+  }, [data?.nextEvaluations, isRtl]);
 
   // Problematic evaluations (>4 mistakes alert)
   const alertEvaluations = useMemo(() => {
@@ -770,7 +818,7 @@ export default function StudentPortal() {
         </div>
 
         {/* Inline Grid Row: Charts & Next Revision & Warning Alerts */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           
           {/* 5. Next Revision Card Section */}
           <div className="bg-gradient-to-br from-[#4f46e5] via-[#3730a3] to-[#1e1b4b] rounded-[32px] p-8 text-white relative overflow-hidden shadow-lg border border-slate-900 shadow-indigo-150 flex flex-col justify-between min-h-[350px] group transition-all">
@@ -842,6 +890,85 @@ export default function StudentPortal() {
                         : nextRevisionInfo.remainingDays === 0 
                           ? (isRtl ? 'مستحقة اليوم' : 'Due today') 
                           : `${isRtl ? 'متبقي' : 'Due in'} ${nextRevisionInfo.remainingDays} ${isRtl ? 'أيام' : 'days'}`}
+                    </span>
+                  </div>
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                </div>
+              )}
+
+            </div>
+          </div>
+
+          {/* Next Evaluation Card Section */}
+          <div className="bg-gradient-to-br from-[#10b981] via-[#047857] to-[#064e3b] rounded-[32px] p-8 text-white relative overflow-hidden shadow-lg border border-slate-900 shadow-emerald-150 flex flex-col justify-between min-h-[350px] group transition-all">
+            <div className="absolute top-0 right-0 p-36 bg-white/5 rounded-br-[180px] -z-0 opacity-20 filter blur-xl group-hover:scale-110 transition-transform duration-1000" />
+            <div className="absolute -bottom-10 -left-10 w-48 h-48 bg-[#34d399]/25 rounded-full blur-3xl" />
+
+            <div className="relative z-10 space-y-6 flex-1 flex flex-col justify-between">
+              
+              <div className="flex items-center justify-between">
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/10 backdrop-blur-md rounded-full text-[9px] font-black uppercase tracking-wider border border-white/20">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+                  <span>{isRtl ? 'التقييم القادم المستهدف' : 'UPCOMING EVALUATION TASK'}</span>
+                </div>
+                
+                {nextEvaluationInfo.hasTask && (
+                  <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider ${
+                    nextEvaluationInfo.priority === 'High' 
+                      ? 'bg-rose-500/80 text-white' 
+                      : nextEvaluationInfo.priority === 'Medium'
+                        ? 'bg-amber-500/80 text-white'
+                        : 'bg-white/15 text-white'
+                  }`}>
+                    {nextEvaluationInfo.priority} {isRtl ? 'أهمية' : 'Priority'}
+                  </span>
+                )}
+              </div>
+
+              {nextEvaluationInfo.hasTask ? (
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-white/60 font-black uppercase tracking-widest">{isRtl ? 'المنهج المستهدف للتسميع والتقييم' : 'EVALUATION TARGET'}</p>
+                    <h3 className="text-3xl font-extrabold tracking-tight text-white leading-tight">
+                      {nextEvaluationInfo.surahName}
+                    </h3>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4 bg-white/5 p-4 rounded-2xl border border-white/10 backdrop-blur-sm">
+                    <div>
+                      <p className="text-[9px] text-white/50 font-black uppercase tracking-wider">{isRtl ? 'المقدار المحدد' : 'Quantity'}</p>
+                      <p className="font-extrabold text-sm text-emerald-100">{nextEvaluationInfo.quantityLabel || 'Not declared'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[9px] text-white/50 font-black uppercase tracking-wider">{isRtl ? 'التاريخ المحدد' : 'Scheduled Due'}</p>
+                      <p className="font-extrabold text-sm text-emerald-100">{nextEvaluationInfo.dueDate}</p>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-white/70 italic font-medium leading-relaxed bg-[#000000]/10 p-3 rounded-xl border-l-[3px] border-emerald-400">
+                    "{nextEvaluationInfo.notes}"
+                  </p>
+                </div>
+              ) : (
+                <div className="text-center py-12 space-y-3">
+                  <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center mx-auto text-white">
+                    <CheckCircle className="w-6 h-6" />
+                  </div>
+                  <h4 className="font-black text-lg">{isRtl ? 'جميع التقييمات منجزة' : 'All caught up!'}</h4>
+                  <p className="text-xs text-emerald-250">{isRtl ? 'لا توجد مهام تسميع أو تقييم مجدولة قادمة.' : 'No pending evaluations requiring immediate action.'}</p>
+                </div>
+              )}
+
+              {nextEvaluationInfo.hasTask && nextEvaluationInfo.remainingDays !== null && (
+                <div className="flex items-center justify-between pt-2 border-t border-white/10">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-white/80">
+                    <Clock className="w-4 h-4 text-emerald-300" />
+                    <span>
+                      {nextEvaluationInfo.remainingDays < 0 
+                        ? (isRtl ? 'متأخرة عن الموعد' : 'Overdue task') 
+                        : nextEvaluationInfo.remainingDays === 0 
+                          ? (isRtl ? 'مستحقة اليوم' : 'Due today') 
+                          : `${isRtl ? 'متبقي' : 'Due in'} ${nextEvaluationInfo.remainingDays} ${isRtl ? 'أيام' : 'days'}`}
                     </span>
                   </div>
                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />

@@ -101,7 +101,7 @@ export default function MemorizationGrid({ evaluations }: MemorizationGridProps)
       </div>
       
       <div className="overflow-x-auto overflow-y-auto">
-        <table className="w-full border-collapse min-w-[1000px] table-fixed">
+        <table className="w-full border-collapse min-w-[1200px] table-fixed">
           <thead className="sticky top-0 bg-white/80 backdrop-blur-md shadow-sm z-20">
             <tr className="border-b-2 border-gray-100">
               <th className="p-5 text-start bg-gray-50/30 w-20">
@@ -109,6 +109,9 @@ export default function MemorizationGrid({ evaluations }: MemorizationGridProps)
               </th>
               <th className="p-5 text-start bg-gray-50/30 w-32">
                 <span className="text-[11px] font-black uppercase text-gray-500 tracking-widest">{t('surah')}</span>
+              </th>
+              <th className="p-5 text-start bg-gray-50/30 w-64">
+                <span className="text-[11px] font-black uppercase text-gray-500 tracking-widest">{t('start_phrase')}</span>
               </th>
               <th className="p-5 text-start bg-gray-50/30 w-48">
                 <span className="text-[11px] font-black uppercase text-gray-500 tracking-widest">{t('progress')}</span>
@@ -138,6 +141,17 @@ export default function MemorizationGrid({ evaluations }: MemorizationGridProps)
                     <td className="p-5 text-start border-r border-gray-50">
                       <p className="font-black text-gray-900 text-sm">{meta?.surah}</p>
                       <p className="text-[10px] text-gray-400 font-bold mt-0.5">{t('page')} {meta?.page}</p>
+                    </td>
+                    <td className="p-5 text-right border-r border-gray-50">
+                      {meta?.startPhrase ? (
+                        <div className="bg-indigo-50/20 px-3 py-1.5 rounded-xl border border-indigo-50/50 inline-block max-w-full">
+                          <span className="font-arabic font-bold text-xs sm:text-sm text-indigo-950 leading-relaxed block text-right" dir="rtl">
+                            {meta.startPhrase}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-300">—</span>
+                      )}
                     </td>
                     <td className="p-5 text-start border-r border-gray-50">
                        <div className="space-y-2">
