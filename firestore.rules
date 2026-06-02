@@ -7,11 +7,10 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      let email = request.auth.token.get('email', '').lower();
       return isSignedIn() && (
-        email == 'abdessamadjibrane2@gmail.com' ||
-        email == 'rachid.houlla@gmail.com' ||
-        email == 'locatortradi@gmail.com' ||
+        request.auth.token.email == 'abdessamadjibrane2@gmail.com' ||
+        request.auth.token.email == 'rachid.houlla@gmail.com' ||
+        request.auth.token.email == 'locatortradi@gmail.com' ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'none') == 'admin')
       );
@@ -48,8 +47,7 @@ service cloud.firestore {
 
     // User Profiles
     match /users/{uid} {
-      allow get: if isSignedIn() && (request.auth.uid == uid || isManager());
-      allow list: if isSignedIn() && (isManager() || resource.data.email.lower() == request.auth.token.email.lower());
+      allow read, get, list: if isSignedIn();
       allow create: if isSignedIn() && (request.auth.uid == uid || isManager());
       allow update: if isSignedIn() && (request.auth.uid == uid || isManager());
       allow delete: if isAdmin();
@@ -57,41 +55,32 @@ service cloud.firestore {
 
     // Kuttabs
     match /kuttabs/{kuttabId} {
-      allow read: if isSignedIn();
+      allow read, list: if isSignedIn();
       allow create: if isManager();
-      allow update: if isManager() || (isTeacher() && resource.data.teacherId == request.auth.uid);
+      allow update: if isManager() || (isTeacher() && resource.data.get('teacherId', '') == request.auth.uid);
       allow delete: if isAdmin();
     }
 
     // Login History
     match /login_history/{id} {
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.get('userId', '') == request.auth.uid;
       allow read, list: if isAdmin();
     }
 
     // Relational Helpers for data access
     function canAccessStudent(data) {
-      let userEmail = request.auth.token.get('email', '').lower();
-      return isManager() || 
-             data.teacherId == request.auth.uid || 
-             data.kuttabResponsibleId == request.auth.uid || 
-             data.get('email', '').lower() == userEmail ||
-             (isTeacher() && hasProfile() && data.get('kuttabName', '') != '' && data.kuttabName == getUserData().get('kuttabName', ''));
-    }
-
-    function canAccessSubData(data) {
-      let userEmail = request.auth.token.get('email', '').lower();
-      return isManager() || 
-             data.teacherId == request.auth.uid || 
-             data.kuttabResponsibleId == request.auth.uid || 
-             data.get('studentEmail', '').lower() == userEmail ||
-             (isTeacher() && hasProfile() && data.get('kuttabName', '') != '' && data.kuttabName == getUserData().get('kuttabName', ''));
+      return isSignedIn() && (
+        isManager() || 
+        data.get('teacherId', '') == request.auth.uid || 
+        data.get('kuttabResponsibleId', '') == request.auth.uid || 
+        ('email' in request.auth.token && data.get('email', '') == request.auth.token.email) ||
+        (isTeacher() && hasProfile() && data.get('kuttabName', '') != '' && data.get('kuttabName', '') == getUserData().get('kuttabName', ''))
+      );
     }
 
     // Students
     match /students/{studentId} {
-      allow get: if isSignedIn() && canAccessStudent(resource.data);
-      allow list: if isSignedIn();
+      allow read, get, list: if isSignedIn();
       allow create: if isTeacher();
       allow update: if isManager() || (isTeacher() && canAccessStudent(resource.data));
       allow delete: if isAdmin();
@@ -99,42 +88,42 @@ service cloud.firestore {
 
     // Sub-data collections (Attendance, Evaluations, etc.)
     match /attendance/{id} {
-      allow get, list: if isSignedIn();
+      allow read, get, list: if isSignedIn();
       allow create, update: if isTeacher();
       allow delete: if isAdmin();
     }
 
     match /teacher_attendance/{id} {
-      allow get, list: if isManager();
+      allow read, get, list: if isManager();
       allow create, update: if isManager();
       allow delete: if isAdmin();
     }
 
     match /evaluations/{id} {
-      allow get, list: if isSignedIn();
+      allow read, get, list: if isSignedIn();
       allow create, update: if isTeacher();
       allow delete: if isAdmin();
     }
 
     match /memorizations/{id} {
-      allow get, list: if isSignedIn();
+      allow read, get, list: if isSignedIn();
       allow create, update: if isTeacher();
       allow delete: if isAdmin();
     }
 
     match /revisions/{id} {
-      allow get, list: if isSignedIn();
+      allow read, get, list: if isSignedIn();
       allow create, update: if isTeacher();
       allow delete: if isAdmin();
     }
 
     match /next_revisions/{id} {
-      allow get, list: if isSignedIn();
+      allow read, get, list: if isSignedIn();
       allow create, update, delete: if isTeacher();
     }
 
     match /next_evaluations/{id} {
-      allow get, list: if isSignedIn();
+      allow read, get, list: if isSignedIn();
       allow create, update, delete: if isTeacher();
     }
 

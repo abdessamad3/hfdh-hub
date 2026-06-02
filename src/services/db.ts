@@ -2521,7 +2521,7 @@ export const dbService = {
 
   async listCustomQuestions() {
     try {
-      const snap = await getDocs(query(collection(db, 'smart_questions'), limit(250)));
+      const snap = await getDocs(query(collection(db, 'smart_questions'), limit(1000)));
       return snap.docs.map(d => ({ id: d.id, ...d.data() }));
     } catch (error) {
       return handleFirestoreError(error, OperationType.GET, 'smart_questions');
@@ -2547,6 +2547,47 @@ export const dbService = {
       return true;
     } catch (error) {
       return handleFirestoreError(error, OperationType.DELETE, `smart_questions/${id}`);
+    }
+  },
+
+  async clearAllCustomQuestions() {
+    try {
+      const snap = await getDocs(query(collection(db, 'smart_questions'), limit(1500)));
+      if (snap.empty) return true;
+      
+      const chunks: string[] = snap.docs.map(doc => doc.id);
+      
+      for (let i = 0; i < chunks.length; i += 400) {
+        const batch = writeBatch(db);
+        const chunkIds = chunks.slice(i, i + 400);
+        for (const id of chunkIds) {
+          batch.delete(doc(db, 'smart_questions', id));
+        }
+        await batch.commit();
+      }
+      return true;
+    } catch (error) {
+      return handleFirestoreError(error, OperationType.DELETE, 'smart_questions/clear_all');
+    }
+  },
+
+  async addCustomQuestionsBulk(questions: any[]) {
+    try {
+      for (let i = 0; i < questions.length; i += 400) {
+        const batch = writeBatch(db);
+        const chunk = questions.slice(i, i + 400);
+        for (const q of chunk) {
+          const newDocRef = doc(collection(db, 'smart_questions'));
+          batch.set(newDocRef, {
+            ...q,
+            createdAt: serverTimestamp()
+          });
+        }
+        await batch.commit();
+      }
+      return true;
+    } catch (error) {
+      return handleFirestoreError(error, OperationType.CREATE, 'smart_questions/bulk');
     }
   }
 };

@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Calendar as CalendarIcon, Check, X, Save, Clock, Users, GraduationCap } from 'lucide-react';
-import { motion } from 'motion/react';
+import { Calendar as CalendarIcon, Check, X, Save, Clock, Users, GraduationCap, Plus } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'react-hot-toast';
 import { dbService } from '../services/db';
 import { auth } from '../lib/firebase';
@@ -34,7 +34,99 @@ export default function AttendancePage({ profile }: AttendancePageProps) {
   
   const [saving, setSaving] = useState(false);
 
+  // Lesson Modal States
+  const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
+  const [modalKuttabId, setModalKuttabId] = useState('');
+  const [modalDate, setModalDate] = useState(date);
+  const [modalType, setModalType] = useState<'specific' | 'recurring'>('specific');
+  const [session1Enabled, setSession1Enabled] = useState(true);
+  const [session1From, setSession1From] = useState('08:00');
+  const [session1To, setSession1To] = useState('10:00');
+  const [session2Enabled, setSession2Enabled] = useState(false);
+  const [session2From, setSession2From] = useState('14:00');
+  const [session2To, setSession2To] = useState('16:00');
+  const [savingLesson, setSavingLesson] = useState(false);
+
   const isSenior = profile?.role === 'admin' || profile?.role === 'manager';
+  const isRtl = i18n.language === 'ar';
+  const canAddLesson = isSenior || (profile?.role === 'teacher' && profile?.kuttabName);
+
+  const openLessonModal = () => {
+    setModalDate(date);
+    setModalType('specific');
+    setSession1Enabled(true);
+    setSession1From('08:00');
+    setSession1To('10:00');
+    setSession2Enabled(false);
+    setSession2From('14:00');
+    setSession2To('16:00');
+    
+    const teacherKuttab = kuttabList.find(k => k.name.trim().toLowerCase() === profile?.kuttabName?.trim().toLowerCase());
+    if (teacherKuttab) {
+      setModalKuttabId(teacherKuttab.id);
+    } else if (kuttabList.length > 0) {
+      // Find currently filtered kuttab or default to first
+      const matchedFilterKuttab = kuttabList.find(k => k.name.trim().toLowerCase() === selectedKuttab.trim().toLowerCase());
+      setModalKuttabId(matchedFilterKuttab?.id || kuttabList[0]?.id || '');
+    } else {
+      setModalKuttabId('');
+    }
+    
+    setIsLessonModalOpen(true);
+  };
+
+  const handleSaveLesson = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!modalKuttabId) {
+      toast.error(isRtl ? 'يرجى اختيار الكُتّاب أولاً' : 'Please select a Kuttab first');
+      return;
+    }
+
+    const finalLessons: string[] = [];
+    if (session1Enabled) {
+      finalLessons.push(`${session1From} - ${session1To}`);
+    }
+    if (session2Enabled) {
+      finalLessons.push(`${session2From} - ${session2To}`);
+    }
+
+    if (finalLessons.length === 0) {
+      toast.error(isRtl ? 'يجب تفعيل حصة واحدة على الأقل' : 'Please enable at least one session');
+      return;
+    }
+
+    setSavingLesson(true);
+    try {
+      const selectedKuttabObj = kuttabList.find(k => k.id === modalKuttabId);
+      if (!selectedKuttabObj) {
+        toast.error(isRtl ? 'لم يتم العثور على الكُتّاب المحدد' : 'Selected Kuttab not found');
+        setSavingLesson(false);
+        return;
+      }
+
+      const currentSchedule = selectedKuttabObj.schedule || { lessons: {} };
+      const key = modalType === 'recurring' 
+        ? getDayIndex(modalDate).toString() 
+        : modalDate;
+
+      const updatedLessons = { ...currentSchedule.lessons };
+      updatedLessons[key] = {
+        type: modalType,
+        lessons: finalLessons
+      };
+
+      await dbService.updateKuttabSchedule(selectedKuttabObj.id, { lessons: updatedLessons });
+      toast.success(isRtl ? 'تمت إضافة الحصة بنجاح!' : 'Session added successfully!');
+      
+      await fetchData();
+      setIsLessonModalOpen(false);
+    } catch (err) {
+      console.error('Error saving lesson:', err);
+      toast.error(isRtl ? 'فشل حِفظ الحّصة المجدولة.' : 'Failed to save scheduled lesson.');
+    } finally {
+      setSavingLesson(false);
+    }
+  };
 
   useEffect(() => {
     fetchData();
@@ -304,10 +396,9 @@ export default function AttendancePage({ profile }: AttendancePageProps) {
 
   return (
     <div className="p-4 sm:p-8 max-w-4xl mx-auto space-y-8">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 text-black">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 text-black border-b border-gray-100 pb-4">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">{t('daily_attendance')}</h2>
-          <p className="text-gray-500 mt-1 text-sm sm:text-base">{t('mark_attendance')} {formatDate(date)}</p>
         </div>
         
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
@@ -445,11 +536,22 @@ export default function AttendancePage({ profile }: AttendancePageProps) {
             {activeTab === 'students' ? t('loading_students') : t('loading_teachers_attendance')}
           </div>
         ) : filteredDisplayList.length === 0 ? (
-          <div className="p-12 text-center text-gray-500 font-medium italic">
-            {activeTab === 'students' 
-              ? (students.length > 0 ? t('no_students_with_sessions') : t('no_students_enrolled'))
-              : t('no_teachers_enrolled')
-            }
+          <div className="p-12 flex flex-col items-center justify-center text-center gap-4">
+            <span className="text-gray-500 font-medium italic">
+              {activeTab === 'students' 
+                ? (students.length > 0 ? t('no_students_with_sessions') : t('no_students_enrolled'))
+                : t('no_teachers_enrolled')
+              }
+            </span>
+            {activeTab === 'students' && students.length > 0 && canAddLesson && (
+              <button
+                onClick={openLessonModal}
+                className="flex items-center gap-2 px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-[20px] transition-all shadow-md shadow-emerald-100 cursor-pointer"
+              >
+                <Plus className="w-5 h-5" />
+                {isRtl ? 'إضافة حصة مجدولة لهذا اليوم' : 'Add Scheduled Lesson for Today'}
+              </button>
+            )}
           </div>
         ) : (
           <div className="divide-y divide-gray-50">
@@ -659,6 +761,232 @@ export default function AttendancePage({ profile }: AttendancePageProps) {
           </div>
         )}
       </div>
+
+      <AnimatePresence>
+        {isLessonModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsLessonModalOpen(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="bg-white rounded-3xl w-full max-w-md p-8 relative z-10 shadow-2xl overflow-y-auto max-h-[90vh] text-black"
+            >
+              <div className="absolute top-0 right-0 p-4">
+                <button 
+                  type="button"
+                  onClick={() => setIsLessonModalOpen(false)} 
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors text-black"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveLesson} className="space-y-6">
+                <div>
+                  <h3 className="text-2xl font-black text-gray-900 tracking-tight">
+                    {isRtl ? 'إضافة حصة مجدولة لطلاب الكُتّاب' : 'Add Scheduled Lesson'}
+                  </h3>
+                  <p className="text-gray-500 font-medium text-sm mt-1">
+                    {isRtl ? 'تحديد مواعيد الحصص وجدول دراسة الطلاب لتسجيل الحضور' : 'Configure lesson schedule for students to enable attendance tracking'}
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  {/* Kuttab Select */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-gray-700">
+                      {isRtl ? 'الكُتّاب' : 'Kuttab'}
+                    </label>
+                    {isSenior ? (
+                      <select
+                        value={modalKuttabId}
+                        onChange={(e) => setModalKuttabId(e.target.value)}
+                        className="w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-black font-medium text-sm"
+                      >
+                        <option value="" disabled>{isRtl ? 'اختر الكُتّاب' : 'Select Kuttab'}</option>
+                        {kuttabList.map(k => (
+                          <option key={k.id} value={k.id}>{k.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        readOnly
+                        disabled
+                        value={profile?.kuttabName || ''}
+                        className="w-full p-4 bg-gray-100 border rounded-2xl outline-none text-gray-500 font-medium text-sm cursor-not-allowed"
+                      />
+                    )}
+                  </div>
+
+                  {/* Date Pick */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-gray-700">
+                      {isRtl ? 'تاريخ الحصة' : 'Lesson Date'}
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={modalDate}
+                      onChange={(e) => setModalDate(e.target.value)}
+                      className="w-full p-4 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-black font-medium text-sm"
+                    />
+                  </div>
+
+                  {/* Schedule Type Toggle */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-gray-700">
+                      {isRtl ? 'نوع الجدولة' : 'Schedule Type'}
+                    </label>
+                    <div className="flex gap-2 p-1 bg-gray-100 rounded-2xl">
+                      <button
+                        type="button"
+                        onClick={() => setModalType('specific')}
+                        className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                          modalType === 'specific' 
+                            ? 'bg-white text-emerald-700 shadow-sm' 
+                            : 'text-gray-500 hover:text-gray-900'
+                        }`}
+                      >
+                        {isRtl ? 'هذا اليوم فقط' : 'This Day Only'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setModalType('recurring')}
+                        className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                          modalType === 'recurring' 
+                            ? 'bg-white text-emerald-700 shadow-sm' 
+                            : 'text-gray-500 hover:text-gray-900'
+                        }`}
+                      >
+                        {isRtl ? 'متكرر أسبوعياً' : 'Weekly Recurring'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Sessions Pickers (Max 2) */}
+                  <div className="space-y-4 pt-2">
+                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest">
+                      {isRtl ? 'الحصص الدراسية (بحد أقصى حصتين يومياً)' : 'Study Sessions (Max 2 per day)'}
+                    </label>
+
+                    {/* Session 1 */}
+                    <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-emerald-600 font-bold text-sm">
+                          <Clock className="w-4 h-4" />
+                          <span>{isRtl ? 'الحصة الأولى (الصباح)' : 'Session 1 (Morning)'}</span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={session1Enabled}
+                          onChange={(e) => setSession1Enabled(e.target.checked)}
+                          className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500 cursor-pointer"
+                        />
+                      </div>
+                      {session1Enabled && (
+                        <div className="flex gap-3">
+                          <div className="flex-1 space-y-1">
+                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{isRtl ? 'من' : 'From'}</span>
+                            <input
+                              type="time"
+                              required
+                              value={session1From}
+                              onChange={(e) => setSession1From(e.target.value)}
+                              className="w-full bg-white border border-gray-250 p-2 rounded-xl text-xs font-bold outline-none"
+                            />
+                          </div>
+                          <div className="flex-1 space-y-1">
+                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{isRtl ? 'إلى' : 'To'}</span>
+                            <input
+                              type="time"
+                              required
+                              value={session1To}
+                              onChange={(e) => setSession1To(e.target.value)}
+                              className="w-full bg-white border border-gray-250 p-2 rounded-xl text-xs font-bold outline-none"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Session 2 */}
+                    <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-indigo-600 font-bold text-sm">
+                          <Clock className="w-4 h-4" />
+                          <span>{isRtl ? 'الحصة الثانية (المساء)' : 'Session 2 (Evening)'}</span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={session2Enabled}
+                          onChange={(e) => setSession2Enabled(e.target.checked)}
+                          className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-emerald-500 cursor-pointer"
+                        />
+                      </div>
+                      {session2Enabled && (
+                        <div className="flex gap-3">
+                          <div className="flex-1 space-y-1">
+                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{isRtl ? 'من' : 'From'}</span>
+                            <input
+                              type="time"
+                              required
+                              value={session2From}
+                              onChange={(e) => setSession2From(e.target.value)}
+                              className="w-full bg-white border border-gray-250 p-2 rounded-xl text-xs font-bold outline-none"
+                            />
+                          </div>
+                          <div className="flex-1 space-y-1">
+                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{isRtl ? 'إلى' : 'To'}</span>
+                            <input
+                              type="time"
+                              required
+                              value={session2To}
+                              onChange={(e) => setSession2To(e.target.value)}
+                              className="w-full bg-white border border-gray-250 p-2 rounded-xl text-xs font-bold outline-none"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsLessonModalOpen(false)}
+                    className="flex-1 py-3 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-2xl font-bold text-sm transition-all text-center cursor-pointer"
+                  >
+                    {isRtl ? 'إلغاء' : 'Cancel'}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingLesson}
+                    className="flex-[2] py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-xl shadow-emerald-100 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    {savingLesson ? (
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        {isRtl ? 'حفظ الحصة المجدولة' : 'Save Scheduled Lesson'}
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

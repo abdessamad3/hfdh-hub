@@ -29,7 +29,7 @@ import SmartChallengePage from './pages/SmartChallengePage';
 import ManageSmartQuestionsPage from './pages/ManageSmartQuestionsPage';
 import AdminSearchBar from './components/AdminSearchBar';
 import NextRevisionNotifier from './components/NextRevisionNotifier';
-import { BookOpen, AlertCircle, Chrome, Menu, Globe } from 'lucide-react';
+import { BookOpen, AlertCircle, Chrome, Menu, Globe, ExternalLink } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 
@@ -103,6 +103,8 @@ function Login({ externalError }: { externalError?: string | null }) {
       console.error('Login Error:', err);
       if (err.code === 'auth/admin-restricted-operation') {
         setError('Google Login requires a supported browser. If on mobile, please try opening in a native browser or ensure Google Auth is active.');
+      } else if (err.code === 'auth/network-request-failed' || (err.message && err.message.includes('network-request-failed'))) {
+        setError('Google Sign-In is blocked in this preview iframe by browser cross-origin security rules. Please click the button below to open the application in a new tab where login works perfectly!');
       } else {
         setError(err.message || 'Failed to sign in with Google');
       }
@@ -138,9 +140,20 @@ function Login({ externalError }: { externalError?: string | null }) {
         </div>
 
         {error && (
-          <div className="bg-red-50 border border-red-100 p-4 rounded-2xl flex items-start gap-3 text-red-600 text-sm">
-            <AlertCircle className="w-5 h-5 shrink-0" />
-            <p>{error}</p>
+          <div className="bg-red-50 border border-red-100 p-4 rounded-2xl flex flex-col gap-3 text-red-600 text-sm">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 shrink-0" />
+              <p className="leading-relaxed">{error}</p>
+            </div>
+            {(error.includes('iframe') || error.includes('network-request-failed') || error.includes('blocked')) && (
+              <button
+                onClick={() => window.open(window.location.href, '_blank')}
+                className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-xs font-bold self-start mt-1 transition-all shadow-md active:scale-95"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                Open in a New Tab
+              </button>
+            )}
           </div>
         )}
 
