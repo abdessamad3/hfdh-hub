@@ -334,8 +334,8 @@ export default function StudentsList({ profile }: StudentsListProps) {
                   key={student.id}
                   className="group hover:bg-emerald-50/50 transition-colors"
                 >
-                  <td onClick={() => navigate(`/students/${student.id}`)} className="px-6 py-4 cursor-pointer truncate">
-                    <div className="font-semibold text-gray-900 truncate">{student.name}</div>
+                  <td onClick={() => navigate(`/students/${student.id}`)} className="px-6 py-4 cursor-pointer whitespace-normal break-words">
+                    <div className="font-semibold text-gray-900">{student.name}</div>
                   </td>
                   <td onClick={() => navigate(`/students/${student.id}`)} className="px-6 py-4 text-gray-600 cursor-pointer">{t('years_old', { age: student.age })}</td>
                   <td onClick={() => navigate(`/students/${student.id}`)} className="px-6 py-4 text-gray-600 cursor-pointer">

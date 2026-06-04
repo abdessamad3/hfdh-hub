@@ -250,7 +250,7 @@ export default function TeacherProfile({ profile }: TeacherProfileProps) {
                   <div className="min-w-0">
                     <Link 
                       to={`/students/${student.id}`}
-                      className="font-black text-gray-900 truncate block group-hover:text-emerald-700 transition-colors"
+                      className="font-black text-gray-900 block group-hover:text-emerald-700 transition-colors whitespace-normal break-words"
                     >
                       {student.name}
                     </Link>

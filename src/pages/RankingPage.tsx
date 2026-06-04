@@ -237,7 +237,7 @@ export default function RankingPage({ profile }: RankingPageProps) {
                     {i + 1}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-3 truncate">
+                    <div className="flex items-center gap-3 flex-wrap">
                       {profile?.role !== 'student' ? (
                         <Link 
                           to={`/students/${student.id}`}

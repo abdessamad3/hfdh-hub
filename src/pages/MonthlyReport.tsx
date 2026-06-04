@@ -459,7 +459,7 @@ export default function MonthlyReport({ profile }: MonthlyReportProps) {
                   <td className="p-4 sticky left-0 bg-white group-hover:bg-gray-50 z-10 border-r shadow-[2px_0_5px_rgba(0,0,0,0.05)]">
                     <div className="flex items-center gap-2">
                        <UserIcon className="w-3 h-3 text-gray-300" />
-                       <span className="font-bold text-gray-900 truncate max-w-[150px]">{student.name}</span>
+                       <span className="font-bold text-gray-900 whitespace-normal break-words">{student.name}</span>
                     </div>
                   </td>
                   {student.daysData.map(day => (

@@ -187,12 +187,54 @@ export default function SmartChallengePage({ profile }: SmartChallengePageProps)
   const memorizedSurahNames = useMemo(() => {
     const list: string[] = [];
     
+    // Helper to normalize strings for robust matching of free-form entered Surah names
+    const getNormalizedWord = (word: string): string => {
+      return word
+        .toLowerCase()
+        .replace(/[ـ\s\-']/g, '') // remove spaces, hyphens, and standard Arabic layout lines
+        .replace(/[أإآا]/g, 'ا')   // normalize Arabic hamzas
+        .replace(/[ة]/g, 'ه')      // normalize taa marbutah
+        .replace(/^(al|at|an|ar|as|ash|az|ad|aj|ak|al|am|an|aw|ay|el|et|en|er|es)/, ''); // remove phonetic definite articles
+    };
+
+    const findSurahMeta = (userInput: string) => {
+      if (!userInput) return null;
+      const cleanInput = getNormalizedWord(userInput);
+      if (!cleanInput) return null;
+      
+      return SURAHS.find(s => {
+        const cleanSName = getNormalizedWord(s.name);
+        const cleanSEng = getNormalizedWord(s.englishName);
+        const cleanSTranslation = getNormalizedWord(s.englishNameTranslation || '');
+        return cleanSName.includes(cleanInput) || 
+               cleanInput.includes(cleanSName) || 
+               cleanSEng.includes(cleanInput) || 
+               cleanInput.includes(cleanSEng) ||
+               cleanSTranslation.includes(cleanInput);
+      });
+    };
+    
     const addFromItem = (item: any) => {
+      // Must be a passed evaluation (accuracyScore >= 50)
+      if (item.accuracyScore === undefined || item.accuracyScore < 50) {
+        return;
+      }
+
+      // If a specific Surah was evaluated, strictly use only that matched Surah!
       if (item.surahName && item.surahName.trim()) {
-        const sName = item.surahName.trim();
-        if (!list.includes(sName)) list.push(sName);
+        const matched = findSurahMeta(item.surahName.trim());
+        if (matched) {
+          if (!list.includes(matched.name)) list.push(matched.name);
+          if (!list.includes(matched.englishName)) list.push(matched.englishName);
+        } else {
+          // Fallback to literal entry
+          const sName = item.surahName.trim();
+          if (!list.includes(sName)) list.push(sName);
+        }
+        return; // CRITICAL: Stop here! Do not parse the surrounding/overlapping Hizb, as those other surahs were not explicitly evaluated.
       }
       
+      // Only parse full Hizb range if no specific surahName was designated
       if (item.hizbNumber && item.hizbNumber >= 1 && item.hizbNumber <= 60) {
         const h = item.hizbNumber;
         const hStart = QURAN_HIZBS[h]?.page;
@@ -218,11 +260,11 @@ export default function SmartChallengePage({ profile }: SmartChallengePageProps)
       }
     };
 
+    // Strictly fetch from completed evaluations where the student passed!
     evaluations.forEach(addFromItem);
-    memorizations.forEach(addFromItem);
     
     return list;
-  }, [evaluations, memorizations]);
+  }, [evaluations]);
 
   // Filter full Surah metadata objects matching the detected list
   const matchedSurahsList = useMemo(() => {
@@ -233,15 +275,9 @@ export default function SmartChallengePage({ profile }: SmartChallengePageProps)
   const startNewChallenge = async () => {
     setLoading(true);
     try {
-      // Find surah numbers
+      // Find surah numbers from the passed evaluations only
       let matchedSurahs = SURAHS.filter(s => memorizedSurahNames.includes(s.name) || memorizedSurahNames.includes(s.englishName));
       
-      // Fallback if they have less than 2 memorized surahs (beginners default pool)
-      if (matchedSurahs.length < 2) {
-        // Juz Amma Surahs numbers: 1 (Fatihah), 112 (Ikhlas), 113 (Falaq), 114 (Nas), 108 (Kawthar)
-        matchedSurahs = SURAHS.filter(s => [1, 93, 94, 95, 103, 108, 110, 112, 113, 114].includes(s.number));
-      }
-
       const generatedQuestions: Question[] = [];
 
       // Query database custom smart questions
@@ -249,7 +285,8 @@ export default function SmartChallengePage({ profile }: SmartChallengePageProps)
         const dbQs = (await dbService.listCustomQuestions()) as any[];
         if (dbQs && dbQs.length > 0) {
           const studentSurahNums = matchedSurahs.map(s => s.number);
-          const matchedDbQs = dbQs.filter(q => !q.surahNumber || studentSurahNums.includes(q.surahNumber));
+          // Strictly only select custom questions belonging to the student's evaluated surah numbers
+          const matchedDbQs = dbQs.filter(q => q.surahNumber && studentSurahNums.includes(q.surahNumber));
           const mappedDbQs: Question[] = matchedDbQs.map(customQ => ({
             type: customQ.type as any,
             prompt: customQ.prompt,
@@ -404,7 +441,9 @@ export default function SmartChallengePage({ profile }: SmartChallengePageProps)
 
           // Generate distractors
           const distractors: string[] = [];
-          while (distractors.length < 3) {
+          let distAttempts = 0;
+          while (distractors.length < 3 && distAttempts < 50) {
+            distAttempts++;
             const randomOtherSurah = surahKeys[Math.floor(Math.random() * surahKeys.length)];
             const otherSurahAyahs = fetchedSurahData[randomOtherSurah] || [];
             if (otherSurahAyahs.length > 0) {
@@ -417,6 +456,9 @@ export default function SmartChallengePage({ profile }: SmartChallengePageProps)
               distractors.push(`آية قريبة من الجزء المذكور`);
             }
           }
+          while (distractors.length < 3) {
+            distractors.push(`آية مباركة من كتاب الله العزيز`);
+          }
           options = [...distractors, correctAnswer].sort(() => 0.5 - Math.random());
         }
         else if (selectedType === 'prev_ayah' && randAyahIdx > 0) {
@@ -426,7 +468,9 @@ export default function SmartChallengePage({ profile }: SmartChallengePageProps)
 
           // Generate distractors
           const distractors: string[] = [];
-          while (distractors.length < 3) {
+          let distAttempts = 0;
+          while (distractors.length < 3 && distAttempts < 50) {
+            distAttempts++;
             const randomOtherSurah = surahKeys[Math.floor(Math.random() * surahKeys.length)];
             const otherSurahAyahs = fetchedSurahData[randomOtherSurah] || [];
             if (otherSurahAyahs.length > 0) {
@@ -438,6 +482,9 @@ export default function SmartChallengePage({ profile }: SmartChallengePageProps)
             } else {
               distractors.push(`آية عشوائية من الحفظ`);
             }
+          }
+          while (distractors.length < 3) {
+            distractors.push(`آية قريبة من السورة المباركة`);
           }
           options = [...distractors, correctAnswer].sort(() => 0.5 - Math.random());
         }
@@ -683,13 +730,21 @@ export default function SmartChallengePage({ profile }: SmartChallengePageProps)
               </div>
 
               <div className="pt-8">
-                <button
-                  onClick={startNewChallenge}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-3.5 bg-[#16C47F] hover:bg-[#14b071] text-white px-8 py-4.5 rounded-2xl font-black text-sm tracking-wide shadow-lg shadow-emerald-950/40 transition-all transform hover:scale-[1.02] active:scale-95"
-                >
-                  <Play className="w-5 h-5 fill-current" />
-                  <span>{isRtl ? 'ابدأ جولة التحدي الآن' : 'Start Assessment Round'}</span>
-                </button>
+                {matchedSurahsList.length === 0 ? (
+                  <div className="p-4 bg-amber-500/10 border border-amber-500/25 rounded-2xl text-amber-300 font-bold text-xs leading-relaxed max-w-md">
+                    ⚠️ {isRtl 
+                      ? 'لا يمكنك بدء التحدي لعدم وجود تقييمات ناجحة (بنسبة ٥٠٪ فما فوق) مسجلة باسمك من قِبل معلمك بعد. يرجى مراجعة معلمك لاجتياز تقييمك الأول!' 
+                      : 'You cannot start the challenge yet because no passed evaluations (50% accuracy & above) are recorded in your file by your teacher. Please pass an evaluation to unlock this mode!'}
+                  </div>
+                ) : (
+                  <button
+                    onClick={startNewChallenge}
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-3.5 bg-[#16C47F] hover:bg-[#14b071] text-white px-8 py-4.5 rounded-2xl font-black text-sm tracking-wide shadow-lg shadow-emerald-950/40 transition-all transform hover:scale-[1.02] active:scale-95 cursor-pointer"
+                  >
+                    <Play className="w-5 h-5 fill-current" />
+                    <span>{isRtl ? 'ابدأ جولة التحدي الآن' : 'Start Assessment Round'}</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -730,8 +785,8 @@ export default function SmartChallengePage({ profile }: SmartChallengePageProps)
                 
                 <p className="text-[11px] font-semibold text-slate-500 leading-relaxed text-justify">
                   {isRtl 
-                    ? 'كلما زاد عدد الأجزاء والسور التي تمر بتقييم معلمك، كلما تدرب خوارزم التحدي على سور أكثر اتساعاً. إن لم تسجل لك أي سور بعد، سيبدأ التحدي بسور جزء عمّ ليكون جاهزاً للمتعة فوراً!' 
-                    : 'The smart engine pulls ayahs based on active records verified by your Sheikh. If you do not have logged revisions yet, the system defaults to Juz Amma targets in standard Warsh layout.'}
+                    ? 'يقوم محرك التحدي الذكي بسحب الآيات حصرياً وبشكل صارم من السور التي اجتزت فيها تقييمات ناجحة (بنسبة ٥٠٪ أو أكثر دقة) مع معلمك في الكُتّاب لتأكيد حفظك وضبط تمكينك.' 
+                    : 'The smart engine strictly and exclusively pulls ayahs based on verified evaluations passed under your teacher\'s grading (50% accuracy score and up).'}
                 </p>
               </div>
 
