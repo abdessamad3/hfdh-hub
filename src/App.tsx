@@ -1,37 +1,47 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { useState, useEffect, ReactNode } from 'react';
+import { useState, useEffect, ReactNode, lazy, Suspense } from 'react';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, User } from 'firebase/auth';
 import { auth } from './lib/firebase';
 import { dbService } from './services/db';
 import { UserProfile } from './types';
 import Sidebar from './components/Sidebar';
-import Dashboard from './pages/Dashboard';
-import StudentsList from './pages/StudentsList';
-import StudentProfile from './pages/StudentProfile';
-import AttendancePage from './pages/Attendance';
-import MonthlyReport from './pages/MonthlyReport';
-import EvaluationEntry from './pages/EvaluationEntry';
-import RankingPage from './pages/RankingPage';
-import StudentPortal from './pages/StudentPortal';
-import StudentCalendarPage from './pages/StudentCalendarPage';
-import StudentAttendancePage from './pages/StudentAttendancePage';
-import StudentProgressPage from './pages/StudentProgressPage';
-import RevisionEntry from './pages/RevisionEntry';
-import NextRevisionTask from './pages/NextRevisionTask';
-import NextEvaluationTask from './pages/NextEvaluationTask';
-import KuttabManagement from './pages/KuttabManagement';
-import TeachersList from './pages/TeachersList';
-import TeacherProfile from './pages/TeacherProfile';
-import KuttabProfile from './pages/KuttabProfile';
-import LoginHistory from './pages/LoginHistory';
-import QuranDatabase from './pages/QuranDatabase';
-import SmartChallengePage from './pages/SmartChallengePage';
-import ManageSmartQuestionsPage from './pages/ManageSmartQuestionsPage';
 import AdminSearchBar from './components/AdminSearchBar';
 import NextRevisionNotifier from './components/NextRevisionNotifier';
 import { BookOpen, AlertCircle, Chrome, Menu, Globe, ExternalLink } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
+
+// Pages are code-split so each role only downloads the screens it opens.
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const StudentsList = lazy(() => import('./pages/StudentsList'));
+const StudentProfile = lazy(() => import('./pages/StudentProfile'));
+const AttendancePage = lazy(() => import('./pages/Attendance'));
+const MonthlyReport = lazy(() => import('./pages/MonthlyReport'));
+const EvaluationEntry = lazy(() => import('./pages/EvaluationEntry'));
+const RankingPage = lazy(() => import('./pages/RankingPage'));
+const StudentPortal = lazy(() => import('./pages/StudentPortal'));
+const StudentCalendarPage = lazy(() => import('./pages/StudentCalendarPage'));
+const StudentAttendancePage = lazy(() => import('./pages/StudentAttendancePage'));
+const StudentProgressPage = lazy(() => import('./pages/StudentProgressPage'));
+const RevisionEntry = lazy(() => import('./pages/RevisionEntry'));
+const NextRevisionTask = lazy(() => import('./pages/NextRevisionTask'));
+const NextEvaluationTask = lazy(() => import('./pages/NextEvaluationTask'));
+const KuttabManagement = lazy(() => import('./pages/KuttabManagement'));
+const TeachersList = lazy(() => import('./pages/TeachersList'));
+const TeacherProfile = lazy(() => import('./pages/TeacherProfile'));
+const KuttabProfile = lazy(() => import('./pages/KuttabProfile'));
+const LoginHistory = lazy(() => import('./pages/LoginHistory'));
+const QuranDatabase = lazy(() => import('./pages/QuranDatabase'));
+const SmartChallengePage = lazy(() => import('./pages/SmartChallengePage'));
+const ManageSmartQuestionsPage = lazy(() => import('./pages/ManageSmartQuestionsPage'));
+
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center py-24">
+      <BookOpen className="w-8 h-8 text-emerald-600 animate-pulse" />
+    </div>
+  );
+}
 
 function Layout({ children, profile }: { children: ReactNode; profile: UserProfile | null }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -297,48 +307,50 @@ export default function App() {
   return (
     <Router>
       <Layout profile={profile}>
-        <Routes>
-          {isStudent ? (
-            <>
-              <Route path="/" element={<StudentPortal />} />
-              <Route path="/calendar" element={<StudentCalendarPage />} />
-              <Route path="/progress" element={<StudentProgressPage />} />
-              <Route path="/ranking" element={<RankingPage profile={profile} />} />
-              <Route path="/smart-challenge" element={<SmartChallengePage profile={profile} />} />
-              <Route path="/quran-database" element={<QuranDatabase profile={profile} />} />
-              <Route path="*" element={<Navigate to="/" />} />
-            </>
-          ) : (
-            <>
-              <Route path="/" element={<Dashboard profile={profile} />} />
-              <Route path="/quran-database" element={<QuranDatabase profile={profile} />} />
-              <Route path="/teachers/:id" element={<TeacherProfile profile={profile} />} />
-              <Route path="/kuttabs/:id" element={<KuttabProfile profile={profile} />} />
-              {(profile?.role === 'admin' || profile?.role === 'manager') && (
-                <>
-                  <Route path="/kuttabs" element={<KuttabManagement profile={profile} />} />
-                  <Route path="/teachers" element={<TeachersList profile={profile} />} />
-                </>
-              )}
-              {profile?.role === 'admin' && (
-                <>
-                  <Route path="/login-history" element={<LoginHistory profile={profile} />} />
-                  <Route path="/admin/smart-questions" element={<ManageSmartQuestionsPage profile={profile} />} />
-                </>
-              )}
-              <Route path="/students" element={<StudentsList profile={profile} />} />
-              <Route path="/students/:id" element={<StudentProfile profile={profile} />} />
-              <Route path="/attendance" element={<AttendancePage profile={profile} />} />
-              <Route path="/monthly-report" element={<MonthlyReport profile={profile} />} />
-              <Route path="/evaluation" element={<EvaluationEntry profile={profile} />} />
-              <Route path="/revision" element={<RevisionEntry profile={profile} />} />
-              <Route path="/next-revision" element={<NextRevisionTask profile={profile} />} />
-              <Route path="/next-evaluation" element={<NextEvaluationTask profile={profile} />} />
-              <Route path="/ranking" element={<RankingPage profile={profile} />} />
-              <Route path="*" element={<Navigate to="/" />} />
-            </>
-          )}
-        </Routes>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            {isStudent ? (
+              <>
+                <Route path="/" element={<StudentPortal />} />
+                <Route path="/calendar" element={<StudentCalendarPage />} />
+                <Route path="/progress" element={<StudentProgressPage />} />
+                <Route path="/ranking" element={<RankingPage profile={profile} />} />
+                <Route path="/smart-challenge" element={<SmartChallengePage profile={profile} />} />
+                <Route path="/quran-database" element={<QuranDatabase profile={profile} />} />
+                <Route path="*" element={<Navigate to="/" />} />
+              </>
+            ) : (
+              <>
+                <Route path="/" element={<Dashboard profile={profile} />} />
+                <Route path="/quran-database" element={<QuranDatabase profile={profile} />} />
+                <Route path="/teachers/:id" element={<TeacherProfile profile={profile} />} />
+                <Route path="/kuttabs/:id" element={<KuttabProfile profile={profile} />} />
+                {(profile?.role === 'admin' || profile?.role === 'manager') && (
+                  <>
+                    <Route path="/kuttabs" element={<KuttabManagement profile={profile} />} />
+                    <Route path="/teachers" element={<TeachersList profile={profile} />} />
+                  </>
+                )}
+                {profile?.role === 'admin' && (
+                  <>
+                    <Route path="/login-history" element={<LoginHistory profile={profile} />} />
+                    <Route path="/admin/smart-questions" element={<ManageSmartQuestionsPage profile={profile} />} />
+                  </>
+                )}
+                <Route path="/students" element={<StudentsList profile={profile} />} />
+                <Route path="/students/:id" element={<StudentProfile profile={profile} />} />
+                <Route path="/attendance" element={<AttendancePage profile={profile} />} />
+                <Route path="/monthly-report" element={<MonthlyReport profile={profile} />} />
+                <Route path="/evaluation" element={<EvaluationEntry profile={profile} />} />
+                <Route path="/revision" element={<RevisionEntry profile={profile} />} />
+                <Route path="/next-revision" element={<NextRevisionTask profile={profile} />} />
+                <Route path="/next-evaluation" element={<NextEvaluationTask profile={profile} />} />
+                <Route path="/ranking" element={<RankingPage profile={profile} />} />
+                <Route path="*" element={<Navigate to="/" />} />
+              </>
+            )}
+          </Routes>
+        </Suspense>
       </Layout>
       <Toaster position="bottom-right" />
     </Router>
