@@ -2301,19 +2301,22 @@ export const dbService = {
         if (!emailSnap.empty) {
           const oldDoc = emailSnap.docs[0];
           const oldData = oldDoc.data();
-          
-          // Delete old doc if it has a different ID
-          if (oldDoc.id !== uid) {
-            await deleteDoc(doc(db, 'users', oldDoc.id));
-          }
 
+          // Firestore rules copy the role/kuttab from the pre-registered doc
+          // named by migratedFrom, so it must still exist when this is written.
           const newUser = {
-            uid,
             ...oldData,
             ...cleanData,
+            uid,
+            migratedFrom: oldDoc.id,
             updatedAt: serverTimestamp()
           };
           await setDoc(userRef, newUser);
+
+          // Then remove the pre-registered doc (it has a different ID)
+          if (oldDoc.id !== uid) {
+            await deleteDoc(doc(db, 'users', oldDoc.id));
+          }
           return newUser as any as UserProfile;
         }
       }
