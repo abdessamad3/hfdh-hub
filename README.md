@@ -33,23 +33,19 @@ built, but not deployed.
 
 ### Automatic deploys: one-time setup
 
-The Action needs a Google Cloud service account allowed to deploy to the
-`hifd-kouttab` project, stored as a GitHub secret.
+The Action logs in to Google without any key or secret (Workload Identity
+Federation): Google trusts GitHub's token for this repository on `main`, and
+lets it act as the `github-deploy` service account, which can only deploy
+Hosting and Firestore rules.
 
-1. Open https://console.cloud.google.com/iam-admin/serviceaccounts?project=hifd-kouttab
-   and click **Create service account**. Name it `github-deploy`.
-2. Grant it these roles, then click **Done**:
-   - Firebase Hosting Admin
-   - Firebase Rules Admin
-   - API Keys Viewer
-   - Service Usage Consumer
-3. Open the new account → **Keys** → **Add key** → **Create new key** → **JSON**.
-   A `.json` file downloads.
-4. In GitHub, open the repo → **Settings** → **Secrets and variables** →
-   **Actions** → **New repository secret**. Name: `FIREBASE_SERVICE_ACCOUNT`,
-   value: the whole contents of the `.json` file.
-5. Delete the downloaded `.json` file from your computer. It grants deploy
-   access, so never commit it or share it.
+To set this up (or repair it), open [Google Cloud Shell](https://shell.cloud.google.com)
+as an owner of the `hifd-kouttab` project and run:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/abdessamad3/hfdh-hub/main/scripts/setup-github-deploy.sh | bash
+```
+
+The script is safe to run more than once.
 
 To deploy without a code change, open **Actions** → **Build and deploy** →
 **Run workflow**.

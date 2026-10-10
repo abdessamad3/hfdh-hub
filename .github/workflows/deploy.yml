@@ -42,6 +42,9 @@ jobs:
     needs: build
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # lets GitHub prove to Google which repo/branch is deploying
     steps:
       - uses: actions/checkout@v4
 
@@ -50,19 +53,17 @@ jobs:
           name: dist
           path: dist
 
+      # Keyless login (Workload Identity Federation): Google trusts GitHub's
+      # token for this repo on main. Set up by scripts/setup-github-deploy.sh.
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/141386006809/locations/global/workloadIdentityPools/github/providers/github
+          service_account: github-deploy@hifd-kouttab.iam.gserviceaccount.com
+
       - name: Deploy hosting and Firestore rules
-        env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-        run: |
-          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
-            echo "::error::The FIREBASE_SERVICE_ACCOUNT secret is not set. See README.md, section 'Automatic deploys'."
-            exit 1
-          fi
-          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
-          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$GOOGLE_APPLICATION_CREDENTIALS"
-          npx --yes firebase-tools@15.33.0 deploy \
-            --only firestore:rules,hosting \
-            --project hifd-kouttab \
-            --non-interactive \
-            --message "GitHub ${{ github.sha }}"
-          rm -f "$GOOGLE_APPLICATION_CREDENTIALS"
+        run: >
+          npx --yes firebase-tools@15.33.0 deploy
+          --only firestore:rules,hosting
+          --project hifd-kouttab
+          --non-interactive
+          --message "GitHub ${{ github.sha }}"
