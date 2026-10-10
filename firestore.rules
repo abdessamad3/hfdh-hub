@@ -109,12 +109,12 @@ service cloud.firestore {
     }
 
     // Managers manage teachers/managers; only admins may grant or edit admin.
-    function canManageUser(newData, oldData) {
-      return isAdmin() || (
-        isManager() &&
-        newData.get('role', 'teacher') != 'admin' &&
-        (oldData == null || oldData.get('role', '') != 'admin')
-      );
+    function canManageUser(newData) {
+      return isAdmin() || (isManager() && newData.get('role', 'teacher') != 'admin');
+    }
+
+    function canManageExistingUser(newData, oldData) {
+      return canManageUser(newData) && (isAdmin() || oldData.get('role', '') != 'admin');
     }
 
     // Default deny
@@ -129,8 +129,8 @@ service cloud.firestore {
       allow get: if isSignedIn() && (request.auth.uid == uid || isRegistered() ||
         (hasVerifiedEmail() && resource.data.get('email', '').lower() == myEmail()));
       allow list: if isRegistered() || (hasVerifiedEmail() && resource.data.email == myEmail());
-      allow create: if isValidSelfCreate(uid) || canManageUser(request.resource.data, null);
-      allow update: if isValidSelfUpdate(uid) || canManageUser(request.resource.data, resource.data);
+      allow create: if isValidSelfCreate(uid) || canManageUser(request.resource.data);
+      allow update: if isValidSelfUpdate(uid) || canManageExistingUser(request.resource.data, resource.data);
       // A user may remove the pre-registration doc for their own email once
       // they have migrated it into users/{their uid}.
       allow delete: if isAdmin() || (
