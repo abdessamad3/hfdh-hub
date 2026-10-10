@@ -20,9 +20,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -31,7 +31,7 @@ jobs:
       - run: npm run lint
       - run: npm run build
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: github.event_name != 'pull_request'
         with:
           name: dist
@@ -46,16 +46,16 @@ jobs:
       contents: read
       id-token: write # lets GitHub prove to Google which repo/branch is deploying
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: dist
           path: dist
 
       # Keyless login (Workload Identity Federation): Google trusts GitHub's
       # token for this repo on main. Set up by scripts/setup-github-deploy.sh.
-      - uses: google-github-actions/auth@v2
+      - uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: projects/141386006809/locations/global/workloadIdentityPools/github/providers/github
           service_account: github-deploy@hifd-kouttab.iam.gserviceaccount.com
