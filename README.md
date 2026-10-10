@@ -1,20 +1,36 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Hifdh Hub
 
-# Run and deploy your AI Studio app
+Quran memorization and attendance tracking for kuttabs: teachers record
+attendance, memorization, revisions and evaluations; students follow their
+progress, calendar and ranking.
 
-This contains everything you need to run your app locally.
+Live: https://hifd-kouttab.web.app
 
-View your app in AI Studio: https://ai.studio/apps/e39ae2e8-e598-4c92-bb7f-7fa0be924f40
+Built with React, Vite, Tailwind CSS and Firebase (Google sign-in, Firestore,
+Hosting). There is no backend server: the app talks to Firestore directly, and
+`firestore.rules` is what controls who can read and write data.
 
-## Run Locally
+## Development
 
-**Prerequisites:**  Node.js
+Requires Node.js and, for deploying, the Firebase CLI (`npm i -g firebase-tools`).
 
+```sh
+npm install
+npm run dev      # local dev server
+npm run lint     # type check
+npm run build    # production build in dist/
+```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+The Firebase web config lives in `firebase-applet-config.json`. It is not a
+secret; access is enforced by `firestore.rules`.
+
+## Deploy
+
+```sh
+firebase login
+npm run deploy   # builds, then deploys firestore.rules and hosting
+```
+
+Deploy rules on their own with `firebase deploy --only firestore:rules`.
+Always deploy `firestore.rules` together with any change to how the app reads
+or writes user profiles, since the sign-in flow depends on them.

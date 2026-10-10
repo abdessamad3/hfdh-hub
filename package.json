@@ -1,46 +1,33 @@
 {
-  "name": "react-example",
+  "name": "hifdh-hub",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
-    "start": "node dist/server.cjs",
+    "dev": "vite",
+    "build": "vite build",
     "preview": "vite preview",
-    "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "deploy": "npm run build && firebase deploy --only firestore:rules,hosting"
   },
   "dependencies": {
-    "@google/genai": "^1.29.0",
-    "clsx": "^2.1.1",
-    "cors": "^2.8.6",
     "date-fns": "^4.1.0",
-    "dotenv": "^17.2.3",
-    "esbuild": "^0.28.0",
-    "express": "^4.22.3",
     "firebase": "^12.12.0",
     "i18next": "^26.0.7",
     "i18next-browser-languagedetector": "^8.2.1",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
-    "path-to-regexp": "^8.4.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hot-toast": "^2.6.0",
     "react-i18next": "^17.0.4",
     "react-router-dom": "^7.14.1",
-    "recharts": "^3.8.1",
-    "tailwind-merge": "^3.5.0",
-    "tsx": "^4.23.15"
+    "recharts": "^3.8.1"
   },
   "devDependencies": {
-    "@firebase/eslint-plugin-security-rules": "^0.0.2",
     "@tailwindcss/vite": "^4.1.14",
-    "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.4",
-    "autoprefixer": "^10.4.21",
     "tailwindcss": "^4.1.14",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
