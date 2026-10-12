@@ -1,6 +1,6 @@
 name: Build and deploy
 
-# Pull requests: type-check and build, so broken changes are caught before merge.
+# Pull requests: type-check and build (the app and the recitation lab), so broken changes are caught before merge.
 # Pushes to main: also deploy the site and the Firestore rules to Firebase.
 on:
   pull_request:
@@ -31,11 +31,21 @@ jobs:
       - run: npm run lint
       - run: npm run build
 
+      # The recitation test page is a separate small site with its own build.
+      - name: Build recitation lab
+        working-directory: recitation-lab
+        run: |
+          npm ci
+          npm test
+          npm run build
+
       - uses: actions/upload-artifact@v6
         if: github.event_name != 'pull_request'
         with:
-          name: dist
-          path: dist
+          name: site
+          path: |
+            dist
+            recitation-lab/dist
           retention-days: 7
 
   deploy:
@@ -50,8 +60,8 @@ jobs:
 
       - uses: actions/download-artifact@v7
         with:
-          name: dist
-          path: dist
+          name: site
+          path: .
 
       # Keyless login (Workload Identity Federation): Google trusts GitHub's
       # token for this repo on main. Set up by scripts/setup-github-deploy.sh.
