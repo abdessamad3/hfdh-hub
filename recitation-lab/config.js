@@ -3,9 +3,9 @@ export const CONFIG = {
   // Quran-tuned Whisper (base) in ONNX format, runs inside the browser (Apache-2.0 per its model card).
   MODEL_ID: 'YunusZJ/whisper-base-ar-quran-ONNX',
 
-  // Shared password gate. Leave empty first: the page then shows a setup form that
-  // turns a chosen password into this hash. Paste the hash here (never the password).
-  PASSWORD_HASH: '',
+  // Shared password gate. This is only the hash of the chosen password (never the password).
+  // To change it: set this to '' and deploy; the page then shows a setup form that makes a new hash.
+  PASSWORD_HASH: '5a1b9a4760e223f63ceea51eb98eca1b65372716e9a9f28e6eaf5074a5887f48',
   PASSWORD_SALT: 'hifd-recitation-lab-v1',
   PASSWORD_ITERATIONS: 150000,
 
