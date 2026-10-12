@@ -34,7 +34,10 @@ if (!fx) {
   const rows = JSON.parse(fs.readFileSync(fx, 'utf8'));
   const bySurah = (n) => rows.filter((r) => r.surah === n);
   const bas = rows[0].text;
-  const mk = (n) => buildSurah(n, bySurah(n).map((r) => ({ ayah: r.ayah, text: r.text })), bas);
+  // With TANZIL_TXT set, the display/match text is the real Tanzil file (the heard text is still the stand-in).
+  const tz = process.env.TANZIL_TXT ? parseTanzil(fs.readFileSync(process.env.TANZIL_TXT, 'utf8')) : null;
+  const basT = tz ? tz.surahs.get(1)[0].text : bas;
+  const mk = (n) => (tz ? buildSurah(n, tz.surahs.get(n), basT) : buildSurah(n, bySurah(n).map((r) => ({ ayah: r.ayah, text: r.text })), bas));
 
   // Seeded noise so the test is repeatable.
   let seed = 7;
@@ -66,6 +69,15 @@ if (!fx) {
     return { trail, wrong, last };
   }
 
+  ok('real Tanzil text: basmala split from verse 1 of surah 2', () => {
+    if (!tz) return;
+    const sur = mk(2);
+    assert.ok(sur.basmala.length > 0);
+    assert.equal(sur.verses[0].text.split(/\s+/)[0].includes('ا'), true);
+    assert.equal(sur.verses.length, 286);
+    assert.equal(mk(9).basmala, '');
+    assert.equal(mk(1).verses.length, 7);
+  });
   for (const [s, a, b] of [[1, 1, 7], [2, 1, 20], [112, 1, 4], [36, 1, 30], [55, 1, 30]]) {
     ok(`tracks surah ${s} verses ${a}-${b}`, () => {
       const r = simulate(s, a, b);

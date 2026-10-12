@@ -20,13 +20,16 @@ self.onmessage = async (e) => {
           self.postMessage({ type: 'progress', loaded, total, file: p.file });
         }
       };
-      const attempts = m.device === 'webgpu' ? [['webgpu', 'fp32']] : [['wasm', 'q8']];
-      attempts.push(['wasm', 'q8']);
+      // The repo's 8-bit decoder is ~315 MB, so the decoder uses the 4-bit file (~140 MB);
+      // the encoder 8-bit file is ~23 MB. Falls back to all 8-bit if 4-bit fails.
+      const small = { encoder_model: 'q8', decoder_model_merged: 'q4' };
+      const attempts = m.device === 'webgpu' ? [['webgpu', 'fp32']] : [];
+      attempts.push(['wasm', small], ['wasm', 'q8']);
       let last;
       for (const [device, dtype] of attempts) {
         try {
           asr = await pipeline('automatic-speech-recognition', m.modelId, { device, dtype, progress_callback });
-          self.postMessage({ type: 'ready', device, dtype, loadMs: Math.round(performance.now() - t0) });
+          self.postMessage({ type: 'ready', device, dtype: typeof dtype === 'string' ? dtype : 'enc-q8/dec-q4', loadMs: Math.round(performance.now() - t0) });
           return;
         } catch (err) { last = err; }
       }
