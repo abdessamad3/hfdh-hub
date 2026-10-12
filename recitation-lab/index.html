@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <title>مختبر تتبّع التلاوة</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
+  <style>
+    :root { --bg:#F7F3EA; --card:#fff; --line:#E2DACB; --ink:#1F2A24; --mute:#5C5A4E; --green:#1E5B45; --tint:#E3EEE8; --warn:#8A4B00; --warnbg:#FBEEDC; --bad:#A3271C; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font-family:'IBM Plex Sans Arabic',system-ui,sans-serif; line-height:1.6; }
+    main { max-width:640px; margin:0 auto; padding:16px; display:flex; flex-direction:column; gap:14px; }
+    h1 { font-family:Amiri,serif; font-size:28px; color:var(--green); margin:8px 0 0; }
+    h2 { font-size:17px; margin:0 0 8px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; }
+    .row { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+    label { display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--mute); flex:1 1 140px; }
+    select, input[type=number], input[type=password], input[type=text] { min-height:46px; border:1px solid #D9CFB8; border-radius:10px; padding:0 12px; font:inherit; font-size:16px; background:#FBFAF6; color:var(--ink); }
+    .check { flex-direction:row; align-items:center; gap:10px; min-height:44px; font-size:15px; color:var(--ink); }
+    .check input { width:22px; height:22px; }
+    button { font:inherit; min-height:48px; padding:0 18px; border-radius:12px; border:1px solid var(--line); background:#fff; color:var(--ink); font-size:16px; cursor:pointer; }
+    button.primary { background:var(--green); border-color:var(--green); color:#fff; font-weight:700; }
+    button.danger { background:#fff; color:var(--bad); border-color:var(--bad); }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+    .note { font-size:13px; color:var(--mute); }
+    .warn { background:var(--warnbg); color:var(--warn); border-radius:10px; padding:10px 12px; font-size:14px; }
+    .bar { height:10px; border-radius:5px; background:#ECE5D6; overflow:hidden; }
+    .bar > div { height:100%; width:0; background:var(--green); transition:width .2s; }
+    .hidden { display:none !important; }
+    #setup, #session, #results { display:flex; flex-direction:column; gap:14px; }
+    #session { gap:10px; }
+    .status { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:14px; }
+    .dot { display:inline-block; width:10px; height:10px; border-radius:50%; background:#B7C6BC; margin-inline-end:6px; }
+    .dot.on { background:#E5484D; }
+    #quran { background:#FFFDF7; border:1px solid #D9CFB8; border-radius:8px; box-shadow:inset 0 0 0 4px #F3ECD9; padding:16px 14px; height:52vh; overflow-y:auto; font-family:Amiri,serif; font-size:26px; line-height:2.3; text-align:justify; }
+    #quran .basmala { text-align:center; color:var(--green); border-bottom:1px solid var(--line); margin-bottom:8px; }
+    .verse { border-radius:10px; padding:0 3px; cursor:pointer; }
+    .verse .num { font-size:19px; color:var(--green); }
+    .verse.done { color:#6E8C7C; }
+    .verse.current { background:#FFF0C2; box-shadow:0 0 0 2px #E8C77A; color:var(--ink); }
+    .w.cw { background:#F7D774; border-radius:6px; }
+    .heard { font-size:13px; color:var(--mute); min-height:40px; direction:rtl; }
+    .stats { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+    .stat { background:var(--tint); border-radius:12px; padding:10px 12px; }
+    .stat b { display:block; font-size:22px; color:var(--green); }
+    table { width:100%; border-collapse:collapse; font-size:14px; }
+    td, th { padding:6px 8px; border-top:1px solid var(--line); text-align:start; }
+    code { direction:ltr; unicode-bidi:embed; background:#F1ECDD; padding:1px 5px; border-radius:5px; word-break:break-all; }
+    footer { font-size:12px; color:var(--mute); padding-bottom:30px; }
+    details summary { cursor:pointer; min-height:36px; display:flex; align-items:center; }
+    pre { white-space:pre-wrap; font-size:11px; direction:ltr; text-align:left; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>مختبر تتبّع التلاوة</h1>
+  <div class="note">صفحة تجريبية منفصلة عن التطبيق: الصوت لا يغادر هاتفك.</div>
+
+  <!-- 1. password -->
+  <section id="gate" class="card hidden">
+    <h2>كلمة المرور</h2>
+    <form id="gateForm" class="row">
+      <label>كلمة المرور المشتركة<input id="gatePw" type="password" autocomplete="current-password" required></label>
+      <button class="primary" type="submit">دخول</button>
+    </form>
+    <div id="gateMsg" class="note"></div>
+  </section>
+
+  <!-- 1b. first-time setup of the password hash -->
+  <section id="gateSetup" class="card hidden">
+    <h2>إعداد كلمة المرور (مرة واحدة)</h2>
+    <p class="note">لم تُضبط كلمة مرور بعد، فالصفحة مغلقة. اكتب كلمة مرور جديدة هنا لا تستعملها في أي موقع آخر، وسيظهر رمز طويل. أرسل <b>الرمز</b> فقط إلى Claude، ولا تكتب كلمة المرور نفسها في المحادثة.</p>
+    <form id="setupForm" class="row">
+      <label>كلمة المرور الجديدة<input id="setupPw" type="password" autocomplete="new-password" minlength="6" required></label>
+      <button class="primary" type="submit">أنشئ الرمز</button>
+    </form>
+    <p class="note" id="setupWait"></p>
+    <code id="setupHash"></code>
+  </section>
+
+  <!-- 2. setup -->
+  <section id="setup" class="hidden">
+    <div class="card">
+      <h2>1. النموذج</h2>
+      <div class="note" id="modelInfo">لم يُحمَّل بعد. التحميل الأول كبير، فاستعمل الواي فاي.</div>
+      <div class="bar" style="margin:10px 0"><div id="modelBar"></div></div>
+      <div class="row">
+        <button id="loadBtn" class="primary">تحميل النموذج</button>
+        <label class="check"><input type="checkbox" id="gpuOpt"> استعمل كرت الشاشة (تجريبي)</label>
+      </div>
+    </div>
+    <div class="card">
+      <h2>2. ما ستتلوه</h2>
+      <div class="row">
+        <label>السورة<select id="surahSel"></select></label>
+        <label>من الآية<input id="fromV" type="number" min="1" value="1" inputmode="numeric"></label>
+        <label>إلى الآية<input id="toV" type="number" min="1" value="7" inputmode="numeric"></label>
+      </div>
+      <div class="note">الآية الأخيرة تُستعمل لحساب النتائج فقط.</div>
+    </div>
+    <div class="card">
+      <h2>3. الصوت</h2>
+      <label class="check"><input type="checkbox" id="saveWav"> احتفظ بتسجيل الجلسة كملف WAV أنزّله على هاتفي</label>
+      <div class="row" style="margin-top:6px">
+        <button id="startMic" class="primary" disabled>ابدأ بالميكروفون</button>
+        <label style="flex:1 1 200px">أو جرّب بملف صوتي<input id="fileIn" type="file" accept="audio/*"></label>
+      </div>
+      <div id="setupMsg" class="warn hidden" style="margin-top:10px"></div>
+    </div>
+  </section>
+
+  <!-- 3. session -->
+  <section id="session" class="hidden">
+    <div class="status"><span><span class="dot" id="recDot"></span><span id="statusTxt">جاهز</span></span><span id="timer">0:00</span></div>
+    <div id="quran" aria-live="polite"></div>
+    <div class="heard" id="heard"></div>
+    <div class="row">
+      <button id="prevBtn" style="flex:1">الآية السابقة</button>
+      <button id="nextBtn" style="flex:1">الآية التالية</button>
+    </div>
+    <button id="stopBtn" class="danger">إنهاء الجلسة</button>
+  </section>
+
+  <!-- 4. results -->
+  <section id="results" class="hidden">
+    <div class="card"><h2>النتيجة</h2><div class="stats" id="statGrid"></div></div>
+    <div class="card"><h2>الآيات التي وصل إليها التتبّع</h2><table id="reachTbl"></table></div>
+    <div class="card">
+      <div class="row">
+        <button id="dlJson" class="primary">نزّل ملف النتائج</button>
+        <button id="dlWav">نزّل التسجيل</button>
+        <button id="againBtn">جلسة جديدة</button>
+      </div>
+      <div class="note">أرسل ملف النتائج إلى Claude لتحليله. لا يحتوي على الصوت.</div>
+    </div>
+  </section>
+
+  <footer>
+    نص القرآن (رواية حفص): <a href="https://tanzil.net" target="_blank" rel="noopener">Tanzil Project</a>، رخصة CC BY 3.0، بلا تعديل.
+    <details><summary>إشعار النص</summary><pre id="notice">—</pre></details>
+    النموذج: <code id="modelName"></code>
+  </footer>
+</main>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
