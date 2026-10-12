@@ -29,3 +29,9 @@ npm run dev      # local test, password gate is skipped on localhost
 npm run build    # output in dist/
 FIXTURE_JSON=/path/to/verses.json npm test
 ```
+
+## Hosting
+Deployed as its own Firebase Hosting site (`hifd-lab`, see `firebase.json`) by the same
+GitHub workflow as the main app. The site must exist in the Firebase console first, or the
+deploy fails. It is sent with `Cross-Origin-Opener-Policy` and `Cross-Origin-Embedder-Policy`
+headers, which let the speech runtime use several threads, and with `noindex`.
