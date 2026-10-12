@@ -14,6 +14,12 @@ const isLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
 
 $('modelName').textContent = CONFIG.MODEL_ID;
 
+// Tuning from the address bar, e.g. ?win=8&new=1&thr=4 (window seconds, min new seconds, threads).
+const qs = new URLSearchParams(location.search);
+if (qs.get('win')) CONFIG.WINDOW_SECONDS = Number(qs.get('win'));
+if (qs.get('new')) CONFIG.MIN_NEW_SECONDS = Number(qs.get('new'));
+const THREADS = qs.get('thr') ? Number(qs.get('thr')) : 0;
+
 // ---------- password gate ----------
 async function start() {
   if (!isConfigured()) {
@@ -61,6 +67,10 @@ worker.onmessage = (e) => {
   if (m.type === 'progress') {
     $('modelBar').style.width = m.total ? `${Math.min(100, (m.loaded / m.total) * 100)}%` : '10%';
     $('modelInfo').textContent = `جارٍ التحميل: ${(m.loaded / 1048576).toFixed(0)} من ${(m.total / 1048576).toFixed(0)} ميغابايت`;
+  } else if (m.type === 'note') {
+    noteLog.push(m.message);
+    $('setupMsg').textContent = noteLog.join(' | ');
+    $('setupMsg').classList.remove('hidden');
   } else if (m.type === 'ready') {
     modelReady = true;
     $('modelBar').style.width = '100%';
@@ -75,6 +85,7 @@ worker.onmessage = (e) => {
   }
 };
 let modelInfo = {};
+const noteLog = [];
 const transcribe = (audio) => new Promise((resolve, reject) => {
   const id = ++rid;
   waiting.set(id, { resolve, reject });
@@ -99,7 +110,7 @@ async function openLab() {
   $('loadBtn').onclick = () => {
     $('loadBtn').disabled = true;
     $('modelInfo').textContent = 'جارٍ البدء...';
-    worker.postMessage({ type: 'load', modelId: CONFIG.MODEL_ID, device: $('gpuOpt').checked ? 'webgpu' : 'wasm' });
+    worker.postMessage({ type: 'load', modelId: CONFIG.MODEL_ID, device: $('gpuOpt').checked ? 'webgpu' : 'wasm', threads: THREADS });
   };
   $('startMic').onclick = () => beginSession('mic');
   $('fileIn').onchange = () => { if ($('fileIn').files[0]) beginSession('file'); };
@@ -162,13 +173,14 @@ async function loop() {
     }
     setStatus('يفكّر...', true);
     let r;
+    const winSec = +(win.length / SAMPLE_RATE).toFixed(1);
     try { r = await transcribe(win); } catch (err) { s.log.push({ t: +t.toFixed(2), type: 'error', message: err.message }); setStatus('خطأ: ' + err.message, true); await sleep(1000); continue; }
     if (!s.active) break;
     const heard = normalizeText(r.text);
     const res = tracker.update(heard);
     const tNow = (performance.now() - s.t0) / 1000;
     s.infer.push(r.ms);
-    s.log.push({ t: +tNow.toFixed(2), type: 'infer', ms: r.ms, audioSec: +(win.length / SAMPLE_RATE).toFixed(1), text: r.text, words: heard.length, ...pick(res) });
+    s.log.push({ t: +tNow.toFixed(2), type: 'infer', ms: r.ms, audioSec: winSec, text: r.text, words: heard.length, ...pick(res) });
     $('heard').textContent = r.text ? `سمعتُ: ${r.text}` : '';
     if (res.reason === 'ok') {
       if (res.changedVerse) noteReach(res.verse, tNow);
@@ -264,6 +276,7 @@ async function finish() {
     when: new Date().toISOString(), surah: s.sNo, from: s.from, to: s.to, kind: s.kind,
     durationSec: +dur.toFixed(1), inferences: s.infer.length,
     inferMs: { median: q(0.5), p90: q(0.9), max: sorted[sorted.length - 1] || 0 },
+    window: CONFIG.WINDOW_SECONDS, threads: THREADS || 'auto', crossOriginIsolated: self.crossOriginIsolated, cores: navigator.hardwareConcurrency,
     manualCorrections: s.manual, wrongJumps: s.wrong,
     versesReached: reachedExpected.length, versesExpected: expected.length,
     reached: Object.fromEntries(s.reached), model: CONFIG.MODEL_ID, ...modelInfo, config: { ...CONFIG, PASSWORD_HASH: undefined, PASSWORD_SALT: undefined, PASSWORD_ITERATIONS: undefined },
