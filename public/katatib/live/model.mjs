@@ -4,8 +4,12 @@ export function validateConfig(config) {
   return config;
 }
 export function accessScopes(access) {
-  if (access?.active !== true || !['admin', 'teacher'].includes(access.role)) throw new Error('no-access');
+  if (access?.active !== true || !['admin','manager','teacher','parent','student'].includes(access.role)) throw new Error('no-access');
   if (access.role === 'admin') return [{ field: null, value: null }];
+  if(['parent','student'].includes(access.role)){
+    if(!Array.isArray(access.studentIds)||!access.studentIds.length||access.studentIds.length>10||access.studentIds.some(id=>typeof id!=='string'||!id||/[~/]/.test(id)))throw new Error('no-access');
+    return [...new Set(access.studentIds)].map(value=>({field:'__name__',value}));
+  }
   const fields = [['kuttabNames', 'kuttabName'], ['teacherIds', 'teacherId']];
   const scopes = fields.flatMap(([key, field]) => {
     const values = access[key] ?? [];

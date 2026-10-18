@@ -1,3 +1,5 @@
+import { createWorkspace, workspaceLabels } from './workspace.mjs';
+const workspace = createWorkspace();
 import { learningProgress } from './progress.mjs';
 import { LEARNING_KINDS, cleanLearning, currentLearning, isGradedLearning } from './learning.mjs';
 import { businessDate, CLOUD_STATUSES, CLOUD_SESSIONS, attendanceId, sameAttendance } from './attendance.mjs';
@@ -37,8 +39,9 @@ const copy = {
     present:'Présent', absent:'Absent', excused:'Excusé', late:'En retard', leftEarly:'Parti tôt', session:'Numéro de séance dans la copie d’origine', admin:'Administrateur du test', teacher:'Enseignant',
   },
 };
+let allStudents = [];
 let language = 'ar', gateway, user = null, students = [], role = '', capped = false, state = 'loading', error = '', search = '', school = '', epoch = 0, historyEpoch = 0, pendingLogin = false;
-const t = key => copy[language][key] || copy[language].error;
+const t = key => copy[language][key] || workspaceLabels[language][key] || copy[language].error;
 const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const value = (n,precision=2) => n == null ? t('unknown') : new Intl.NumberFormat(language === 'ar' ? 'ar-MA' : 'fr-FR', {maximumFractionDigits:precision}).format(n);
 function errorKey(e) {
@@ -58,8 +61,8 @@ let screen = 'today', cloudContext = {date:businessDate(),session:'morning'}, cl
 const rowKey = id => attendanceId(id, cloudContext.date, cloudContext.session);
 const cloudRow = id => cloudRows.get(rowKey(id));
 const rowDirty = row => row && !sameAttendance(row.base,row.draft);
-function hasDrafts() {return learningTouched||!!learningPending||[...cloudRows.values()].some(rowDirty);}
-function hasSaves() {return learningSaving||[...cloudRows.values()].some(row=>row.saving);}
+function hasDrafts() {return workspace.dirty()||learningTouched||!!learningPending||[...cloudRows.values()].some(rowDirty);}
+function hasSaves() {return workspace.busy()||learningSaving||[...cloudRows.values()].some(row=>row.saving);}
 function attendanceControls() {
   return `<div class="live-filter cloud-controls"><label>${t('date')}<input id="cloud-date" type="date" value="${cloudContext.date}" ${hasSaves()?'disabled':''}></label><label>${t('cloudSession')}<select id="cloud-session" ${hasSaves()?'disabled':''}>${CLOUD_SESSIONS.map(s=>`<option value="${s}" ${cloudContext.session===s?'selected':''}>${t(s)}</option>`).join('')}</select></label></div><p class="live-status">${t('cloudHint')}</p>${attendanceState==='loading'?`<p role="status">${t('loading')}</p>`:''}${attendanceState==='error'?`<p class="notice-error" role="alert">${t('cloudLoadError')}</p><button class="secondary-button" data-action="reload-attendance">${t('retry')}</button>`:''}`;
 }
@@ -169,19 +172,21 @@ async function saveLearning(event) {
   if(generation===epoch&&learningSaved)loadLearning();
 }
 
-const icons={today:'◈',students:'◉',attendance:'✓',learning:'▤'};
-const screens=['today','students','attendance','learning'];
-const screenTitle=()=>t({today:'today',students:'studentsTab',attendance:'cloudAttendance',learning:'learningTab'}[screen]);
+const icons={today:'◈',students:'◉',attendance:'✓',learning:'▤',tasks:'◷',reports:'▥',manage:'⚙',access:'♙',audit:'≡'};
+const extraScreens=['tasks','reports','manage','access','audit'];
+const screens=()=>['today','students',...(['parent','student'].includes(role)?[]:['attendance','learning']),'tasks','reports',...(['admin','manager'].includes(role)?['manage']:[]),...(role==='admin'?['access','audit']:[])];
+const titleKey=s=>({today:'today',students:'studentsTab',attendance:'cloudAttendance',learning:'learningTab'}[s]||s);
+const screenTitle=()=>t(titleKey(screen));
 const displayName=()=>user?.displayName?.trim()||user?.email||t('workspaceTitle');
 const initials=name=>Array.from(name.trim()).slice(0,2).join('').toLocaleUpperCase();
 function languageSwitch(){return `<div class="language-switch" role="group" aria-label="Language / اللغة"><button data-lang="fr" class="${language==='fr'?'active':''}" aria-pressed="${language==='fr'}">FR</button><button data-lang="ar" class="${language==='ar'?'active':''}" aria-pressed="${language==='ar'}">عربي</button></div>`;}
 function accountChip(){return `<div class="teacher-chip"><span class="avatar" aria-hidden="true">${escape(initials(displayName()))}</span><div><strong>${escape(displayName())}</strong><small>${role?t(role):t('loading')}</small></div></div>`;}
-function sidebar(){return `<aside class="sidebar unified-sidebar"><div class="brand"><span class="brand-symbol" aria-hidden="true">${bookIcon()}</span><div><div class="brand-name">${t('brand')}</div><div class="brand-caption">${t('brandCaption')}</div></div></div><p class="nav-label">${t('workspaceTitle')}</p><nav aria-label="${t('workspaceTitle')}">${screens.map(s=>`<button type="button" data-screen="${s}" class="nav-link ${screen===s?'active':''}" aria-pressed="${screen===s}" ${screen===s?'aria-current="page"':''}><span class="unified-nav-icon" aria-hidden="true">${icons[s]}</span><span>${t({today:'today',students:'studentsTab',attendance:'cloudAttendance',learning:'learningTab'}[s])}</span></button>`).join('')}</nav><div class="sidebar-bottom"><div class="sidebar-note"><strong>${t('testBadge')}</strong>${t('notice')}</div>${accountChip()}</div></aside>`;}
+function sidebar(){return `<aside class="sidebar unified-sidebar"><div class="brand"><span class="brand-symbol" aria-hidden="true">${bookIcon()}</span><div><div class="brand-name">${t('brand')}</div><div class="brand-caption">${t('brandCaption')}</div></div></div><p class="nav-label">${t('workspaceTitle')}</p><nav aria-label="${t('workspaceTitle')}">${screens().map(s=>`<button type="button" data-screen="${s}" class="nav-link ${screen===s?'active':''}" aria-pressed="${screen===s}" ${screen===s?'aria-current="page"':''}><span class="unified-nav-icon" aria-hidden="true">${icons[s]}</span><span>${t(titleKey(s))}</span></button>`).join('')}</nav><div class="sidebar-bottom"><div class="sidebar-note"><strong>${t('testBadge')}</strong>${t('notice')}</div>${accountChip()}</div></aside>`;}
 function bookIcon(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4c4-1 7 0 9 2 2-2 5-3 9-2v15c-4-1-7 0-9 2-2-2-5-3-9-2ZM12 6v15"/></svg>';}
 function todayView(){
  const groups=new Set(students.map(s=>s.kuttab).filter(Boolean));
  const drafts=[...cloudRows.values()].filter(rowDirty).length+(learningTouched||learningPending?1:0);
- return `<section class="hero unified-hero"><div class="hero-copy"><p class="hero-kicker">${t('todayKicker')}</p><h2>${t('todayHero')}</h2><p>${t('todayIntro')}</p><div class="hero-cta"><button class="primary-button" data-action="open-attendance">${t('cloudAttendance')}</button><button class="secondary-button" data-action="open-learning">${t('learningTab')}</button></div></div><div class="hero-emblem" aria-hidden="true">${bookIcon()}</div></section><div class="stats-grid"><div class="stat-card"><div><p class="stat-label">${t('studentsTab')}</p><div class="stat-value" data-dashboard-students>${value(students.length)}</div><p class="stat-detail">${t('authorizedRoster')}</p></div><span class="stat-icon" aria-hidden="true">◉</span></div><div class="stat-card"><div><p class="stat-label">${t('school')}</p><div class="stat-value">${value(groups.size)}</div><p class="stat-detail">${t('authorizedGroups')}</p></div><span class="stat-icon" aria-hidden="true">▤</span></div><div class="stat-card"><div><p class="stat-label">${t('draftsTitle')}</p><div class="stat-value">${value(drafts)}</div><p class="stat-detail">${t('draftsCaption')}</p></div><span class="stat-icon" aria-hidden="true">✎</span></div></div><div class="section-heading"><div><h2>${t('studentsTab')}</h2><p>${t('rosterSubtitle')}</p></div><button class="text-button" data-action="open-students">${t('viewAll')}</button></div><div class="student-cards">${students.slice(0,4).map(s=>studentCard(s)).join('')||`<p class="empty-state">${t('empty')}</p>`}</div>`;
+ return `<section class="hero unified-hero"><div class="hero-copy"><p class="hero-kicker">${t('todayKicker')}</p><h2>${t('todayHero')}</h2><p>${t('todayIntro')}</p><div class="hero-cta">${['parent','student'].includes(role)?`<button class="primary-button" data-action="open-tasks">${t('tasks')}</button><button class="secondary-button" data-action="open-students">${t('studentsTab')}</button>`:`<button class="primary-button" data-action="open-attendance">${t('cloudAttendance')}</button><button class="secondary-button" data-action="open-learning">${t('learningTab')}</button>`}</div></div><div class="hero-emblem" aria-hidden="true">${bookIcon()}</div></section><div class="stats-grid"><div class="stat-card"><div><p class="stat-label">${t('studentsTab')}</p><div class="stat-value" data-dashboard-students>${value(students.length)}</div><p class="stat-detail">${t('authorizedRoster')}</p></div><span class="stat-icon" aria-hidden="true">◉</span></div><div class="stat-card"><div><p class="stat-label">${t('school')}</p><div class="stat-value">${value(groups.size)}</div><p class="stat-detail">${t('authorizedGroups')}</p></div><span class="stat-icon" aria-hidden="true">▤</span></div><div class="stat-card"><div><p class="stat-label">${t('draftsTitle')}</p><div class="stat-value">${value(drafts)}</div><p class="stat-detail">${t('draftsCaption')}</p></div><span class="stat-icon" aria-hidden="true">✎</span></div></div><div class="section-heading"><div><h2>${t('studentsTab')}</h2><p>${t('rosterSubtitle')}</p></div><button class="text-button" data-action="open-students">${t('viewAll')}</button></div><div class="student-cards">${students.slice(0,4).map(s=>studentCard(s)).join('')||`<p class="empty-state">${t('empty')}</p>`}</div>`;
 }
 function studentCard(s){
  return `<article class="student-card live-student"><span class="avatar ${['sage','sand','lavender','blue'][Array.from(s.id).reduce((sum,c)=>sum+c.charCodeAt(0),0)%4]}" aria-hidden="true">${escape(initials(s.name||'?'))}</span><h3>${escape(s.name||t('unknown'))}</h3><p>${escape(s.kuttab||t('unknown'))}</p><div class="progress-heading"><span>${t('hizbs')}</span><strong>${value(s.hizbs)}</strong></div><button class="text-button" data-profile="${escape(s.id)}">${t('profile')} <span aria-hidden="true">←</span></button></article>`;
@@ -195,11 +200,13 @@ function render(){
   root.innerHTML=`<div class="login-shell"><header class="unified-login-header">${brand}<div class="live-actions"><span class="demo-pill">${t('testBadge')}</span>${languageSwitch()}</div></header><div class="unified-login-grid"><section class="login-story"><p class="eyebrow">${t('brandCaption')}</p><h1>${t('loginHero')}</h1><p>${t('loginStory')}</p><div class="login-story-mark" aria-hidden="true">${bookIcon()}</div></section><section class="panel live-panel login-panel"><p class="eyebrow">${t('workspaceTitle')}</p><h2>${state==='loading'?t('loading'):t('welcome')}</h2><p>${t('intro')}</p>${errorNotice()}${gateway?`<button data-action="login" class="primary-button" ${pendingLogin?'disabled':''}>${t('login')}</button>`:''}${state==='error'?`<button data-action="retry" class="secondary-button">${t('retry')}</button>`:''}<p class="login-footnote">${t('notice')}</p></section></div></div>`;
   return;
  }
- const body=state==='ready'?(screen==='today'?todayView():`${screen==='attendance'?attendanceControls():''}${capped?`<p class="notice-error">${t('capped')}</p>`:''}${screen!=='learning'?rosterFilters():''}<div id="live-students" class="${screen==='learning'?'learning-layout':'student-cards'}">${renderResults()}</div>`):`<section class="panel live-panel"><h2>${state==='loading'?t('loading'):t('welcome')}</h2>${state==='error'?`<button data-action="retry" class="secondary-button">${t('retry')}</button>`:''}</section>`;
- root.innerHTML=`<div class="app-shell">${sidebar()}<div class="workspace"><header class="topbar"><div class="breadcrumb"><span>${t('brand')}</span><span>/</span><b>${t('workspaceTitle')}</b></div><div class="unified-mobile-brand">${brand}</div><div class="top-actions"><span class="demo-pill"><i class="dot"></i>${t('testBadge')}</span>${languageSwitch()}<button class="text-button unified-logout" data-action="logout">${t('logout')}</button></div></header><main class="content unified-content"><div class="page-heading"><div><p class="eyebrow">${t('workspaceTitle')}</p><h1>${screen==='today'?`${t('greeting')} ${escape(displayName())}`:screenTitle()}</h1><p class="heading-caption">${t(screen==='today'?'todayIntro':screen==='students'?'rosterSubtitle':screen==='attendance'?'attendanceSubtitle':'learningSubtitle')}</p></div><span class="heading-date">${new Intl.DateTimeFormat(language==='ar'?'ar-MA':'fr-FR',{dateStyle:'long',timeZone:'Africa/Casablanca'}).format(new Date())}</span></div>${errorNotice()}${body}<footer class="footer-note"><span>${t('notice')}</span><span>${escape(user.email||'')}</span></footer></main></div></div>`;
+ const body=state==='ready'?(screen==='today'?todayView():extraScreens.includes(screen)?'<div id="work-root"></div>':`${screen==='attendance'?attendanceControls():''}${capped?`<p class="notice-error">${t('capped')}</p>`:''}${screen!=='learning'?rosterFilters():''}<div id="live-students" class="${screen==='learning'?'learning-layout':'student-cards'}">${renderResults()}</div>`):`<section class="panel live-panel"><h2>${state==='loading'?t('loading'):t('welcome')}</h2>${state==='error'?`<button data-action="retry" class="secondary-button">${t('retry')}</button>`:''}</section>`;
+ root.innerHTML=`<div class="app-shell">${sidebar()}<div class="workspace"><header class="topbar"><div class="breadcrumb"><span>${t('brand')}</span><span>/</span><b>${t('workspaceTitle')}</b></div><div class="unified-mobile-brand">${brand}</div><div class="top-actions"><span class="demo-pill"><i class="dot"></i>${t('testBadge')}</span>${languageSwitch()}<button class="text-button unified-logout" data-action="logout">${t('logout')}</button></div></header><main class="content unified-content"><div class="page-heading"><div><p class="eyebrow">${t('workspaceTitle')}</p><h1>${screen==='today'?`${t('greeting')} ${escape(displayName())}`:screenTitle()}</h1><p class="heading-caption">${extraScreens.includes(screen)?'':t(screen==='today'?'todayIntro':screen==='students'?'rosterSubtitle':screen==='attendance'?'attendanceSubtitle':'learningSubtitle')}</p></div><span class="heading-date">${new Intl.DateTimeFormat(language==='ar'?'ar-MA':'fr-FR',{dateStyle:'long',timeZone:'Africa/Casablanca'}).format(new Date())}</span></div>${errorNotice()}${body}<footer class="footer-note"><span>${t('notice')}</span><span>${escape(user.email||'')}</span></footer></main></div></div>`;
+ if(state==='ready'&&extraScreens.includes(screen))workspace.mount(document.getElementById('work-root'),{page:screen,gateway,user,role,students:allStudents,language,refresh:loadStudents});
 }
 
 function clearData() {
+  workspace.reset();allStudents=[];
   learningEpoch++;learningForm=blankLearning();learningRecords=[];learningState='idle';learningError='';learningSaved=false;learningSaving=false;learningPending=null;learningTouched=false;
   attendanceEpoch++; cloudRows.clear(); attendanceState='idle'; screen='today'; cloudContext={date:businessDate(),session:'morning'};
   epoch++; historyEpoch++; students = []; role = ''; capped = false; search = ''; school = ''; dialog.close(); dialog.replaceChildren();
@@ -210,8 +217,8 @@ async function loadStudents() {
   try {
     const result = await gateway.students(user);
     if (generation !== epoch) return;
-    students = result.students; role = result.role; capped = result.capped; state = 'ready';
-  } catch (e) { if (generation !== epoch) return; students = []; state = 'error'; error = errorKey(e); }
+    allStudents = result.students; students = allStudents.filter(s=>s.status!=='archived'); role = result.role; capped = result.capped; state = 'ready';
+  } catch (e) { if (generation !== epoch) return; students = [];allStudents=[];workspace.reset(); state = 'error'; error = errorKey(e); }
   render();
 }
 async function start() {
@@ -242,6 +249,9 @@ dialog.addEventListener('click', e=>{ if(e.target.closest('[data-close]')) dialo
 dialog.addEventListener('close',()=>{historyEpoch++;dialog.replaceChildren();if(trigger?.isConnected)trigger.focus();});
 root.addEventListener('click', async e => {
   const b = e.target.closest('button'); if (!b || b.disabled) return;
+  const nextScreen=b.dataset.screen|| (b.dataset.action?.startsWith('open-')?b.dataset.action.slice(5):null);
+  if(nextScreen&&(!screens().includes(nextScreen)||workspace.busy()||extraScreens.includes(screen)&&nextScreen!==screen&&!workspace.canLeave()))return;
+  if(nextScreen&&nextScreen!==screen&&extraScreens.includes(screen))workspace.reset();
   if(b.dataset.action?.startsWith('open-')){screen=b.dataset.action.slice(5);if(screen==='attendance')loadAttendance();else if(screen==='learning')loadLearning();else render();window.scrollTo(0,0);}
   else if (b.dataset.screen) {screen=b.dataset.screen;if(screen==='attendance')loadAttendance();else if(screen==='learning')loadLearning();else render();}
   else if(b.dataset.learningCorrect){
@@ -262,6 +272,7 @@ root.addEventListener('click', async e => {
     pendingLogin = true; error = ''; render();
     try { await gateway.login(); } catch (e) { error = errorKey(e); } finally { pendingLogin = false; render(); }
   } else if (b.dataset.action === 'logout') {
+    if(hasSaves())return;
     if(hasDrafts()&&!confirm(t('cloudLeave')))return;
     clearData(); user = null; state = 'signed-out'; error = ''; render();
     try { await gateway.logout(); } catch { error = 'error'; render(); }

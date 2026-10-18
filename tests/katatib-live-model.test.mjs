@@ -23,3 +23,9 @@ test('overlapping permitted scopes do not duplicate students',()=>{
   const a={id:'a',name:'Amine'}, b={id:'b',name:'Basma'};
   assert.deepEqual(mergeStudents([[b,a],[a]]),[a,b]);
 });
+
+test('manager assignments and explicit portal links stay scoped',()=>{
+ assert.deepEqual(accessScopes({active:true,role:'manager',kuttabNames:['One']}),[{field:'kuttabName',value:'One'}]);
+ assert.deepEqual(accessScopes({active:true,role:'parent',studentIds:['a','a']}),[{field:'__name__',value:'a'}]);
+ assert.throws(()=>accessScopes({active:true,role:'parent',studentIds:['a/b']}));
+});

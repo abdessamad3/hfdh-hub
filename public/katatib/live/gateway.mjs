@@ -1,3 +1,4 @@
+import { readPages, commitWorkspace, STAFF_ROLES } from './workspace-model.mjs';
 import { createSessionAuth } from './auth-session.mjs';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js';
 import { initializeAuth, browserSessionPersistence, browserPopupRedirectResolver, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js';
@@ -23,11 +24,52 @@ export async function connect() {
       if (!access.exists()) throw new Error('no-access');
       const scopes = accessScopes(access.data());
       const batches = await Promise.all(scopes.map(async scope => {
-        const filters = scope.field ? [where(scope.field, '==', scope.value)] : [];
-        const snapshot = await getDocsFromServer(query(collection(db, 'students'), ...filters, limit(100)));
-        return snapshot.docs.map(d => studentView(d.id, d.data()));
+        const filters = scope.field ? [where(scope.field==='__name__'?documentId():scope.field, '==', scope.value)] : [];
+        const original=await readPages(async after=>{
+          const snapshot=await getDocsFromServer(query(collection(db,'students'),...filters,orderBy(documentId()),...(after?[startAfter(after)]:[]),limit(100)));
+          return snapshot.docs.map(d=>({id:d.id,...d.data()}));
+        });
+        const added=await readPages(async after=>{
+          const snapshot=await getDocsFromServer(query(collection(db,'katatib_students'),...filters,orderBy(documentId()),...(after?[startAfter(after)]:[]),limit(100)));
+          return snapshot.docs.map(d=>({id:d.id,...d.data()}));
+        });
+        const overlays=new Map(added.map(r=>[r.id,r]));
+        // Source permissions and identity fields stay unchanged. Only explicit V2 profile fields overlay the copy.
+        const out=original.map(raw=>{
+          const profile=overlays.get(raw.id);overlays.delete(raw.id);
+          return {...studentView(raw.id,{...raw,...profile}),teacherId:raw.teacherId||'',group:profile?.group||'',status:profile?.status||'active',profileRevision:profile?.revision||0,source:'copy'};
+        });
+        for(const raw of overlays.values())if(raw.source==='new')out.push({...studentView(raw.id,raw),teacherId:raw.teacherId||'',group:raw.group,status:raw.status,profileRevision:raw.revision,source:'new'});
+        return out;
       }));
-      return { students: mergeStudents(batches), role: access.data().role, capped: batches.some(b => b.length === 100) };
+      return { students: mergeStudents(batches), role: access.data().role, capped: false };
+    },
+    async workspaceList(name,studentId) {
+      if(!['katatib_tasks','katatib_access','katatib_audit','katatib_attendance'].includes(name))throw new Error('invalid-collection');
+      return readPages(async after=>{
+        const filters=studentId?[where('studentId','==',studentId)]:[];
+        const snapshot=await getDocsFromServer(query(collection(db,name),...filters,orderBy(documentId()),...(after?[startAfter(after)]:[]),limit(100)));
+        return snapshot.docs.map(d=>({...d.data(),id:d.id}));
+      });
+    },
+    async workspaceSave(name,id,input,revision,eventId) {
+      if(!auth.currentUser)throw new Error('no-access');
+      return commitWorkspace(db,{doc,runTransaction,serverTimestamp},auth.currentUser.uid,name,id,input,revision,eventId);
+    },
+    async importStudents(rows) {
+      // All records are checked before writing. Fixed IDs make a partial retry resume without duplication.
+      for(const r of rows){const snap=await getDocFromServer(doc(db,'students',r.id));if(snap.exists())throw new Error('import-id-exists');}
+      const results=[];
+      for(const row of rows){
+        const {id,...input}=row,snap=await getDocFromServer(doc(db,'katatib_students',id));
+        if(snap.exists()){
+          const stored=snap.data();if(Object.entries(input).some(([k,v])=>stored[k]!==v))throw new Error('import-id-exists');
+          results.push(id);continue;
+        }
+        await commitWorkspace(db,{doc,runTransaction,serverTimestamp},auth.currentUser.uid,'katatib_students',id,input,0,crypto.randomUUID());results.push(id);
+      }
+      return results;
+
     },
     async saveLearning(input, id) {
       if(!auth.currentUser)throw new Error('no-access');
@@ -58,7 +100,7 @@ export async function connect() {
     async history(id) {
       // Recheck the student with server rules before reading a bounded history query.
       const student = await getDocFromServer(doc(db, 'students', id));
-      if (!student.exists()) throw new Error('no-access');
+      if (!student.exists()) { const added=await getDocFromServer(doc(db,'katatib_students',id));if(!added.exists())throw new Error('no-access');return []; }
       const snapshot = await getDocsFromServer(query(collection(db, 'attendance'), where('studentId', '==', id), limit(20)));
       return snapshot.docs.map(d => { const x = d.data(); return { date: typeof x.date === 'string' ? x.date : '', status: typeof x.status === 'string' ? x.status : '', session: Number.isInteger(x.sessionIndex) ? x.sessionIndex : null }; }).sort((a,b) => b.date.localeCompare(a.date));
     },

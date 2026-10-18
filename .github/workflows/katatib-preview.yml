@@ -35,6 +35,7 @@ jobs:
           node tests/katatib-cloud-attendance.test.mjs
           node tests/katatib-learning.test.mjs
           node tests/katatib-progress.test.mjs
+          node tests/katatib-workspace.test.mjs
           node --check public/katatib/live/app.mjs
           node --check public/katatib/live/gateway.mjs
           bash -n scripts/deploy-katatib-connected.sh

@@ -10,24 +10,32 @@ service cloud.firestore {
     function access() { return get(/databases/$(database)/documents/katatib_access/$(email())).data; }
     function member() {
       return googleUser() && exists(/databases/$(database)/documents/katatib_access/$(email())) &&
-        access().get('active', false) == true && access().get('role', '') in ['admin', 'teacher'];
+        access().get('active', false) == true && access().get('role', '') in ['admin', 'manager', 'teacher', 'parent', 'student'];
     }
     function studentAllowed(data) {
-      return member() && (access().role == 'admin' ||
+      return member() && (access().role == 'admin' || (access().role in ['manager','teacher'] && (
         data.get('kuttabName', '') in access().get('kuttabNames', []) ||
-        data.get('teacherId', '') in access().get('teacherIds', []));
+        data.get('teacherId', '') in access().get('teacherIds', []))));
+    }
+    function staff() { return member() && access().role in ['admin','manager','teacher']; }
+    function linkedStudent(id) { return member() && access().role in ['parent','student'] && id in access().get('studentIds', []); }
+    function studentIdAllowed(id) {
+      return linkedStudent(id) || (exists(/databases/$(database)/documents/students/$(id)) && studentAllowed(get(/databases/$(database)/documents/students/$(id)).data)) ||
+        (exists(/databases/$(database)/documents/katatib_students/$(id)) && studentAllowed(get(/databases/$(database)/documents/katatib_students/$(id)).data));
     }
     function historyAllowed(data) {
       return data.get('studentId', null) is string &&
-        studentAllowed(get(/databases/$(database)/documents/students/$(data.studentId)).data);
+        studentIdAllowed(data.studentId);
     }
     match /katatib_access/{address} {
-      allow get: if googleUser() && address == email();
-      allow list, write: if false;
+      allow get: if member() && access().role == 'admin' || googleUser() && address == email();
+      allow list: if member() && access().role == 'admin' && request.query.limit <= 100;
+      allow create, update: if member() && access().role == 'admin' && address != email() && validAccess(request.resource.data, address) && workspaceRevision() && audited('katatib_access',address,request.resource.data);
+      allow delete: if false;
     }
     match /students/{id} {
-      allow get: if studentAllowed(resource.data);
-      allow list: if request.query.limit <= 100 && studentAllowed(resource.data);
+      allow get: if staff() && !exists(/databases/$(database)/documents/students/$(id)) || studentAllowed(resource.data) || linkedStudent(id);
+      allow list: if request.query.limit <= 100 && (studentAllowed(resource.data) || linkedStudent(id));
       allow write: if false;
     }
     match /attendance/{id} {
@@ -45,7 +53,7 @@ service cloud.firestore {
         d.status in ['present', 'absent', 'excused', 'late', 'leftEarly', 'unmarked'] &&
         d.note is string && d.note.size() <= 500 && d.revision is int && d.revision > 0 &&
         d.updatedBy == request.auth.uid && d.updatedAt == request.time &&
-        d.eventId is string && d.eventId.matches('[A-Za-z0-9-]{16,80}') && historyAllowed(d);
+        staff() && d.eventId is string && d.eventId.matches('[A-Za-z0-9-]{16,80}') && historyAllowed(d);
     }
     function appendedHistory(d) {
       return !exists(/databases/$(database)/documents/katatib_attendance_history/$(d.eventId)) &&
@@ -54,7 +62,7 @@ service cloud.firestore {
     match /katatib_attendance/{id} {
       // Missing records contain no student data. Creation is checked against the actual student.
       allow get: if member() && (!exists(/databases/$(database)/documents/katatib_attendance/$(id)) || historyAllowed(resource.data));
-      allow list: if false;
+      allow list: if request.query.limit <= 100 && historyAllowed(resource.data);
       allow create: if validAttendance(request.resource.data, id) && request.resource.data.revision == 1 && appendedHistory(request.resource.data);
       allow update: if validAttendance(request.resource.data, id) &&
         request.resource.data.studentId == resource.data.studentId &&
@@ -74,7 +82,7 @@ service cloud.firestore {
       return id.matches('[A-Za-z0-9-]{16,80}') &&
         d.keys().hasAll(['schemaVersion','studentId','kind','date','session','hizb','fromEighth','toEighth','quantity','mistakes','score','note','supersedesId','createdBy','createdAt']) &&
         d.keys().hasOnly(['schemaVersion','studentId','kind','date','session','hizb','fromEighth','toEighth','quantity','mistakes','score','note','supersedesId','createdBy','createdAt']) &&
-        d.schemaVersion == 2 && historyAllowed(d) &&
+        d.schemaVersion == 2 && staff() && historyAllowed(d) &&
         d.kind in ['memorization','practice','revision','evaluation'] &&
         d.date is string && d.date.matches('[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])') &&
         d.session in ['morning','afternoon','evening'] &&
@@ -98,6 +106,64 @@ service cloud.firestore {
       allow get: if member() && (!exists(/databases/$(database)/documents/katatib_learning/$(id)) || historyAllowed(resource.data));
       allow list: if request.query.limit <= 30 && historyAllowed(resource.data);
       allow create: if validLearning(request.resource.data, id);
+      allow update, delete: if false;
+    }
+
+    function validMeta(d) {
+      return d.schemaVersion == 1 && d.revision is int && d.revision > 0 && d.updatedBy == request.auth.uid && d.updatedAt == request.time && d.eventId is string && d.eventId.matches('[A-Za-z0-9_-]{1,128}');
+    }
+    function workspaceRevision() { return request.resource.data.revision == (request.method == 'create' ? 1 : resource.data.get('revision',0) + 1); }
+    function audited(c,id,d) {
+      return !exists(/databases/$(database)/documents/katatib_audit/$(d.eventId)) &&
+        getAfter(/databases/$(database)/documents/katatib_audit/$(d.eventId)).data == {'collection':c,'recordId':id,'snapshot':d};
+    }
+    function manage() { return staff() && access().role in ['admin','manager']; }
+    function validProfile(d,id) {
+      return d.keys().hasOnly(['schemaVersion','name','kuttabName','teacherId','group','age','status','source','revision','updatedBy','updatedAt','eventId']) && validMeta(d) &&
+        d.name is string && d.name.size() > 0 && d.name.size() <= 120 && d.kuttabName is string && d.kuttabName.size() > 0 && d.kuttabName.size() <= 120 &&
+        d.teacherId is string && d.teacherId.size() <= 128 && d.group is string && d.group.size() <= 80 &&
+        (d.age == null || d.age is int && d.age >= 1 && d.age <= 120) && d.status in ['active','archived'] &&
+        ((d.source == 'copy' && exists(/databases/$(database)/documents/students/$(id)) &&
+          d.kuttabName == get(/databases/$(database)/documents/students/$(id)).data.get('kuttabName','') &&
+          d.teacherId == get(/databases/$(database)/documents/students/$(id)).data.get('teacherId','')) ||
+         (d.source == 'new' && !exists(/databases/$(database)/documents/students/$(id)))) && studentAllowed(d);
+    }
+    match /katatib_students/{id} {
+      allow get: if member() && (!exists(/databases/$(database)/documents/katatib_students/$(id)) || linkedStudent(id) || studentAllowed(resource.data));
+      allow list: if request.query.limit <= 100 && (studentAllowed(resource.data) || linkedStudent(id));
+      allow create: if manage() && validProfile(request.resource.data,id) && request.resource.data.revision == 1 && audited('katatib_students',id,request.resource.data);
+      allow update: if manage() && studentAllowed(resource.data) && validProfile(request.resource.data,id) && workspaceRevision() &&
+        request.resource.data.source == resource.data.source && request.resource.data.kuttabName == resource.data.kuttabName && request.resource.data.teacherId == resource.data.teacherId && audited('katatib_students',id,request.resource.data);
+      allow delete: if false;
+    }
+    function validTask(d) {
+      return d.keys().hasOnly(['schemaVersion','studentId','kind','due','hizb','fromEighth','toEighth','note','status','revision','updatedBy','updatedAt','eventId']) && validMeta(d) && historyAllowed(d) &&
+        d.kind in ['memorization','revision'] && d.status in ['planned','done','cancelled'] &&
+        d.due is string && d.due.matches('[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])') &&
+        d.hizb is int && d.hizb >= 1 && d.hizb <= 60 && d.fromEighth is int && d.fromEighth >= 1 && d.fromEighth <= 8 && d.toEighth is int && d.toEighth >= d.fromEighth && d.toEighth <= 8 &&
+        d.note is string && d.note.size() <= 500;
+    }
+    match /katatib_tasks/{id} {
+      allow get: if member() && (!exists(/databases/$(database)/documents/katatib_tasks/$(id)) || historyAllowed(resource.data));
+      allow list: if request.query.limit <= 100 && historyAllowed(resource.data);
+      allow create: if staff() && validTask(request.resource.data) && request.resource.data.revision == 1 && audited('katatib_tasks',id,request.resource.data);
+      allow update: if staff() && historyAllowed(resource.data) && validTask(request.resource.data) && request.resource.data.studentId == resource.data.studentId && workspaceRevision() && audited('katatib_tasks',id,request.resource.data);
+      allow delete: if false;
+    }
+    function validAccess(d,address) {
+      return d.keys().hasOnly(['schemaVersion','active','role','kuttabNames','teacherIds','studentIds','revision','updatedBy','updatedAt','eventId']) && validMeta(d) &&
+        address.matches('[^/ @]+@[^/ @]+\\.[^/ @]+') && address == address.lower() &&
+        d.active is bool && d.role in ['admin','manager','teacher','parent','student'] &&
+        d.kuttabNames is list && d.kuttabNames.size() <= 10 && d.teacherIds is list && d.teacherIds.size() <= 10 && d.studentIds is list && d.studentIds.size() <= 10 &&
+        (d.role == 'admin' || (d.role in ['parent','student'] ? d.studentIds.size() > 0 : d.kuttabNames.size() + d.teacherIds.size() > 0));
+    }
+    match /katatib_audit/{id} {
+      allow get, list: if member() && access().role == 'admin' && (request.method == 'get' || request.query.limit <= 100);
+      allow create: if member() && request.resource.data.keys().hasOnly(['collection','recordId','snapshot']) &&
+        request.resource.data.collection in ['katatib_students','katatib_tasks','katatib_access'] &&
+        request.resource.data.recordId is string && request.resource.data.snapshot.eventId == id &&
+        request.resource.data.snapshot.updatedBy == request.auth.uid && request.resource.data.snapshot.updatedAt == request.time &&
+        getAfter(/databases/$(database)/documents/$(request.resource.data.collection)/$(request.resource.data.recordId)).data == request.resource.data.snapshot;
       allow update, delete: if false;
     }
     match /{document=**} { allow read, write: if false; }
