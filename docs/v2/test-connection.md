@@ -131,3 +131,9 @@ The root `/` now serves the connected teacher app directly, using the same cream
 This change keeps the same Firebase app name, session persistence and test database. Existing saved attendance, learning versions and copied students are reused unchanged. The original production site/config is untouched. The product still has the previously documented functional limits; unifying the interface does not implement the remaining Mushaf, reports, student/parent portal or management features.
 
 Deploy with the existing connected script after pulling the branch, then open only `https://katatib-64049.web.app/`. Sign in once if needed, and test Today → Students/profile → Attendance/save → Learning/save/edit/progress → refresh. Browser checks exercise this single entry and real-account/roster-derived dashboard data with mocked backend responses; emulator and actual Auth persistence checks remain in place.
+
+## Integrated management release
+
+See [the integrated release report](integrated-release.md) for the current behavior. The same homepage now includes role-aware student management, reversible archives, validated CSV import, tasks, monthly V2 reports, Excel-compatible export/printing, administrator access management and read-only linked-family views. Profile/task/access edits require paired immutable audit snapshots. Roster reads paginate rather than stop silently at 100.
+
+Earlier paragraphs describing a teacher-only reader or separate demo are historical milestones. PIN login, Warsh Mushaf, recordings, a durable offline queue and the other items listed in the release report are not delivered by these changes.

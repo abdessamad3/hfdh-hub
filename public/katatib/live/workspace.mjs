@@ -55,7 +55,7 @@ export function createWorkspace(){
   }catch(e){if(token!==generation)return;error=e.code==='conflict'?'conflict':'failed';if(e.code==='conflict')pending=null;}
   finally{if(token===generation){busy=false;paint();}}
  }
- function newDraft(type,data,id=crypto.randomUUID(),revision=0){if(draft&&!confirm(t('discard')))return;draft={type,id,revision,data};pending=null;notice='';error='';paint();}
+ function newDraft(type,data,id=crypto.randomUUID(),revision=0){if(draft&&!confirm(t('discard')))return false;draft={type,id,revision,data};pending=null;notice='';error='';paint();return true;}
  async function click(e){const b=e.target.closest('button');if(!b||b.disabled||busy)return;
   const action=b.dataset.workAction;
   if(action==='reload'){if((draft||pending)&&!confirm(t('reconcile')))return;draft=null;pending=null;preview=[];await ctx.refresh();loaded=false;await load();return;}
@@ -65,7 +65,7 @@ export function createWorkspace(){
   if(action==='new-task'&&ctx.students.length)newDraft('task',{studentId:ctx.students[0].id,kind:'memorization',due:businessDate(),hizb:1,fromEighth:1,toEighth:1,note:'',status:'planned'});
   if(action==='new-access')newDraft('access',{role:'teacher',active:true,kuttabNames:[],teacherIds:[],studentIds:[]},'');
   if(b.dataset.workEdit){const id=b.dataset.workEdit;if(page==='manage'){const s=student(id);newDraft('profile',profileData(s),id,s.profileRevision||0);}else{const r=rows.find(r=>r.id===id);newDraft(page==='access'?'access':'task',page==='access'?{role:r.role,active:r.active,kuttabNames:r.kuttabNames||[],teacherIds:r.teacherIds||[],studentIds:r.studentIds||[]}:cleanTask(r),id,r.revision||0);}}
-  if(b.dataset.workArchive){const s=student(b.dataset.workArchive);if(s.status!=='archived'&&!confirm(t('archiveConfirm')))return;newDraft('profile',{...profileData(s),status:s.status==='archived'?'active':'archived'},s.id,s.profileRevision||0);if(draft?.id===s.id)await save();}
+  if(b.dataset.workArchive){const s=student(b.dataset.workArchive);if(s.status!=='archived'&&!confirm(t('archiveConfirm')))return;if(newDraft('profile',{...profileData(s),status:s.status==='archived'?'active':'archived'},s.id,s.profileRevision||0))await save();}
   if(action==='template')download('katatib-students.csv','id,name,kuttabName,teacherId,group,age\r\n','text/csv;charset=utf-8');
   if(action==='import'){const token=generation;busy=true;paint();try{await ctx.gateway.importStudents(preview);if(token!==generation)return;preview=[];notice='saved';await ctx.refresh();}catch{if(token===generation)error='importFailed';}finally{if(token===generation){busy=false;paint();}}}
   if(action==='excel'){const keys=['name','kuttab','present','absent','excused','late','leftEarly','unmarked','baseline','confirmed'];download('katatib-'+ctx.month+'.xml',excelWorkbook(keys.map(k=>t(k==='kuttab'?'kuttabName':k)),report.map(r=>keys.map(k=>r[k]??''))),'application/vnd.ms-excel;charset=utf-8');}
