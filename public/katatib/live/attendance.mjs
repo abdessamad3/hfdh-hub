@@ -28,7 +28,7 @@ export async function commitAttendance(db, sdk, userId, studentId, context, desi
   const clean=cleanAttendance(desired);
   if (!userId || !/^[A-Za-z0-9-]{16,80}$/.test(eventId)) throw new Error('invalid-identity');
   const ref=sdk.doc(db,'katatib_attendance',recordId);
-  return sdk.runTransaction(db,async tx=>{
+  try { return await sdk.runTransaction(db,async tx=>{
     const snap=await tx.get(ref);
     const current=snap.exists()?snap.data():null;
     const decision=decideSave(current,clean,expectedRevision);
@@ -37,5 +37,16 @@ export async function commitAttendance(db, sdk, userId, studentId, context, desi
     tx.set(ref,data);
     tx.set(sdk.doc(db,'katatib_attendance_history',eventId),data);
     return {...clean,revision:decision.revision};
-  });
+  }); } catch (error) {
+    // Rules can reject a racing stale revision before the SDK receives ABORTED.
+    // Recheck with server authorization; revoked access must remain permission-denied.
+    if (error.code === 'permission-denied') {
+      let latest;
+      try { latest = await sdk.getDocFromServer(ref); } catch { throw error; }
+      const current = latest.exists() ? latest.data() : null;
+      const decision = decideSave(current, clean, expectedRevision);
+      if (decision.unchanged) return {...clean,revision:decision.revision};
+    }
+    throw error;
+  }
 }

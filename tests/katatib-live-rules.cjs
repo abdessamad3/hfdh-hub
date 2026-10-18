@@ -58,7 +58,7 @@ const {doc,setDoc,getDoc,collection,getDocs,query,where,limit,updateDoc,deleteDo
   await assertFails(getDoc(doc(admin,'users/legacy-one')));
   await assertFails(getDoc(doc(teacher,'evaluations/a')));
   const {commitAttendance,attendanceId}=await import('../public/katatib/live/attendance.mjs');
-  const sdk={doc,runTransaction,serverTimestamp};
+  const sdk={doc,runTransaction,serverTimestamp,getDocFromServer};
   const context={date:'2026-10-18',session:'morning'};
   const recordId=attendanceId('a',context.date,context.session);
   const save=(db,uid,student,ctx,payload,rev,event)=>commitAttendance(db,sdk,uid,student,ctx,payload,rev,event);

@@ -37,7 +37,7 @@ export async function connect() {
     },
     async saveAttendance(studentId, context, desired, expectedRevision) {
       if (!auth.currentUser) throw new Error('no-access');
-      return commitAttendance(db, { doc, runTransaction, serverTimestamp }, auth.currentUser.uid, studentId, context, desired, expectedRevision, crypto.randomUUID());
+      return commitAttendance(db, { doc, runTransaction, serverTimestamp, getDocFromServer }, auth.currentUser.uid, studentId, context, desired, expectedRevision, crypto.randomUUID());
     },
     async attendanceHistory(studentId) {
       const snapshot = await getDocsFromServer(query(collection(db, 'katatib_attendance_history'), where('studentId', '==', studentId), limit(20)));
