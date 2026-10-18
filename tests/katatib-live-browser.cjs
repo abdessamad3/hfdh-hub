@@ -10,13 +10,21 @@ const server=http.createServer((req,res)=>{
 });
 const mock=`
 let observer;
-window.__pending=false;window.__deny=false;window.__history=[];window.__records={};window.__events=[];window.__saveFail=false;window.__conflict=false;
+window.__pending=false;window.__deny=false;window.__history=[];window.__learning={};window.__learningFail=false;window.__learningLostAck=false;window.__records={};window.__events=[];window.__saveFail=false;window.__conflict=false;
 export async function connect(){
  return {
  observe(callback){observer=callback;callback(null);},
  async login(){observer({email:'teacher@example.com',emailVerified:true});},
  async logout(){observer(null);},
  async students(){if(window.__pending)await new Promise(r=>window.__release=r);if(window.__deny)throw new Error('no-access');return {students:[{id:'a',name:'<img src=x onerror=alert(1)>',kuttab:'One',age:12,hizbs:3,attendance:80},{id:'b',name:'Maryam',kuttab:'Two',age:null,hizbs:null,attendance:null}],role:'teacher',capped:false};},
+ async learningHistory(id){return Object.values(window.__learning).filter(x=>x.studentId===id);},
+ async saveLearning(input,id){
+  if(window.__learningFail)throw new Error('unavailable');
+  if(window.__learning[id]&&JSON.stringify(window.__learning[id].input)!==JSON.stringify(input))throw Object.assign(new Error('learning-conflict'),{code:'learning-conflict'});
+  window.__learning[id]={...input,input,id};
+  if(window.__learningLostAck){window.__learningLostAck=false;throw new Error('unavailable');}
+  return window.__learning[id];
+ },
  async attendance(ids,context){return Object.fromEntries(ids.map(id=>[id,window.__records[id+'~'+context.date+'~'+context.session]||{status:'unmarked',note:'',revision:0}]));},
  async saveAttendance(id,context,desired,revision){
   if(window.__saveFail)throw new Error('unavailable');
@@ -100,6 +108,62 @@ let browser;
  await page.locator('[data-screen=attendance]').click();
  await page.waitForFunction(()=>document.querySelector('[data-cloud-student=a][data-cloud-status=absent]')?.getAttribute('aria-pressed')==='true');
  await page.locator('[data-screen=students]').click();
+ await page.locator('[data-screen=learning]').click();
+ await page.locator('#learning-student').selectOption('a');
+ await page.locator('#learning-form [name=hizb]').fill('4');
+ await page.locator('#learning-form [name=fromEighth]').selectOption('2');
+ await page.locator('#learning-form [name=toEighth]').selectOption('4');
+ await page.locator('#learning-form [name=note]').fill('حفظ <img src=x onerror=alert(1)>');
+ await page.locator('#learning-form button[type=submit]').click();
+ await page.waitForFunction(()=>Object.keys(window.__learning).length===1);
+ await page.locator('.learning-history li').waitFor();
+ assert.ok((await page.locator('.learning-history').innerText()).includes('حفظ <img'));
+ assert.equal(await page.locator('.learning-history img').count(),0);
+ assert.equal(await page.evaluate(()=>Object.values(window.__learning)[0].quantity),3);
+ // A correction appends a new record; the original remains visible.
+ await page.locator('[data-learning-correct]').first().click();
+ await page.locator('#learning-form [name=note]').fill('تصحيح محفوظ');
+ await page.locator('#learning-form button[type=submit]').click();
+ await page.waitForFunction(()=>Object.keys(window.__learning).length===2);
+ await page.waitForFunction(()=>document.querySelectorAll('.learning-history li').length===2);
+ assert.ok(await page.evaluate(()=>Object.values(window.__learning).some(x=>!!x.supersedesId)));
+ for(const kind of ['revision','evaluation']){
+  await page.locator('#learning-form [name=kind]').selectOption(kind);
+  await page.locator('#learning-form [name=hizb]').fill('5');
+  await page.locator('#learning-form [name=mistakes]').fill('2');
+  await page.locator('#learning-form [name=score]').fill('85');
+  await page.locator('#learning-form button[type=submit]').click();
+  await page.waitForFunction(kind=>Object.values(window.__learning).some(x=>x.kind===kind),kind);
+  await page.waitForFunction(()=>!document.querySelector('#learning-form fieldset').disabled);
+ }
+ await page.waitForFunction(()=>document.querySelectorAll('.learning-history li').length===4);
+ assert.equal(await page.locator('.learning-history li').count(),4);
+ await page.locator('#learning-form [name=hizb]').fill('6');
+ await page.locator('#learning-form [name=mistakes]').fill('0');
+ await page.locator('#learning-form [name=score]').fill('90');
+ await page.evaluate(()=>window.__learningLostAck=true);
+ await page.locator('#learning-form button[type=submit]').click();
+ await page.waitForFunction(()=>document.querySelector('#learning-form fieldset').disabled&&!document.querySelector('#learning-form button[type=submit]').disabled);
+ assert.equal(await page.evaluate(()=>Object.keys(window.__learning).length),5);
+ await page.locator('#learning-form button[type=submit]').click();
+ await page.waitForFunction(()=>!document.querySelector('#learning-form fieldset').disabled);
+ await page.waitForFunction(()=>document.querySelectorAll('.learning-history li').length===5);
+ assert.equal(await page.evaluate(()=>Object.keys(window.__learning).length),5,'lost acknowledgement retry does not duplicate');
+ await page.setViewportSize({width:390,height:844});
+ await page.waitForFunction(()=>document.documentElement.scrollWidth<=window.innerWidth+1);
+ await page.screenshot({path:'artifacts/katatib/mobile-learning-fr.png',fullPage:true});
+ await page.locator('[data-lang=ar]').click();
+ await page.screenshot({path:'artifacts/katatib/mobile-learning-ar.png',fullPage:true});
+ await page.locator('[data-screen=students]').click();
+ await page.locator('[data-profile=a]').click();
+ await page.locator('#profile-learning li').first().waitFor();
+ assert.equal(await page.locator('#profile-learning li').count(),5);
+ await page.keyboard.press('Escape');
+ // Re-authentication loads saved learning from the mocked server rather than a draft.
+ await page.locator('[data-action=logout]').click();await page.locator('[data-action=login]').click();
+ await page.locator('[data-screen=learning]').click();await page.locator('#learning-student').selectOption('a');
+ await page.waitForFunction(()=>document.querySelectorAll('.learning-history li').length===5);
+ await page.locator('[data-screen=students]').click();
  assert.equal(await page.evaluate(()=>localStorage.length),0);
  assert.equal(await page.evaluate(()=>sessionStorage.length),0);
  await page.locator('[data-action=logout]').click();assert.equal(await page.locator('.student-card').count(),0);
@@ -115,5 +179,5 @@ let browser;
  await page.waitForTimeout(100);
  assert.equal(await page.locator('.student-card').count(),0,'late response cannot restore signed-out data');
  assert.deepEqual(errors,[]);
- console.log('PASS: mocked-provider reader login, denied access, logout and stale-request clearing, no persistent student storage, escaped copied data, history, Arabic/French and responsive layout, cloud attendance save/reload, date/session isolation, unsaved errors and conflicts. Real Google OAuth requires owner setup and a live smoke test.');
+ console.log('PASS: mocked-provider reader login, denied access, logout and stale-request clearing, no persistent student storage, escaped copied data, history, Arabic/French and responsive layout, cloud attendance save/reload, date/session isolation, unsaved errors and conflicts; learning types, corrections, lost-ack retries and profile history. Real Google OAuth requires owner setup and a live smoke test.');
 })().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{await browser?.close();server.close();});

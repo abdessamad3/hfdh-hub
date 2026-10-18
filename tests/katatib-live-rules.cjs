@@ -105,9 +105,37 @@ const {doc,setDoc,getDoc,collection,getDocs,query,where,limit,updateDoc,deleteDo
   for(const db of strangers)await assertFails(save(db,'new-stranger','a',context,{status:'present',note:''},3,'event-strange-001'));
   // Original copied data is unchanged after all successful V2 writes.
   await env.withSecurityRulesDisabled(async ctx=>{assert.equal((await getDoc(doc(ctx.firestore(),'attendance/a'))).data().status,'present');assert.equal((await getDoc(doc(ctx.firestore(),'students/a'))).data().name,'A');});
+  const {commitLearning}=await import('../public/katatib/live/learning.mjs');
+  const learningInput={studentId:'a',kind:'memorization',date:'2026-10-18',session:'morning',hizb:2,fromEighth:1,toEighth:3,mistakes:null,score:null,note:'original',supersedesId:null};
+  const learningSave=(db,uid,input,id)=>commitLearning(db,{doc,runTransaction,serverTimestamp},uid,input,id);
+  await assertSucceeds(learningSave(teacher,'new-teacher@example.com',learningInput,'learning-memo-0001'));
+  const storedLearning=(await getDocFromServer(doc(secondDevice,'katatib_learning','learning-memo-0001'))).data();
+  assert.equal(storedLearning.quantity,3);assert.equal(storedLearning.createdBy,'new-teacher@example.com');
+  await assertSucceeds(learningSave(teacher,'new-teacher@example.com',learningInput,'learning-memo-0001'));
+  await assert.rejects(learningSave(teacher,'new-teacher@example.com',{...learningInput,note:'different'},'learning-memo-0001'),e=>e.code==='learning-conflict');
+  for(const kind of ['revision','evaluation'])await assertSucceeds(learningSave(teacher,'new-teacher@example.com',{...learningInput,kind,mistakes:2,score:85},'learning-'+kind+'-0001'));
+  await assertSucceeds(learningSave(teacher,'new-teacher@example.com',{...learningInput,note:'corrected',supersedesId:'learning-memo-0001'},'learning-correct-001'));
+  assert.equal((await getDocFromServer(doc(teacher,'katatib_learning','learning-memo-0001'))).data().note,'original');
+  assert.equal((await getDocFromServer(doc(teacher,'katatib_learning','learning-correct-001'))).data().supersedesId,'learning-memo-0001');
+  assert.equal((await assertSucceeds(getDocs(query(collection(teacher,'katatib_learning'),where('studentId','==','a'),limit(30))))).size,4);
+  await assertFails(getDocs(query(collection(teacher,'katatib_learning'),limit(30))));
+  await assertFails(getDocs(query(collection(teacher,'katatib_learning'),where('studentId','==','a'),limit(31))));
+  await assertFails(updateDoc(doc(admin,'katatib_learning','learning-memo-0001'),{note:'overwrite'}));
+  await assertFails(deleteDoc(doc(admin,'katatib_learning','learning-memo-0001')));
+  await assertFails(learningSave(teacher,'new-teacher@example.com',{...learningInput,studentId:'b'},'learning-other-0001'));
+  await assertSucceeds(learningSave(admin,'new-admin@example.com',{...learningInput,studentId:'b'},'learning-admin-0001'));
+  await assertFails(getDocFromServer(doc(teacher,'katatib_learning','learning-admin-0001')));
+  for(const db of strangers)await assertFails(learningSave(db,'new-stranger',learningInput,'learning-strange-001'));
+  // Direct SDK writes bypassing client validation still face server schema and scope checks.
+  for(const change of [{hizb:61},{fromEighth:5,toEighth:2,quantity:-2},{quantity:8},{kind:'other'},{mistakes:0,score:100},{note:'x'.repeat(501)},{createdBy:'forged'},{createdAt:new Date(0)},{role:'admin'},{supersedesId:'learning-admin-0001'},{kind:'revision',mistakes:0,score:101},{kind:'evaluation',mistakes:-1,score:10}]){
+   const bad={...storedLearning,createdAt:serverTimestamp(),...change};
+   await assertFails(setDoc(doc(teacher,'katatib_learning','learning-invalid-001'),bad));
+  }
+  await assert.rejects(learningSave(teacher,'new-teacher@example.com',{...learningInput,supersedesId:'learning-evaluation-0001'},'learning-wrong-kind-01'));
   await env.withSecurityRulesDisabled(ctx=>updateDoc(doc(ctx.firestore(),'katatib_access/teacher@example.com'),{active:false}));
   await assertFails(getDoc(doc(teacher,'students/a')));
   await assertFails(save(teacher,'new-teacher@example.com','a',context,{status:'present',note:'revoked'},3,'event-revoked-001'));
-  console.log('PASS: test rules reject strangers, wrong providers, unverified accounts, other kuttabs, forged history scope, privilege escalation and all legacy-data writes; bounded reads, scoped V2 save/reload, atomic history, revisions, conflicts, retries, session isolation and revocation work.');
+  await assertFails(learningSave(teacher,'new-teacher@example.com',learningInput,'learning-revoked-001'));
+  console.log('PASS: test rules reject strangers, wrong providers, unverified accounts, other kuttabs, forged history scope, privilege escalation and all legacy-data writes; bounded reads, scoped V2 save/reload, atomic history, revisions, conflicts, retries, session isolation and revocation work; learning saves, retries, immutable corrections, grades and teacher isolation work.');
  } finally {await env.cleanup();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -1,6 +1,7 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js';
 import { getAuth, setPersistence, inMemoryPersistence, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js';
 import { initializeFirestore, memoryLocalCache, collection, doc, getDocFromServer, getDocsFromServer, query, where, limit, runTransaction, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js';
+import { commitLearning } from './learning.mjs';
 import { attendanceId, emptyAttendance, commitAttendance } from './attendance.mjs';
 import { validateConfig, accessScopes, studentView, mergeStudents } from './model.mjs';
 export async function connect() {
@@ -27,6 +28,14 @@ export async function connect() {
         return snapshot.docs.map(d => studentView(d.id, d.data()));
       }));
       return { students: mergeStudents(batches), role: access.data().role, capped: batches.some(b => b.length === 100) };
+    },
+    async saveLearning(input, id) {
+      if(!auth.currentUser)throw new Error('no-access');
+      return commitLearning(db,{doc,runTransaction,serverTimestamp},auth.currentUser.uid,input,id);
+    },
+    async learningHistory(studentId) {
+      const snapshot=await getDocsFromServer(query(collection(db,'katatib_learning'),where('studentId','==',studentId),limit(30)));
+      return snapshot.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt?.seconds??0)-(a.createdAt?.seconds??0));
     },
     async attendance(studentIds, context) {
       return Object.fromEntries(await Promise.all(studentIds.map(async id => {

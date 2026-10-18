@@ -64,3 +64,19 @@ Transactions compare the revision originally loaded by the page. A competing edi
 Saving is explicit **per student**, not an atomic whole-class save. The interface only reports saved after Firebase acknowledges the transaction. Network or permission failure retains the draft with an error; this slice requires Internet and does not queue writes offline. Drafts remain in memory only, with a leave warning and a sign-out confirmation. Leaving/signing out cannot cancel a transaction already submitted; it may still commit, and the next server reload is authoritative. The reader's in-memory authentication still requires sign-in after reload.
 
 Use the same `scripts/deploy-katatib-connected.sh` after pulling this update. It runs 24 model tests and deploys only test rules/Hosting. Live owner verification: record one student's attendance and note, save, reload/sign in again and verify; choose another session/date and confirm independence; check the profile's V2 history. Teacher denial and concurrent edits are also exercised by the real emulator suite. The Google browser flow remains covered by a mocked provider in CI and requires the live owner smoke test.
+
+## Update: memorization, revision and evaluations
+
+The **Learning** tab records a student, learning type, date/session, hizb (1–60), inclusive eighth range (1–8 in that hizb) and note. A range spanning two hizbs must use two records. These are portion identifiers, not a verified Warsh verse/page mapping; this slice does not display Quran text.
+
+Revision and evaluation require an integer mistake count (0–999) and a **teacher-entered** integer score (0–100). Memorization has neither a mistake count nor a score. No scoring formula is invented. Existing V1 progress, totals, ranks and attendance statistics are not recalculated from V2 entries; overlap and aggregation policy remain to be agreed.
+
+New records go only to `katatib_learning`. Records are immutable; authorized teachers can append a linked correction for the same student and learning type, preserving the original. Corrections may correct the date, portion, note or entered grade. The UI marks originals with a linked correction present in the displayed results; it does not claim to compute an authoritative total from correction chains or choose between simultaneous corrections.
+
+A generated record intent ID remains stable during an unconfirmed save. The form is locked for retry with the same content until that save succeeds, avoiding duplicate records after a lost acknowledgement. Retrying an already committed identical record by its original author is a no-op; different content under the same ID is rejected. Drafts remain in memory with the existing leave/sign-out warnings. Internet is required. There is no background/offline queue.
+
+Both the Learning tab and student profile read **up to 30 V2 learning entries** for the selected student, sorted within that returned set. The bounded query does not guarantee the latest 30 globally. Earlier entries remain in Firestore; pagination is future work. Notes/names are escaped, missing legacy statistics remain missing, and switching students resets the form after confirming any unsaved changes.
+
+Actual emulator tests cover all three types, server-side scope/schema checks, teacher-grade boundaries, original-record preservation, linked corrections, idempotent retries, unauthorized reads/writes and revocation. Browser tests mock auth/server responses and exercise form entry, corrections, failure/retry, profile history, Arabic/French and mobile layout. The owner live smoke test remains: save each type, reload/sign in, verify history, and append a correction.
+
+Deploy this update with the same fixed-test-project script after pulling the branch. The script now runs **32 model tests**. Google setup and owner access need not be repeated if the previous test app already works.
