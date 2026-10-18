@@ -59,7 +59,7 @@ async function waitFor(condition, page) {
   await page.locator('[data-action=next]').click();
   await page.locator('[data-student="demo-02"][data-status=late]').click();
   await page.locator('[data-action=save]').click();
-  await page.locator('.sidebar a[href="#attendance"]').click();
+  await page.locator('.sidebar nav a[href="#attendance"]').click();
   await page.locator('[data-action=mark-rest]').click();
   assert.equal(await page.locator('[data-student="demo-01"][data-status=absent]').getAttribute('aria-pressed'), 'true');
   assert.equal(await page.locator('[data-student="demo-02"][data-status=late]').getAttribute('aria-pressed'), 'true');
@@ -73,7 +73,7 @@ async function waitFor(condition, page) {
   assert.equal(await page.evaluate(() => window.__injected), undefined);
   await page.keyboard.press('Escape');
   assert.equal(await page.getByRole('dialog').count(), 0);
-  await page.locator('.sidebar a[href="#students"]').click();
+  await page.locator('.sidebar nav a[href="#students"]').click();
   await page.locator('#student-search').fill('Maryam');
   assert.equal(await page.locator('.student-card').count(), 1);
   await page.locator('#student-search').fill('<img src=x>');
@@ -83,7 +83,7 @@ async function waitFor(condition, page) {
   assert.equal(await page.locator('.student-card').count(), 4);
   assert.equal(await page.locator('[data-profile="demo-01"]').count(), 0);
   await page.locator('#group-select').selectOption('fajr');
-  await page.locator('.sidebar a[href="#today"]').click();
+  await page.locator('.sidebar nav a[href="#today"]').click();
   await page.locator('[data-language=ar]').click();
   await page.screenshot({ path: path.join(output, 'desktop-today-ar.png'), fullPage: true });
   const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
