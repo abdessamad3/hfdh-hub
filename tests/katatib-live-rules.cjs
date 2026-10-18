@@ -4,7 +4,7 @@ const path = require('node:path');
 const {createRequire} = require('node:module');
 const requireTools = createRequire(path.resolve(process.env.KATATIB_TEST_TOOLS, 'package.json'));
 const {initializeTestEnvironment, assertSucceeds, assertFails} = requireTools('@firebase/rules-unit-testing');
-const {doc,setDoc,getDoc,collection,getDocs,query,where,limit,orderBy,documentId,startAfter,updateDoc,deleteDoc,runTransaction,serverTimestamp,getDocFromServer,writeBatch} = requireTools('firebase/firestore');
+const {doc,setDoc,getDoc,collection,getDocs,getDocsFromServer,query,where,limit,orderBy,documentId,startAfter,updateDoc,deleteDoc,runTransaction,serverTimestamp,getDocFromServer,writeBatch} = requireTools('firebase/firestore');
 (async()=>{
  const env = await initializeTestEnvironment({projectId:'demo-katatib-test',firestore:{rules:fs.readFileSync('firestore.katatib-test.rules','utf8')}});
  try {
