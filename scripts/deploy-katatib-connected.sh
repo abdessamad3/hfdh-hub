@@ -23,4 +23,4 @@ python3 scripts/katatib-test-access.py --email "$katatib_owner" --role admin
 npx --yes firebase-tools@15.33.0 deploy --project katatib-64049 \
   --config firebase.katatib-connected.json --only firestore:rules,hosting --non-interactive \
   --message 'Katatib test-only Google sign-in and V2 attendance and learning records'
-printf '\nTest attendance app deployed: https://katatib-64049.web.app/live/\n'
+printf '\nKatatib deployed: https://katatib-64049.web.app/\n'
