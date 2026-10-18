@@ -18,8 +18,8 @@ test('session keys reject impossible calendar dates and invalid scope', () => {
 });
 
 test('business date follows Casablanca instead of the UTC date', () => {
-  assert.equal(businessDate(new Date('2026-10-18T23:30:00Z')), '2026-10-19');
-  assert.equal(businessDate(new Date('2026-10-18T08:00:00Z')), '2026-10-18');
+  assert.equal(businessDate(new Date('2025-07-18T23:30:00Z')), '2025-07-19');
+  assert.equal(businessDate(new Date('2025-07-18T08:00:00Z')), '2025-07-18');
 });
 
 test('save, reload and profile history preserve statuses and Unicode notes', () => {
