@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Explicitly deploy read-only rules and Hosting to the fixed TEST project only.
+# Explicitly deploy test rules and Hosting to the fixed TEST project only.
 set -euo pipefail
 katatib_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$katatib_root"
@@ -10,6 +10,7 @@ if (c.hosting.site !== 'katatib-64049' || c.hosting.public !== 'public/katatib' 
 NODE
 node tests/katatib-domain.test.mjs
 node tests/katatib-live-model.test.mjs
+node tests/katatib-cloud-attendance.test.mjs
 katatib_owner="$(gcloud config get-value account 2>/dev/null)"
 if [[ "$katatib_owner" != *'@'* || "$katatib_owner" == *'gserviceaccount.com' ]]; then
   printf 'Sign in to Cloud Shell with your owner Google account first.\n' >&2
@@ -19,5 +20,5 @@ python3 scripts/katatib-test-access.py --email "$katatib_owner" --role admin
 # The original firebase.json, firestore.rules and original project are never selected.
 npx --yes firebase-tools@15.33.0 deploy --project katatib-64049 \
   --config firebase.katatib-connected.json --only firestore:rules,hosting --non-interactive \
-  --message 'Katatib test-only Google sign-in and read-only copied students'
-printf '\nTest data reader deployed: https://katatib-64049.web.app/live/\n'
+  --message 'Katatib test-only Google sign-in and V2 attendance saving'
+printf '\nTest attendance app deployed: https://katatib-64049.web.app/live/\n'

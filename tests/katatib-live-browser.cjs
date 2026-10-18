@@ -10,13 +10,21 @@ const server=http.createServer((req,res)=>{
 });
 const mock=`
 let observer;
-window.__pending=false;window.__deny=false;window.__history=[];
+window.__pending=false;window.__deny=false;window.__history=[];window.__records={};window.__events=[];window.__saveFail=false;window.__conflict=false;
 export async function connect(){
  return {
  observe(callback){observer=callback;callback(null);},
  async login(){observer({email:'teacher@example.com',emailVerified:true});},
  async logout(){observer(null);},
  async students(){if(window.__pending)await new Promise(r=>window.__release=r);if(window.__deny)throw new Error('no-access');return {students:[{id:'a',name:'<img src=x onerror=alert(1)>',kuttab:'One',age:12,hizbs:3,attendance:80},{id:'b',name:'Maryam',kuttab:'Two',age:null,hizbs:null,attendance:null}],role:'teacher',capped:false};},
+ async attendance(ids,context){return Object.fromEntries(ids.map(id=>[id,window.__records[id+'~'+context.date+'~'+context.session]||{status:'unmarked',note:'',revision:0}]));},
+ async saveAttendance(id,context,desired,revision){
+  if(window.__saveFail)throw new Error('unavailable');
+  if(window.__conflict)throw Object.assign(new Error('conflict'),{code:'conflict'});
+  const key=id+'~'+context.date+'~'+context.session;
+  const result={...desired,revision:revision+1};window.__records[key]=result;window.__events.push({...result,date:context.date,session:context.session,id});return result;
+ },
+ async attendanceHistory(id){return window.__events.filter(e=>e.id===id);},
  async history(){return window.__history;}
  };
 }`;
@@ -51,6 +59,47 @@ let browser;
  await page.setViewportSize({width:1440,height:1000});
  await page.locator('[data-lang=ar]').click();
  await page.screenshot({path:'artifacts/katatib/desktop-test-reader-ar.png',fullPage:true});
+ // Actual browser behavior with a mocked server; real transactions/rules run separately in the emulator.
+ await page.locator('[data-screen=attendance]').click();
+ await page.locator('[data-cloud-student=a][data-cloud-status=absent]').waitFor();
+ await page.locator('[data-cloud-student=a][data-cloud-status=absent]').click();
+ await page.locator('[data-cloud-note=a]').fill('ملاحظة <img src=x onerror=alert(1)>');
+ await page.locator('[data-cloud-save=a]').click();
+ await page.waitForFunction(()=>document.querySelector('[data-cloud-message=a]').textContent.includes('محفوظ في'));
+ const day=await page.locator('#cloud-date').inputValue();
+ await page.locator('#cloud-session').selectOption('evening');
+ await page.waitForFunction(()=>document.querySelector('[data-cloud-student=a][data-cloud-status=unmarked]')?.getAttribute('aria-pressed')==='true');
+ await page.locator('[data-cloud-student=a][data-cloud-status=present]').click();await page.locator('[data-cloud-save=a]').click();
+ await page.waitForFunction(()=>document.querySelector('[data-cloud-message=a]').textContent.includes('محفوظ في'));
+ await page.locator('#cloud-session').selectOption('morning');
+ await page.waitForFunction(()=>document.querySelector('[data-cloud-student=a][data-cloud-status=absent]')?.getAttribute('aria-pressed')==='true');
+ assert.ok((await page.locator('[data-cloud-note=a]').inputValue()).includes('<img'));
+ assert.equal(await page.locator('.cloud-card img').count(),0);
+ await page.locator('#cloud-date').fill(day==='2026-10-20'?'2026-10-21':'2026-10-20');
+ await page.waitForFunction(()=>document.querySelector('[data-cloud-student=a][data-cloud-status=unmarked]')?.getAttribute('aria-pressed')==='true');
+ await page.locator('#cloud-date').fill(day);
+ await page.waitForFunction(()=>document.querySelector('[data-cloud-student=a][data-cloud-status=absent]')?.getAttribute('aria-pressed')==='true');
+ // Network errors retain the draft and never show it as saved.
+ await page.evaluate(()=>window.__saveFail=true);
+ await page.locator('[data-cloud-student=a][data-cloud-status=late]').click();await page.locator('[data-cloud-save=a]').click();
+ await page.waitForFunction(()=>document.querySelector('[data-cloud-message=a]').textContent.includes('لم يتم'));
+ assert.equal(await page.locator('[data-cloud-student=a][data-cloud-status=late]').getAttribute('aria-pressed'),'true');
+ await page.evaluate(()=>{window.__saveFail=false;window.__conflict=true;});
+ await page.locator('[data-cloud-save=a]').click();
+ await page.waitForFunction(()=>document.querySelector('[data-cloud-message=a]').textContent.includes('عُدّل'));
+ page.once('dialog',d=>d.accept());await page.locator('[data-cloud-reload=a]').click();
+ await page.waitForFunction(()=>document.querySelector('[data-cloud-student=a][data-cloud-status=absent]')?.getAttribute('aria-pressed')==='true');
+ await page.evaluate(()=>window.__conflict=false);
+ await page.setViewportSize({width:390,height:844});
+ await page.waitForFunction(()=>document.documentElement.scrollWidth<=window.innerWidth+1);
+ await page.screenshot({path:'artifacts/katatib/mobile-cloud-attendance-ar.png',fullPage:true});
+ await page.locator('[data-lang=fr]').click();
+ await page.screenshot({path:'artifacts/katatib/mobile-cloud-attendance-fr.png',fullPage:true});
+ // Re-sign-in rereads the mocked server and is independent of the old in-memory draft.
+ await page.locator('[data-action=logout]').click();await page.locator('[data-action=login]').click();
+ await page.locator('[data-screen=attendance]').click();
+ await page.waitForFunction(()=>document.querySelector('[data-cloud-student=a][data-cloud-status=absent]')?.getAttribute('aria-pressed')==='true');
+ await page.locator('[data-screen=students]').click();
  assert.equal(await page.evaluate(()=>localStorage.length),0);
  assert.equal(await page.evaluate(()=>sessionStorage.length),0);
  await page.locator('[data-action=logout]').click();assert.equal(await page.locator('.student-card').count(),0);
@@ -66,5 +115,5 @@ let browser;
  await page.waitForTimeout(100);
  assert.equal(await page.locator('.student-card').count(),0,'late response cannot restore signed-out data');
  assert.deepEqual(errors,[]);
- console.log('PASS: mocked-provider reader login, denied access, logout and stale-request clearing, no persistent student storage, escaped copied data, history, Arabic/French and responsive layout. Real Google OAuth requires owner setup and a live smoke test.');
+ console.log('PASS: mocked-provider reader login, denied access, logout and stale-request clearing, no persistent student storage, escaped copied data, history, Arabic/French and responsive layout, cloud attendance save/reload, date/session isolation, unsaved errors and conflicts. Real Google OAuth requires owner setup and a live smoke test.');
 })().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{await browser?.close();server.close();});

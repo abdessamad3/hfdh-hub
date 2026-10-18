@@ -1,6 +1,6 @@
 # Katatib test-project connection
 
-The fictional workflow remains at `/`. A separate `/live/` page signs in with Google and reads copied student records and up to 20 copied attendance rows per student. It never writes student data, attendance, user profiles or access grants. It does not recalculate the original statistics. It is a first read-only integration, not cloud attendance saving or the completed V2.
+The fictional workflow remains at `/`. A separate `/live/` page signs in with Google and reads copied student records and up to 20 copied attendance rows per student. It never edits copied student data, V1 attendance, user profiles or access grants; the attendance update below adds separate V2 records. It does not recalculate the original statistics. The original reader is retained; see the attendance update below for the new writable V2 path. This is not the completed V2.
 
 ## Project boundary
 
@@ -8,7 +8,7 @@ Only `katatib-64049` is accepted. The Firebase web configuration comes from Host
 
 Authentication creates new accounts in the test project. Original Auth accounts are not imported. A first sign-in does not grant access. `katatib_access/{lowercase verified Google email}` is a separate test-only access document, provisioned by the owner's administrative CLI. The original copied `users` collection is neither changed nor trusted for this integration. A new Google UID therefore does not need to match an original UID.
 
-An active admin grant reads all copied students with bounded queries. An active teacher grant reads only assigned `kuttabNames` and/or original `teacherIds`; these assignments are an OR, so specifying a kuttab explicitly grants its whole roster. Exact kuttab names are the V1 data boundary; unique kuttab IDs should replace this legacy name matching in the full V2 model. Users cannot write their own grants, list other grants, or write any collection. Attendance access follows the actual referenced student's authorization, not a potentially stale kuttab field on an attendance row. All unspecified collections remain denied.
+An active admin grant reads all copied students with bounded queries. An active teacher grant reads only assigned `kuttabNames` and/or original `teacherIds`; these assignments are an OR, so specifying a kuttab explicitly grants its whole roster. Exact kuttab names are the V1 data boundary; unique kuttab IDs should replace this legacy name matching in the full V2 model. Users cannot write their own grants, list other grants, or write original collections; new V2 attendance writes are described below. Attendance access follows the actual referenced student's authorization, not a potentially stale kuttab field on an attendance row. All unspecified collections remain denied.
 
 The roster fetch is limited to 100 students per assignment and reports when the cap is reached. History shows **up to 20 entries**, not necessarily the latest 20 (no ordered composite index is introduced in this first slice). Missing source values remain missing. The UI includes a search, kuttab filter and student profile with the copied history.
 
@@ -49,4 +49,18 @@ For records attached only by the original teacher UID, add `--teacher-id ORIGINA
 - Browser checks use a mocked auth/data adapter to verify sign-in UI, denial, safe display, roster/profile, sign-out races, Arabic/French and phone/desktop layouts. They do **not** establish that the owner's live Google OAuth configuration works.
 - Firestore emulator checks exercise the actual rules for strangers, revoked users, unverified email, password-provider impersonation, wrong kuttab queries, forged attendance scope, unbounded reads and every client write.
 - Owner live smoke test remains: sign in, see the copied roster, open a profile, sign out; try an ungranted Google account and confirm denial. No production account/data is needed for this test.
-- Production rules, a V2 permissions editor, profile migrations, cloud attendance writes and offline synchronization are future work. This test reader does not implement them.
+- Production rules, a V2 permissions editor, profile migrations and offline synchronization are future work. This test reader does not implement them.
+
+## Update: Firebase attendance saving
+
+The connected app now has **Students** and **Attendance** tabs. Copied students and V1 `attendance` remain read-only. The only new client write paths are `katatib_attendance` and its immutable `katatib_attendance_history` collection in the test project.
+
+Select the date (initially the Africa/Casablanca business date), morning/afternoon/evening session and optional kuttab filter. Each student has five attendance statuses plus explicit **unmarked**, a bounded note and an individual Firebase Save button. A save applies to that student/date/session only. Changing filters does not silently save or discard drafts. Missing and unmarked attendance are distinct from absent. The V1 attendance-rate statistic is not recalculated from these V2 test records.
+
+Every successful changed save uses a Firestore transaction that writes the current state and a new history snapshot atomically. Record IDs include the student/date/session; revisions start at 1 and increment by exactly one. Rules require the signed-in teacher/admin to have access to the actual student, bind the writer UID and server timestamp, validate fields/status/note limits, prevent scope changes and require the matching history snapshot. Original collections, access grants, history updates/deletions and current-record deletions remain forbidden to browser clients.
+
+Transactions compare the revision originally loaded by the page. A competing edit is rejected, retaining the local draft; the teacher can explicitly reload the row (after confirming draft loss) and edit again. Retrying an already committed identical payload is a no-op, including after an acknowledgement was lost. History is append-only; the profile displays up to 20 V2 changes separately from the copied V1 attendance. The bounded history query is not guaranteed to select the latest 20 globally.
+
+Saving is explicit **per student**, not an atomic whole-class save. The interface only reports saved after Firebase acknowledges the transaction. Network or permission failure retains the draft with an error; this slice requires Internet and does not queue writes offline. Drafts remain in memory only, with a leave warning and a sign-out confirmation. Leaving/signing out cannot cancel a transaction already submitted; it may still commit, and the next server reload is authoritative. The reader's in-memory authentication still requires sign-in after reload.
+
+Use the same `scripts/deploy-katatib-connected.sh` after pulling this update. It runs 24 model tests and deploys only test rules/Hosting. Live owner verification: record one student's attendance and note, save, reload/sign in again and verify; choose another session/date and confirm independence; check the profile's V2 history. Teacher denial and concurrent edits are also exercised by the real emulator suite. The Google browser flow remains covered by a mocked provider in CI and requires the live owner smoke test.

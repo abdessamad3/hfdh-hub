@@ -1,6 +1,7 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js';
 import { getAuth, setPersistence, inMemoryPersistence, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js';
-import { initializeFirestore, memoryLocalCache, collection, doc, getDocFromServer, getDocsFromServer, query, where, limit } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js';
+import { initializeFirestore, memoryLocalCache, collection, doc, getDocFromServer, getDocsFromServer, query, where, limit, runTransaction, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js';
+import { attendanceId, emptyAttendance, commitAttendance } from './attendance.mjs';
 import { validateConfig, accessScopes, studentView, mergeStudents } from './model.mjs';
 export async function connect() {
   const response = await fetch('/__/firebase/init.json', { cache: 'no-store', credentials: 'omit' });
@@ -26,6 +27,21 @@ export async function connect() {
         return snapshot.docs.map(d => studentView(d.id, d.data()));
       }));
       return { students: mergeStudents(batches), role: access.data().role, capped: batches.some(b => b.length === 100) };
+    },
+    async attendance(studentIds, context) {
+      return Object.fromEntries(await Promise.all(studentIds.map(async id => {
+        const snap = await getDocFromServer(doc(db, 'katatib_attendance', attendanceId(id, context.date, context.session)));
+        const data = snap.exists() ? snap.data() : emptyAttendance();
+        return [id, { status: data.status, note: data.note, revision: data.revision }];
+      })));
+    },
+    async saveAttendance(studentId, context, desired, expectedRevision) {
+      if (!auth.currentUser) throw new Error('no-access');
+      return commitAttendance(db, { doc, runTransaction, serverTimestamp }, auth.currentUser.uid, studentId, context, desired, expectedRevision, crypto.randomUUID());
+    },
+    async attendanceHistory(studentId) {
+      const snapshot = await getDocsFromServer(query(collection(db, 'katatib_attendance_history'), where('studentId', '==', studentId), limit(20)));
+      return snapshot.docs.map(d => { const x=d.data(); return {date:x.date,session:x.session,status:x.status,note:x.note,revision:x.revision}; }).sort((a,b)=>b.date.localeCompare(a.date)||b.revision-a.revision);
     },
     async history(id) {
       // Recheck the student with server rules before reading a bounded history query.

@@ -35,6 +35,41 @@ service cloud.firestore {
       allow list: if request.query.limit <= 20 && historyAllowed(resource.data);
       allow write: if false;
     }
+    function validAttendance(d, id) {
+      return d.keys().hasAll(['schemaVersion', 'recordId', 'studentId', 'date', 'session', 'status', 'note', 'revision', 'updatedBy', 'updatedAt', 'eventId']) &&
+        d.keys().hasOnly(['schemaVersion', 'recordId', 'studentId', 'date', 'session', 'status', 'note', 'revision', 'updatedBy', 'updatedAt', 'eventId']) &&
+        d.schemaVersion == 1 && d.recordId == id &&
+        d.studentId is string && d.studentId.size() > 0 && d.studentId.size() <= 500 && !d.studentId.matches('.*[~/].*') &&
+        d.date is string && d.date.matches('[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])') &&
+        d.session in ['morning', 'afternoon', 'evening'] && id == d.studentId + '~' + d.date + '~' + d.session &&
+        d.status in ['present', 'absent', 'excused', 'late', 'leftEarly', 'unmarked'] &&
+        d.note is string && d.note.size() <= 500 && d.revision is int && d.revision > 0 &&
+        d.updatedBy == request.auth.uid && d.updatedAt == request.time &&
+        d.eventId is string && d.eventId.matches('[A-Za-z0-9-]{16,80}') && historyAllowed(d);
+    }
+    function appendedHistory(d) {
+      return !exists(/databases/$(database)/documents/katatib_attendance_history/$(d.eventId)) &&
+        getAfter(/databases/$(database)/documents/katatib_attendance_history/$(d.eventId)).data == d;
+    }
+    match /katatib_attendance/{id} {
+      // Missing records contain no student data. Creation is checked against the actual student.
+      allow get: if member() && (!exists(/databases/$(database)/documents/katatib_attendance/$(id)) || historyAllowed(resource.data));
+      allow list: if false;
+      allow create: if validAttendance(request.resource.data, id) && request.resource.data.revision == 1 && appendedHistory(request.resource.data);
+      allow update: if validAttendance(request.resource.data, id) &&
+        request.resource.data.studentId == resource.data.studentId &&
+        request.resource.data.date == resource.data.date && request.resource.data.session == resource.data.session &&
+        request.resource.data.revision == resource.data.revision + 1 && appendedHistory(request.resource.data);
+      allow delete: if false;
+    }
+    match /katatib_attendance_history/{id} {
+      allow get: if historyAllowed(resource.data);
+      allow list: if request.query.limit <= 20 && historyAllowed(resource.data);
+      allow create: if request.resource.data.eventId == id &&
+        validAttendance(request.resource.data, request.resource.data.recordId) &&
+        getAfter(/databases/$(database)/documents/katatib_attendance/$(request.resource.data.recordId)).data == request.resource.data;
+      allow update, delete: if false;
+    }
     match /{document=**} { allow read, write: if false; }
   }
 }
