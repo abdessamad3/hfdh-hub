@@ -1,0 +1,45 @@
+name: Katatib teacher preview
+
+on:
+  pull_request:
+    paths:
+      - 'public/katatib/**'
+      - 'tests/katatib-*'
+      - 'scripts/deploy-katatib-preview.sh'
+      - 'firebase.katatib-preview.json'
+      - '.github/workflows/katatib-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Check application syntax and attendance behavior
+        run: |
+          node --check public/katatib/app.mjs
+          node --check public/katatib/domain.mjs
+          node tests/katatib-domain.test.mjs
+          bash -n scripts/deploy-katatib-preview.sh
+      - name: Install browser test tools outside the application
+        run: |
+          npm install --prefix "$RUNNER_TEMP/katatib-browser" --no-package-lock --ignore-scripts playwright@1.56.1
+          "$RUNNER_TEMP/katatib-browser/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Exercise the teacher preview in Chromium
+        env:
+          PLAYWRIGHT_MODULE: ${{ runner.temp }}/katatib-browser/node_modules/playwright
+        run: node tests/katatib-browser.cjs
+      - name: Upload preview screenshots
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: katatib-preview-screenshots
+          path: artifacts/katatib
+          if-no-files-found: ignore
