@@ -11,6 +11,14 @@
         "**/.*",
         "**/node_modules/**"
       ],
+      "headers": [
+        {
+          "source": "/design/**",
+          "headers": [
+            { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+          ]
+        }
+      ],
       "rewrites": [
         {
           "source": "**",
