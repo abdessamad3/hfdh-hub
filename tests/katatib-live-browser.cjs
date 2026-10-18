@@ -21,7 +21,7 @@ export async function connect(){
  async login(){observer({email:'teacher@example.com',displayName:'Teacher Test',emailVerified:true});},
  async logout(){observer(null);},
  async students(){if(window.__pending)await new Promise(r=>window.__release=r);if(window.__deny)throw new Error('no-access');const original=[{id:'a',name:'<img src=x onerror=alert(1)>',kuttab:'One',age:12,hizbs:3,attendance:80},{id:'b',name:'Maryam',kuttab:'Two',age:null,hizbs:null,attendance:null}];const students=(window.__roster||original).map(s=>({...s,teacherId:'legacy',status:'active',source:'copy',...window.__profiles[s.id]}));for(const [id,p] of Object.entries(window.__profiles))if(!students.some(s=>s.id===id))students.push({id,...p,hizbs:null,attendance:null});return {students,role:window.__role,capped:false};},
- async studentHistory(id){return mergeHistory([(window.__legacy[id]||[]).map(r=>historyProjection(r.collection,r.id,r.data))],id);},
+ async studentHistory(id){if(window.__historyFail)throw new Error('history-unavailable');return mergeHistory([(window.__legacy[id]||[]).map(r=>historyProjection(r.collection,r.id,r.data)),Object.entries(window.__records).filter(([key])=>key.startsWith(id+'~')).map(([key,x])=>{const [studentId,date,session]=key.split('~');return historyProjection('katatib_attendance',key,{...x,studentId,date,session});})],id);},
  async workspaceList(name,id){if(window.__workspaceFail)throw new Error('unavailable');if(name==='katatib_attendance')return Object.entries(window.__records).filter(([key])=>key.startsWith(id+'~')).map(([key,x])=>{const [studentId,date,session]=key.split('~');return {...x,id:key,studentId,date,session};});return Object.values(window.__workspace[name]||{}).filter(r=>!id||r.studentId===id);},
  async workspaceSave(name,id,input,revision,event){
   if(window.__workspaceFail)throw new Error('unavailable');const target=name==='katatib_students'?window.__profiles:(window.__workspace[name]||={});
@@ -368,6 +368,26 @@ let browser;
  await page.locator('#history-student').selectOption('b');
  await page.waitForFunction(()=>document.querySelector('[data-history-count]')?.textContent.startsWith('0'));
  assert.equal((await page.locator('#work-root').innerText()).includes('Old note'),false,'switching a child cannot retain another child’s history');
+ // Historical monthly report includes every original evaluation and flags both duplicate attendance rows.
+ await page.locator('[data-screen=reports]').click();await page.locator('#katatib-print').waitFor();
+ await page.locator('#report-month').fill('2020-01');
+ await page.locator('[data-report-v1]').waitFor();
+ await page.locator('#report-student').selectOption('a');
+ const historicCells=await page.locator('[data-report-v1] tbody tr').first().locator('td').allTextContents();
+ assert.deepEqual(historicCells.slice(1),['0','0','0','2','130','0','0','0','0']);
+ assert.ok((await page.locator('[data-report-v2]').innerText()).includes('V2'));
+ const historyDownloadPromise=page.waitForEvent('download');await page.locator('[data-work-action=excel]').click();
+ const historyDownload=await historyDownloadPromise;
+ const spreadsheet=fs.readFileSync(await historyDownload.path(),'utf8');
+ assert.ok(spreadsheet.includes('130'));assert.ok(spreadsheet.includes('V1:'));assert.ok(spreadsheet.includes('V2:'));
+ await page.locator('#report-student').selectOption('b');
+ const childCells=await page.locator('[data-report-v1] tbody tr').first().locator('td').allTextContents();
+ assert.ok(childCells.slice(1).every(x=>x==='0'),'reports cannot leak another child’s totals');
+ await page.evaluate(()=>window.__historyFail=true);
+ await page.locator('#report-month').fill('2020-02');await page.getByRole('alert').waitFor();
+ assert.equal(await page.locator('#katatib-print').count(),0,'failed history reads must not leave an exportable partial or stale report');
+ await page.evaluate(()=>window.__historyFail=false);
+ await page.locator('[data-work-action=reload]').click();await page.locator('#katatib-print').waitFor();
  await page.locator('[data-action=logout]').click();
  // Candidate-only performance smoke: 501 students, CPU throttling, bounded DOM and reads.
  await page.evaluate(()=>{window.__roster=Array.from({length:501},(_,i)=>({id:'s-'+String(i).padStart(4,'0'),name:'Student '+String(i).padStart(4,'0'),kuttab:i%2?'One':'Two',hizbs:null,age:12,attendance:null}));window.__profiles={};window.__attendanceCalls=[];});

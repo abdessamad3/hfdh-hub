@@ -3,6 +3,49 @@ import assert from 'node:assert/strict';
 import {historyProjection,mergeHistory,validCalendarDate} from '../public/katatib/live/legacy.mjs';
 import {rosterPage} from '../public/katatib/live/roster.mjs';
 import {readPages} from '../public/katatib/live/workspace-model.mjs';
+import {historicalMonthlySummary,loadMonthlyReports} from '../public/katatib/live/reports.mjs';
+
+test('monthly history keeps ambiguous attendance outside totals and retains activities without claiming mastery',()=>{
+ const make=(collection,id,fields)=>historyProjection(collection,id,{studentId:'a',date:'2026-10-18',...fields});
+ const history=[
+  make('attendance','clear',{sessionIndex:0,status:'present'}),
+  make('attendance','duplicate-1',{sessionIndex:1,status:'absent'}),
+  make('attendance','duplicate-2',{sessionIndex:1,status:'present'}),
+  make('attendance','unknown',{status:'excused'}),
+  make('attendance','unknown-status',{sessionIndex:2,status:'other'}),
+  make('attendance','invalid',{date:'2026-02-30',status:'present'}),
+  make('attendance','previous',{date:'2026-09-18',sessionIndex:0,status:'present'}),
+  make('evaluations','e',{accuracyScore:100}),make('revisions','r',{}),make('memorizations','m',{}),
+  make('next_revisions','plan',{dueDate:'2026-10-20'}),make('next_evaluations','plan',{dueDate:'2026-11-20'}),
+  make('katatib_attendance','new',{session:'morning',status:'present'})
+ ];
+ const before=structuredClone(history),summary=historicalMonthlySummary(history,'a','2026-10');
+ assert.deepEqual(summary,{v1Present:1,v1Absent:0,v1Excused:0,v1Review:4,v1Evaluations:1,v1Revisions:1,v1Memorizations:1,v1Planned:1,invalidHistoryDates:1});
+ assert.deepEqual(history,before);assert.equal(summary.confirmed,undefined);
+ assert.throws(()=>historicalMonthlySummary(history,'b','2026-10'),/wrong-student/);
+ assert.throws(()=>historicalMonthlySummary([...history,history[0]],'a','2026-10'),/duplicate/);
+ assert.throws(()=>historicalMonthlySummary(history,'a','2026-13'),/invalid-month/);
+});
+test('combined reports distinguish monthly V2 sessions, original records and lifetime coverage',async()=>{
+ const students=[{id:'a',name:'A',kuttab:'One',hizbs:3}];
+ const gateway={async studentHistory(id){return [historyProjection('attendance','old',{studentId:id,date:'2026-10-18',sessionIndex:0,status:'absent'}),historyProjection('katatib_attendance','new',{studentId:id,date:'2026-10-18',session:'morning',status:'present'})];},async learningHistory(){return [];}};
+ const [row]=await loadMonthlyReports(students,'2026-10',gateway);
+ assert.equal(row.present,1);assert.equal(row.absent,0);assert.equal(row.v1Present,0);assert.equal(row.v1Absent,1);assert.equal(row.baseline,3);assert.equal(row.confirmed,0);
+ const [next]=await loadMonthlyReports(students,'2026-11',gateway);
+ assert.equal(next.present,0);assert.equal(next.v1Absent,0);assert.equal(next.baseline,3);
+});
+test('report reads bound concurrency, stop on failure and never return partial success',async()=>{
+ const students=Array.from({length:12},(_,i)=>({id:'s'+i,name:'Student',kuttab:'One'}));
+ let active=0,peak=0;
+ const gateway={async studentHistory(){active++;peak=Math.max(peak,active);await new Promise(resolve=>setTimeout(resolve,2));active--;return [];},async learningHistory(){return [];}};
+ const result=await loadMonthlyReports(students,'2026-10',gateway);
+ assert.equal(result.length,12);assert.equal(peak,3);assert.deepEqual(result.map(r=>r.id),students.map(s=>s.id));
+ let reads=0;
+ await assert.rejects(loadMonthlyReports(students,'2026-10',{async studentHistory(){reads++;throw new Error('permission-denied');}}),/permission-denied/);
+ assert.equal(reads,3);
+ reads=0;await assert.rejects(loadMonthlyReports(students,'2026-10',{async studentHistory(){reads++;}},()=>false),/report-cancelled/);assert.equal(reads,0);
+ await assert.rejects(loadMonthlyReports(students,'invalid',gateway),/invalid-month/);
+});
 test('legacy learning display preserves original grades, quantities, identifiers and Unicode without claiming V2 mastery',()=>{
  const original={studentId:'a',date:'2026-10-18',hizbNumber:3,quantity:2,quantityIdentifier:'r2',accuracyScore:87,mistakesCount:3,notes:'قديم <script>',surahName:'البقرة'};
  const row=historyProjection('evaluations','old',original);

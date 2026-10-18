@@ -79,3 +79,7 @@ bash scripts/deploy-katatib-connected.sh
 ```
 
 Open only https://katatib-64049.web.app/ after `Deploy complete`. No merge to main is required for this test deployment.
+
+### Monthly historical report update
+
+Reports now show copied V1 attendance and activity counts alongside V2 sessions, with both included in print and Excel. Ambiguous/duplicate V1 attendance is counted for review outside totals. Invalid dates are shown as all-history counts; cumulative coverage is labelled separately from monthly activity. There are no source-data writes or new permissions. V1-specific grade formulas, teacher attendance, schedules and the other readiness gaps remain open.

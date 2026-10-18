@@ -11,7 +11,8 @@ This review implements the owner's request to compare actual functionality, hist
 3. **Ambiguities:** historical duplicate attendance rows remain visible and flagged. Missing sessions and invalid dates are not guessed. Old grades do not become confirmed V2 memorization.
 4. **Large rosters:** at most 40 student/attendance cards are rendered per page. All loaded students remain searchable. Attendance reads only the visible page. Unsaved notes and statuses survive paging, and filtering loads the newly visible records without losing search focus.
 5. **Visible review:** admins now have a Migration readiness screen comparing V1/V2. A private comparison report can be loaded locally; even a matching clone does not change the verdict to production-ready.
-6. **Private read-only tools:** fresh typed source/test exports and reconciliation are available in one command. The audit counts missing/different records, permits separately identified V2 collections, compares typed in-database references across projects, and flags ambiguous relationships. It does not write to Firebase or publish data.
+6. **Monthly history:** reports, student cards, print and Excel now include copied V1 attendance and learning activity beside V2 attendance. V1 duplicates/unknown sessions/statuses are counted for review rather than inflating attendance. Invalid dates are explicitly an all-history count outside monthly totals. Baseline and confirmed coverage are labelled cumulative, not monthly gains. At most three student report loads run concurrently; a failed read leaves no partial/exportable report.
+7. **Private read-only tools:** fresh typed source/test exports and reconciliation are available in one command. The audit counts missing/different records, permits separately identified V2 collections, compares typed in-database references across projects, and flags ambiguous relationships. It does not write to Firebase or publish data.
 
 ## Feature comparison against main
 
@@ -27,7 +28,7 @@ Source baseline: `main` commit `d3106bb6115e025db554803eb862430342e7deed`. Route
 | Old learning/attendance | Present, with view-dependent query cutoffs | Now readable through History/calendar with pagination | No silent old-history loss; legacy activities remain read-only |
 | Editing old V1 learning | Present | Original data protected; no V1 correction-overlay editor yet | Still a parity gap if staff need to correct old entries after cutover |
 | Planned revision/evaluation | Both present | V2 memorization/revision tasks; V1 planned rows now readable | Dedicated planned evaluation and original completion semantics still need replacement |
-| Monthly reports | Includes V1-specific calculations/views | V2 counts and cards/export/print; V1 history is separately visible | A complete combined historic monthly report is not finished |
+| Monthly reports | Includes V1-specific calculations/views | One monthly report with separate V1 activity/attendance and V2 sessions; print/Excel include both | Ambiguous V1 rows excluded from totals and counted for review; V1-specific grade formulas still need parity validation |
 | Teacher attendance | Present (`teacher_attendance`) | Not implemented | Block migration rather than silently remove the workflow |
 | Kuttab/teacher management and schedules | Present, including specific-date overrides | Profile groups/access assignments; no equivalent schedule editor | Block migration until retained with reconciled identities/ownership |
 | Student calendar/progress | Present | History month filter, profile and separate old/V2 progress | Full calendar/schedule parity remains partial |
@@ -63,11 +64,17 @@ V2 now reads a complete authorized roster instead of hiding records after 100. T
 
 ## Data and security evidence
 
-- 65 JavaScript model tests cover current behavior, legacy projections, roster paging and report validation. Sixteen Python tests cover snapshot/reconciliation behavior, typed values, checksum failures, missing parents, source/test boundaries, read-only requests, checkpoint reuse, duplicate-job locking, background completion and atomic report preservation.
+- 68 JavaScript model tests cover current behavior, legacy projections, roster paging and report validation. Sixteen Python tests cover snapshot/reconciliation behavior, typed values, checksum failures, missing parents, source/test boundaries, read-only requests, checkpoint reuse, duplicate-job locking, background completion and atomic report preservation.
 - The real Firestore emulator verifies scoped V1 history reads, reads beyond 500 rows, denial of another student's records, denial of writes to copied history, parent/teacher restrictions, transaction audits, stale updates and revocation.
 - Chromium verifies the connected workflows, 133 historical rows/filtering/child switch, large-roster navigation/search, filter-triggered attendance loading, draft preservation across pages and readiness-report rejection. Existing login, recording and failure/retry checks also run.
 - Matching backup payloads are **not** proof of identity recovery or production readiness. The audit always reports `production_migration_ready: false`.
 - Owner screenshots previously showed a 3,850-document isolated restore and typed-field comparison. This review does not discard that evidence, but it is not a fresh independently executed source/test audit. The original site may have acquired newer records since that snapshot.
+
+## Owner-run comparison received on 18 October 2026
+
+The owner provided the aggregate report from the completed read-only check: 3,851 source records, 3,849 matching records, one missing `login_history` entry, one different `users` record, six expected V2 additions and no unexplained target records. Missing-parent paths match. All student, attendance, evaluation, revision, program, kuttab and question records match **those snapshots**. This is owner-run evidence, not a new live query from this environment. The source and target snapshots were taken at different times.
+
+The owner accepts the missing login-history entry as nonessential. The changed user field has not been identified; it cannot yet be classified as activity-only or dismissed as a permissions change. No record was overwritten to force a match. The source has 124 attendance rows with unmapped sessions: the website preserves and flags these; the monthly report excludes ambiguous attendance from totals. A new report does not repair or reinterpret original data.
 
 ## One safe account-dependent action
 
@@ -102,7 +109,7 @@ Run the `tail -f ...` command printed by the launcher to follow its private log.
 ## Remaining production gates, in priority order
 
 1. **Parity:** finish retained V1 workflows identified above; verify existing historical reports and correction behavior. Do not replace the main site merely because new features look better.
-2. **Fresh data:** execute the read-only comparison; resolve missing/different rows and existing relationship/session ambiguities without guessing or deleting evidence. Preserve all additional V2 test records separately.
+2. **Fresh data:** a completed owner-run comparison is recorded above. Classify the changed user fields and attendance ambiguities without guessing or deleting evidence; make a new consistent snapshot before any eventual cutover. Preserve all additional V2 records separately.
 3. **Identity/config/files:** rehearse account/provider recovery and verified mappings, inspect actual Storage/config/index inventory, and retain the existing no-card constraint.
 4. **Classroom trial:** a teacher uses the test site on an actual phone for one complete session. Test slow Internet, a failed save/retry, reload persistence, different accounts and cross-kuttab denial. Record which results were observed; simulated CPU throttling is not this trial.
 5. **Rollback:** freeze/coordinate V1 writes for the final consistent snapshot, pin the V1 Hosting release and rules/index versions, and rehearse retaining/reconciling V2 writes when returning to V1. Reverting Hosting alone is insufficient.
