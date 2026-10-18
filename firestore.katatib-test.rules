@@ -12,16 +12,19 @@ service cloud.firestore {
       return googleUser() && exists(/databases/$(database)/documents/katatib_access/$(email())) &&
         access().get('active', false) == true && access().get('role', '') in ['admin', 'manager', 'teacher', 'parent', 'student'];
     }
-    function studentAllowed(data) {
-      return member() && (access().role == 'admin' || (access().role in ['manager','teacher'] && (
-        data.get('kuttabName', '') in access().get('kuttabNames', []) ||
-        data.get('teacherId', '') in access().get('teacherIds', []))));
+    function scopeAllowed(data) {
+      let a = access();
+      return a.role == 'admin' || (a.role in ['manager','teacher'] &&
+        (data.get('kuttabName','') in a.get('kuttabNames',[]) || data.get('teacherId','') in a.get('teacherIds',[])));
     }
+    function studentAllowed(data) { return member() && scopeAllowed(data); }
     function staff() { return member() && access().role in ['admin','manager','teacher']; }
     function linkedStudent(id) { return member() && access().role in ['parent','student'] && id in access().get('studentIds', []); }
     function studentIdAllowed(id) {
-      return linkedStudent(id) || (exists(/databases/$(database)/documents/students/$(id)) && studentAllowed(get(/databases/$(database)/documents/students/$(id)).data)) ||
-        (exists(/databases/$(database)/documents/katatib_students/$(id)) && studentAllowed(get(/databases/$(database)/documents/katatib_students/$(id)).data));
+      let a = access();
+      return member() && (a.role in ['parent','student'] ? id in a.get('studentIds',[]) :
+        (exists(/databases/$(database)/documents/students/$(id)) ? scopeAllowed(get(/databases/$(database)/documents/students/$(id)).data) :
+         exists(/databases/$(database)/documents/katatib_students/$(id)) && scopeAllowed(get(/databases/$(database)/documents/katatib_students/$(id)).data)));
     }
     function historyAllowed(data) {
       return data.get('studentId', null) is string &&
@@ -117,7 +120,7 @@ service cloud.firestore {
       return !exists(/databases/$(database)/documents/katatib_audit/$(d.eventId)) &&
         getAfter(/databases/$(database)/documents/katatib_audit/$(d.eventId)).data == {'collection':c,'recordId':id,'snapshot':d};
     }
-    function manage() { return staff() && access().role in ['admin','manager']; }
+    function manage() { return member() && access().role in ['admin','manager']; }
     function validProfile(d,id) {
       return d.keys().hasOnly(['schemaVersion','name','kuttabName','teacherId','group','age','status','source','revision','updatedBy','updatedAt','eventId']) && validMeta(d) &&
         d.name is string && d.name.size() > 0 && d.name.size() <= 120 && d.kuttabName is string && d.kuttabName.size() > 0 && d.kuttabName.size() <= 120 &&
@@ -147,7 +150,7 @@ service cloud.firestore {
       allow get: if member() && (!exists(/databases/$(database)/documents/katatib_tasks/$(id)) || historyAllowed(resource.data));
       allow list: if request.query.limit <= 100 && historyAllowed(resource.data);
       allow create: if staff() && validTask(request.resource.data) && request.resource.data.revision == 1 && audited('katatib_tasks',id,request.resource.data);
-      allow update: if staff() && historyAllowed(resource.data) && validTask(request.resource.data) && request.resource.data.studentId == resource.data.studentId && workspaceRevision() && audited('katatib_tasks',id,request.resource.data);
+      allow update: if staff() && validTask(request.resource.data) && request.resource.data.studentId == resource.data.studentId && workspaceRevision() && audited('katatib_tasks',id,request.resource.data);
       allow delete: if false;
     }
     function validAccess(d,address) {
