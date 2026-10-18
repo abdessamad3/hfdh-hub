@@ -6,7 +6,7 @@ const server=http.createServer((req,res)=>{
  const route=redirects.find(r=>r.source===new URL(req.url,'http://localhost').pathname);
  if(route){res.writeHead(route.type,{Location:route.destination});res.end();return;}
  let file=path.resolve(root,'.'+new URL(req.url,'http://localhost').pathname);
- if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return;}
+ if(file!==root&&!file.startsWith(root+path.sep)){res.writeHead(403).end();return;}
  if(fs.existsSync(file)&&fs.statSync(file).isDirectory()) file=path.join(file,'index.html');
  if(!fs.existsSync(file)){res.writeHead(404).end();return;}
  res.setHeader('Content-Type',file.endsWith('.mjs')?'text/javascript':file.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync(file));
@@ -17,7 +17,7 @@ window.__pending=false;window.__deny=false;window.__history=[];window.__learning
 export async function connect(){
  return {
  observe(callback){observer=callback;callback(null);},
- async login(){observer({email:'teacher@example.com',emailVerified:true});},
+ async login(){observer({email:'teacher@example.com',displayName:'Teacher Test',emailVerified:true});},
  async logout(){observer(null);},
  async students(){if(window.__pending)await new Promise(r=>window.__release=r);if(window.__deny)throw new Error('no-access');return {students:[{id:'a',name:'<img src=x onerror=alert(1)>',kuttab:'One',age:12,hizbs:3,attendance:80},{id:'b',name:'Maryam',kuttab:'Two',age:null,hizbs:null,attendance:null}],role:'teacher',capped:false};},
  async learningHistory(id){return Object.values(window.__learning).filter(x=>x.studentId===id);},
@@ -44,18 +44,26 @@ let browser;
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  browser=await chromium.launch({headless:true});
  const errors=[];
+ fs.mkdirSync('artifacts/katatib',{recursive:true});
  const page=await browser.newPage({viewport:{width:390,height:844}});
  page.on('pageerror',e=>errors.push(e.message));
  await page.route('**/live/gateway.mjs',r=>r.fulfill({contentType:'text/javascript',body:mock}));
  const url=`http://127.0.0.1:${server.address().port}/live/`;
  await page.goto(new URL('/',url).href);
- assert.equal(new URL(page.url()).pathname,'/live/');
+ assert.equal(new URL(page.url()).pathname,'/');
  await page.locator('[data-action=login]').waitFor();
- assert.equal(await page.locator('a.live-link').getAttribute('href'),'../demo/');
+ assert.equal(await page.locator('a[href*=demo]').count(),0);
+ assert.equal(await page.locator('a[href*=live]').count(),0);
  assert.equal(await page.locator('.student-card').count(),0);
+ await page.screenshot({path:'artifacts/katatib/unified-login-phone-ar.png',fullPage:true});
  await page.locator('[data-lang=fr]').click();
  await page.locator('[data-action=login]').click();
  await page.locator('.student-card').first().waitFor();
+ assert.equal(await page.locator('[data-dashboard-students]').innerText(),'2');
+ assert.ok((await page.locator('h1').innerText()).includes('Teacher Test'));
+ assert.equal(await page.locator('a[href*=demo]').count(),0);
+ await page.screenshot({path:'artifacts/katatib/unified-today-phone-fr.png',fullPage:true});
+ await page.locator('[data-screen=students]').click();
  assert.equal(await page.locator('.student-card').count(),2);
  assert.equal(await page.locator('.student-card img').count(),0);
  await page.locator('#live-search').fill('Maryam');assert.equal(await page.locator('.student-card').count(),1);
@@ -72,6 +80,9 @@ let browser;
  await page.setViewportSize({width:1440,height:1000});
  await page.locator('[data-lang=ar]').click();
  await page.screenshot({path:'artifacts/katatib/desktop-test-reader-ar.png',fullPage:true});
+ await page.locator('[data-screen=today]').click();
+ await page.screenshot({path:'artifacts/katatib/unified-today-desktop-ar.png',fullPage:true});
+ await page.locator('[data-screen=students]').click();
  // Actual browser behavior with a mocked server; real transactions/rules run separately in the emulator.
  await page.locator('[data-screen=attendance]').click();
  await page.locator('[data-cloud-student=a][data-cloud-status=absent]').waitFor();
@@ -222,5 +233,5 @@ let browser;
  await page.waitForTimeout(100);
  assert.equal(await page.locator('.student-card').count(),0,'late response cannot restore signed-out data');
  assert.deepEqual(errors,[]);
- console.log('PASS: mocked-provider reader login, denied access, logout and stale-request clearing, no persistent student storage, escaped copied data, history, Arabic/French and responsive layout, cloud attendance save/reload, date/session isolation, unsaved errors and conflicts; learning types, one current row per edit with collapsed prior versions, lost-ack retries and profile consistency; explicit confirmation, practice exclusion and edited progress. Real Google OAuth requires owner setup and a live smoke test.');
+ console.log('PASS: mocked-provider reader login, denied access, logout and stale-request clearing, no persistent student storage, escaped copied data, history, Arabic/French and responsive unified homepage/design with actual account/roster,  cloud attendance save/reload, date/session isolation, unsaved errors and conflicts; learning types, one current row per edit with collapsed prior versions, lost-ack retries and profile consistency; explicit confirmation, practice exclusion and edited progress. Real Google OAuth requires owner setup and a live smoke test.');
 })().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{await browser?.close();server.close();});

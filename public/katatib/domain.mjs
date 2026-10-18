@@ -19,11 +19,7 @@ export const STUDENTS = Object.freeze([
   { id: 'demo-10', group: 'nour', ar: 'نور الهدى', fr: 'Nour El Houda', initials: 'نه', latin: 'NH', hizbs: 27, age: 14, portion: 27, task: 'memorization', color: 'lavender' },
 ]);
 
-export function businessDate(now = new Date()) {
-  const parts = new Intl.DateTimeFormat('en', { timeZone: 'Africa/Casablanca', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
-  const get = key => parts.find(part => part.type === key).value;
-  return `${get('year')}-${get('month')}-${get('day')}`;
-}
+export { businessDate } from './live/dates.mjs';
 
 export function sessionKey({ group, date, session }) {
   if (!GROUPS.some(item => item.id === group) || !SESSIONS.includes(session)) throw new Error('Invalid session scope');

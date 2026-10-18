@@ -121,3 +121,13 @@ The test site's homepage `/` and `/index.html` now redirect to `/live/` with exa
 The root HTML also has a small fallback link/refresh to the connected app. Existing demo assets and localStorage keys are retained, so moving the demo URL does not wipe its device-local saves. Both test Hosting configs agree on entry routing; original production Hosting is unchanged. Browser checks now exercise the homepage redirect to the sign-in screen and run the original fictional workflow at `/demo/`.
 
 Deploy using the existing `scripts/deploy-katatib-connected.sh`. After deployment, open `https://katatib-64049.web.app/`: it should land at `/live/`, showing sign-in or the authorized user's restored session. `/demo/` is available only when explicitly chosen. This routing change does not remove Google sign-in or grant anyone access.
+
+## One connected Katatib website
+
+The root `/` now serves the connected teacher app directly, using the same cream/forest-green layout as the original design preview: an actual-account sidebar, Today dashboard, student cards, attendance and learning forms, and mobile bottom navigation. The signed-out view uses the matching design and Google login. Dashboard counts come from the authorized loaded roster and actual unsaved drafts; there are no invented plans, teacher identities or student metrics.
+
+`/live`, `/live/`, `/live/index.html` and old demo page URLs redirect to `/` for bookmark compatibility. Do not redirect `/live/**`: runtime modules and styles remain there as implementation assets. Normal app navigation contains no demo or alternate-app link. Both test Hosting configurations publish the same root app and explicitly ignore `demo/**`, the old fictional `app.mjs` and the fixture `domain.mjs`. They remain in the repository only as prior design reference/local tests. The connected app's business-date helper is independent of those fixtures.
+
+This change keeps the same Firebase app name, session persistence and test database. Existing saved attendance, learning versions and copied students are reused unchanged. The original production site/config is untouched. The product still has the previously documented functional limits; unifying the interface does not implement the remaining Mushaf, reports, student/parent portal or management features.
+
+Deploy with the existing connected script after pulling the branch, then open only `https://katatib-64049.web.app/`. Sign in once if needed, and test Today → Students/profile → Attendance/save → Learning/save/edit/progress → refresh. Browser checks exercise this single entry and real-account/roster-derived dashboard data with mocked backend responses; emulator and actual Auth persistence checks remain in place.

@@ -4,7 +4,10 @@
     "public": "public/katatib",
     "ignore": [
       "**/.*",
-      "**/node_modules/**"
+      "**/node_modules/**",
+      "demo/**",
+      "app.mjs",
+      "domain.mjs"
     ],
     "headers": [
       {
@@ -31,13 +34,38 @@
     ],
     "redirects": [
       {
-        "source": "/",
-        "destination": "/live/",
+        "source": "/index.html",
+        "destination": "/",
         "type": 302
       },
       {
-        "source": "/index.html",
-        "destination": "/live/",
+        "source": "/live",
+        "destination": "/",
+        "type": 302
+      },
+      {
+        "source": "/live/",
+        "destination": "/",
+        "type": 302
+      },
+      {
+        "source": "/live/index.html",
+        "destination": "/",
+        "type": 302
+      },
+      {
+        "source": "/demo",
+        "destination": "/",
+        "type": 302
+      },
+      {
+        "source": "/demo/",
+        "destination": "/",
+        "type": 302
+      },
+      {
+        "source": "/demo/**",
+        "destination": "/",
         "type": 302
       }
     ]
