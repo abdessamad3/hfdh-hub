@@ -53,9 +53,18 @@ Checked against official Firebase documentation on 18 October 2026:
 
 This is not a claim that every possible alternative requires billing. Alternative authentication/storage designs need a separate security and feasibility review; no change to the owner's no-card preference is inferred.
 
+## Warsh source investigation
+
+The publisher's developer platform and Warsh page were identified:
+
+- https://qurancomplex.gov.sa/en/techquran/dev/
+- https://qurancomplex.gov.sa/warsh/
+
+Direct retrieval returned HTTP 503 or timed out during this session. Search metadata is not enough to verify the complete edition, licence, verse numbering and portion boundaries. No third-party renumbered Warsh dataset has been substituted, and no unverified text is published by this release.
+
 ## Validation and release
 
-`katatib-preview.yml` runs model validation, Chromium teacher/management/family flows, Firestore emulator authorization and real transaction tests, plus actual Firebase SDK/Auth emulator session restoration checks. The existing production build workflow validates the PR without publishing it.
+`katatib-preview.yml` runs model validation, Chromium teacher/management/family and local microphone/recording/download flows, Firestore emulator authorization and real transaction tests, plus actual Firebase SDK/Auth emulator session restoration checks. The existing production build workflow validates the PR without publishing it.
 
 Real Google OAuth and actual Firebase deployment need the owner's account session. Deployment from the existing Cloud Shell checkout:
 
