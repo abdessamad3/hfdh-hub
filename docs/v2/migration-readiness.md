@@ -63,7 +63,7 @@ V2 now reads a complete authorized roster instead of hiding records after 100. T
 
 ## Data and security evidence
 
-- 65 JavaScript model tests cover current behavior, legacy projections, roster paging and report validation. Ten Python tests cover snapshot/reconciliation behavior, typed values, checksum failures, missing parents, source/test boundaries and read-only requests.
+- 65 JavaScript model tests cover current behavior, legacy projections, roster paging and report validation. Sixteen Python tests cover snapshot/reconciliation behavior, typed values, checksum failures, missing parents, source/test boundaries, read-only requests, checkpoint reuse, duplicate-job locking, background completion and atomic report preservation.
 - The real Firestore emulator verifies scoped V1 history reads, reads beyond 500 rows, denial of another student's records, denial of writes to copied history, parent/teacher restrictions, transaction audits, stale updates and revocation.
 - Chromium verifies the connected workflows, 133 historical rows/filtering/child switch, large-roster navigation/search, filter-triggered attendance loading, draft preservation across pages and readiness-report rejection. Existing login, recording and failure/retry checks also run.
 - Matching backup payloads are **not** proof of identity recovery or production readiness. The audit always reports `production_migration_ready: false`.
@@ -85,6 +85,19 @@ bash scripts/katatib-migration-check.sh
 The deployment is fixed to `katatib-64049`. The migration check only reads `hifd-kouttab` and `katatib-64049`, writes private local files under `~/hifdh-backups/migration-check-*`, never restores/deletes/overwrites Firestore, and prints aggregate findings. Reads consume normal Firebase quota. Nonzero exit code 2 means the copy differs; it is not an instruction to overwrite it.
 
 After deployment, sign in as admin at https://katatib-64049.web.app/ and open **Migration readiness**. Optionally select the private `readiness.json` from the check to review counts locally. It is not uploaded or persisted by the app.
+
+### Recover an interrupted comparison
+
+The export discovers nested collections under every document after listing the top-level collections. This can take minutes. The exporter now prints request counts and retries throughout that phase. A missing `readiness.json` means no completed comparison report exists; it does not establish that database records are missing.
+
+Do not launch several checks while waiting. Stop the previous check first. With the updated scripts, reuse its exact output directory:
+
+```bash
+git pull --ff-only
+bash scripts/katatib-migration-check.sh --resume ~/hifdh-backups/migration-check-YOUR-EXISTING-FOLDER --background
+```
+
+Run the `tail -f ...` command printed by the launcher to follow its private log. Ctrl+C stops viewing that log, while the background check continues. A stopped/recycled Cloud Shell VM can still interrupt the job. Resume is between complete project backups: existing ZIPs are validated and reused, and only a missing project export is restarted. Partial exports are not accepted as complete snapshots. A lock prevents concurrent checks in the same directory. Reports are published atomically; a rerun preserves previous reports with a new filename. Exit code 2 indicates a completed comparison with differences, not a failed export or permission to overwrite records.
 
 ## Remaining production gates, in priority order
 

@@ -72,14 +72,18 @@ class Reader:
                 headers={'Authorization': 'Bearer ' + self.token, 'Content-Type': 'application/json'},
             )
             self.requests += 1
+            if self.requests == 1 or self.requests % 25 == 0:
+                print(f'Progress: {self.requests} read requests; checking documents and subcollections ({int(time.monotonic() - self.started)} seconds).', flush=True)
             try:
                 with urllib.request.urlopen(request, timeout=60) as response:
                     return json.load(response)
             except urllib.error.HTTPError as error:
                 if error.code == 401 and attempt < 5:
+                    print('Refreshing Google sign-in for the next read.', flush=True)
                     self.token = None
                     continue
                 if error.code in (429, 500, 502, 503, 504) and attempt < 5:
+                    print(f'Read delayed (HTTP {error.code}); retry {attempt + 1}/5.', flush=True)
                     time.sleep(min(2 ** attempt, 16))
                     continue
                 # Do not print response bodies, records, headers, or tokens.
@@ -87,6 +91,7 @@ class Reader:
             except (urllib.error.URLError, TimeoutError):
                 if attempt == 5:
                     raise RuntimeError('Network read failed. No completed backup was published.') from None
+                print(f'Network read delayed; retry {attempt + 1}/5.', flush=True)
                 time.sleep(min(2 ** attempt, 16))
         raise RuntimeError('Read attempts exhausted.')
 
@@ -183,6 +188,7 @@ def export(output_directory, maximum):
     # One point-in-time for collection discovery AND every document page.
     snapshot = stamp(start - timedelta(seconds=10))
     reader = Reader(snapshot)
+    print('After listing collections, every document is checked for nested collections. This can take several minutes.', flush=True)
     output_directory.mkdir(mode=0o700, parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='hifdh-export-') as temporary:
         directory = Path(temporary)

@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import os
+import tempfile
 from pathlib import Path
 import zipfile
 
@@ -160,16 +161,35 @@ def audit(source_path,target_path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--source',type=Path,required=True)
-    parser.add_argument('--target',type=Path,required=True)
-    parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--source',type=Path)
+    parser.add_argument('--target',type=Path)
+    parser.add_argument('--output',type=Path)
+    parser.add_argument('--validate',type=Path)
+    parser.add_argument('--project',choices=[SOURCE,TARGET])
     args = parser.parse_args()
     os.umask(0o077)
+    if args.validate:
+        if not args.project or args.source or args.target or args.output:
+            parser.error('--validate requires --project and cannot be combined with comparison arguments')
+        rows, _, _ = load_backup(args.validate,args.project)
+        print(f'Validated existing {args.project} backup: {len(rows)} documents. No export needed.')
+        return 0
+    if not all((args.source,args.target,args.output)) or args.project:
+        parser.error('Comparison requires --source, --target and --output')
     result = audit(args.source,args.target)
-    # Never clobber an earlier report or a backup file.
-    with args.output.open('x',encoding='utf8') as stream:
-        json.dump(result,stream,ensure_ascii=False,indent=2)
-        stream.write('\n')
+    # Publish a complete report atomically; interruption never leaves readiness.json half-written.
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w',encoding='utf8',dir=args.output.parent,prefix='.readiness-',delete=False) as stream:
+            temporary = Path(stream.name)
+            json.dump(result,stream,ensure_ascii=False,indent=2)
+            stream.write('\n')
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.link(temporary,args.output)  # Atomic create-if-absent, never overwrite an older report.
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
     print(json.dumps(result,indent=2))
     return 0 if result['typed_clone_matches'] and result['missing_parent_paths_match'] else 2
 

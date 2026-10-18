@@ -1,8 +1,12 @@
 import hashlib
 import importlib.util
 import json
+import fcntl
+import io
 from pathlib import Path
+import subprocess
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 import zipfile
@@ -63,6 +67,98 @@ class AuditTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError,'outside|writes'):reader.request(resource,body=body)
         with self.assertRaises(ValueError):b.configure_project('unknown')
         b.configure_project('hifd-kouttab')
+
+
+class RecoveryTests(unittest.TestCase):
+    def fixtures(self, directory, corrupt=False):
+        paths = []
+        for project, name in [(m.SOURCE, 'source'), (m.TARGET, 'target')]:
+            folder = directory / name
+            folder.mkdir()
+            original = backup(folder, project, {'students/a': {}}, corrupt=corrupt and name == 'source')
+            path = folder / 'hifdh-firestore-fixture.zip'
+            original.rename(path)
+            paths.append(path)
+        return paths
+
+    def run_check(self, directory, *options):
+        return subprocess.run(['bash', str(ROOT/'scripts/katatib-migration-check.sh'), '--resume', str(directory), *options], capture_output=True, text=True, timeout=15)
+
+    def test_resume_reuses_valid_archives_and_preserves_previous_report(self):
+        with tempfile.TemporaryDirectory() as d:
+            directory = Path(d)
+            archives = self.fixtures(directory)
+            before = [p.read_bytes() for p in archives]
+            first = self.run_check(directory)
+            self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+            report = (directory/'readiness.json').read_bytes()
+            self.assertEqual(first.stdout.count('No export needed.'), 2)
+            second = self.run_check(directory)
+            self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
+            self.assertEqual((directory/'readiness.json').read_bytes(), report)
+            self.assertEqual(len(list(directory.glob('readiness-*.json'))), 1)
+            self.assertEqual([p.read_bytes() for p in archives], before)
+
+    def test_invalid_source_stops_before_target_or_network_work(self):
+        with tempfile.TemporaryDirectory() as d:
+            directory = Path(d)
+            self.fixtures(directory, corrupt=True)
+            result = self.run_check(directory)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('checksum', result.stdout + result.stderr)
+            self.assertNotIn('Starting the missing', result.stdout)
+            self.assertNotIn('Validated existing katatib-64049', result.stdout)
+            self.assertFalse((directory/'readiness.json').exists())
+
+    def test_lock_refuses_duplicate_job(self):
+        with tempfile.TemporaryDirectory() as d:
+            directory = Path(d)
+            with (directory/'.check.lock').open('w') as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                result = self.run_check(directory)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('already running', result.stderr)
+            self.assertFalse((directory/'source').exists())
+
+    def test_background_reports_completion_in_private_log(self):
+        with tempfile.TemporaryDirectory() as d:
+            directory = Path(d)
+            self.fixtures(directory)
+            result = self.run_check(directory, '--background')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('tail -f', result.stdout)
+            deadline = time.monotonic() + 5
+            log, = directory.glob('check-*.log')
+            while 'CHECK FINISHED' not in log.read_text() and time.monotonic() < deadline:
+                time.sleep(0.05)
+            self.assertIn('CHECK FINISHED', log.read_text())
+            self.assertTrue((directory/'readiness.json').exists())
+            self.assertEqual(log.stat().st_mode & 0o777, 0o600)
+
+    def test_atomic_publication_never_overwrites_existing_report(self):
+        with tempfile.TemporaryDirectory() as d:
+            directory = Path(d)
+            a, target = self.fixtures(directory)
+            output = directory/'readiness.json'
+            output.write_text('previous report')
+            with patch('sys.argv', ['audit', '--source', str(a), '--target', str(target), '--output', str(output)]):
+                with self.assertRaises(FileExistsError):
+                    m.main()
+            self.assertEqual(output.read_text(), 'previous report')
+            self.assertFalse(list(directory.glob('.readiness-*')))
+
+    def test_export_progress_excludes_credentials_and_document_paths(self):
+        b.configure_project(m.SOURCE)
+        reader = b.Reader('2026-10-18T00:00:00Z')
+        reader.token = 'private-test-token'
+        reader.requests = 24
+        with patch.object(b.urllib.request, 'urlopen') as urlopen, patch('builtins.print') as out:
+            urlopen.return_value.__enter__.return_value = io.StringIO('{}')
+            reader.request(b.ROOT+'/students/private-student')
+        printed = str(out.call_args_list)
+        self.assertIn('25 read requests', printed)
+        self.assertNotIn('private-test-token', printed)
+        self.assertNotIn('private-student', printed)
 
 
 class FakeReader:
