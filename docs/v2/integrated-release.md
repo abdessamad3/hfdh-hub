@@ -2,6 +2,10 @@
 
 This is the connected teacher/management release in PR #11, on `katatib-v2/teacher-preview`. It is not a claim that every feature in the original 21-screen V2 design is finished. The owner has authorized routine implementation without per-step approval; production replacement, billing changes and unresolved data ownership remain critical gates.
 
+## Migration review update
+
+See [the V1/V2 migration-readiness review](migration-readiness.md). A new scoped History/calendar screen now exposes copied V1 evaluations, revisions, memorization and planned work. Attendance history reads paginate instead of stopping at 20, large rosters render/read attendance in 40-student pages, and admins can review migration readiness. Production remains a no-go until the documented gates pass.
+
 ## Delivered in the same website
 
 | Area | Implemented behavior |

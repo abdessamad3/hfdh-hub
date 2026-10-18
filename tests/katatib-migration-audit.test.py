@@ -65,4 +65,73 @@ class AuditTests(unittest.TestCase):
         b.configure_project('hifd-kouttab')
 
 
+class FakeReader:
+    def __init__(self, snapshot):
+        self.snapshot = snapshot
+        self.requests = 0
+
+    def collection_ids(self, parent):
+        return {b.ROOT: ['students', 'programs'],
+                b.ROOT + '/programs/missing': ['history']}.get(parent, [])
+
+    def documents(self, parent, collection):
+        base = parent + '/' + collection
+        values = {'students': [
+            {'name': base + '/s1', 'createTime': '2020-01-01T00:00:00Z', 'fields': {
+                'large': {'integerValue': '9223372036854775807'},
+                'binary': {'bytesValue': 'AP8='},
+                'ref': {'referenceValue': b.ROOT + '/programs/missing'},
+                'nested': {'mapValue': {'fields': {'when': {'timestampValue': '2020-01-01T00:00:00.123456Z'}}}},
+            }}],
+            'programs': [{'name': base + '/missing'}],
+            'history': [{'name': base + '/h1', 'createTime': '2020-01-01T00:00:00Z', 'fields': {}}]}
+        return values[collection]
+
+
+class ExportTests(unittest.TestCase):
+    def test_nested_orphans_typed_values_and_archive(self):
+        with tempfile.TemporaryDirectory() as temp, patch.object(b, 'Reader', FakeReader), patch('builtins.print'):
+            directory = Path(temp)
+            b.export(directory, 100)
+            archive, = directory.glob('*.zip')
+            with zipfile.ZipFile(archive) as bundle:
+                manifest = json.loads(bundle.read('manifest.json'))
+                self.assertEqual(manifest['summary']['documents'], 2)
+                self.assertEqual(manifest['summary']['missing_parent_paths'], 1)
+                self.assertEqual(manifest['summary']['top_level_collections'], ['programs', 'students'])
+                docs = [json.loads(row) for row in bundle.read('documents.jsonl').splitlines()]
+                self.assertEqual(docs[0]['fields']['large']['integerValue'], '9223372036854775807')
+                self.assertEqual(docs[0]['fields']['binary']['bytesValue'], 'AP8=')
+                self.assertIn('/programs/missing/history/h1', docs[1]['name'])
+                self.assertEqual(manifest['status'], 'export_finished_restore_not_verified')
+                for name, digest in manifest['payload_sha256'].items():
+                    self.assertEqual(b.hashlib.sha256(bundle.read(name)).hexdigest(), digest)
+            self.assertIn(b.sha256_file(archive), archive.with_suffix('.sha256').read_text())
+
+    def test_limit_publishes_no_completed_backup(self):
+        with tempfile.TemporaryDirectory() as temp, patch.object(b, 'Reader', FakeReader), patch('builtins.print'):
+            with self.assertRaisesRegex(RuntimeError, 'safety limit'):
+                b.export(Path(temp), 1)
+            self.assertFalse(list(Path(temp).iterdir()))
+
+    def test_pagination_keeps_snapshot(self):
+        reader = b.Reader('2026-10-18T00:00:00.000000Z')
+        calls = []
+        def request(resource, body=None, params=None):
+            calls.append(dict(body))
+            return {'collectionIds': ['first'], 'nextPageToken': 'next'} if len(calls) == 1 else {'collectionIds': ['second']}
+        reader.request = request
+        self.assertEqual(list(reader.collection_ids(b.ROOT)), ['first', 'second'])
+        self.assertEqual(calls[0]['readTime'], calls[1]['readTime'])
+        self.assertEqual(calls[1]['pageToken'], 'next')
+
+    def test_no_write_or_cross_database_calls(self):
+        reader = b.Reader('2026-10-18T00:00:00.000000Z')
+        with self.assertRaisesRegex(RuntimeError, 'database writes'):
+            reader.request(b.ROOT + '/students/s1', body={'fields': {}})
+        with self.assertRaisesRegex(RuntimeError, 'outside'):
+            reader.request('projects/other/databases/(default)/documents')
+
+
+
 if __name__=='__main__':unittest.main()

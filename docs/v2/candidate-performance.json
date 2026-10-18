@@ -1,0 +1,11 @@
+{
+  "scope": "candidate mocked-provider UI; not V1 comparison or live Firebase/phone performance",
+  "students": 501,
+  "cpuSlowdown": 4,
+  "rosterMs": 65,
+  "searchMs": 18,
+  "maxAttendanceReadsPerPage": 40,
+  "maxVisibleCards": 40,
+  "evidence_run": "https://github.com/abdessamad3/hfdh-hub/actions/runs/39168534504",
+  "samples": 1
+}

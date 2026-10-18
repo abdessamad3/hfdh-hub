@@ -2,7 +2,9 @@
 
 Current status: one connected test app with teacher workflows, student management, planned work, reports, audited permissions and restricted family access. The complete original V2 design is not finished.
 
-Start with [the integrated release report](integrated-release.md) for the delivered features, data boundaries, remaining requirements, validation and deployment instructions.
+Start with [the migration-readiness comparison](migration-readiness.md) for the V1/V2 verdict and current evidence.
+
+See [the integrated release report](integrated-release.md) for the delivered features, data boundaries, remaining requirements, validation and deployment instructions.
 
 The owner authorizes routine implementation without repeated approvals. Original records remain recoverable and unchanged; production cutover and billing changes remain critical decisions.
 
