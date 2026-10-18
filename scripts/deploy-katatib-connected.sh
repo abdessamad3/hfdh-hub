@@ -14,6 +14,8 @@ node tests/katatib-cloud-attendance.test.mjs
 node tests/katatib-learning.test.mjs
 node tests/katatib-progress.test.mjs
 node tests/katatib-workspace.test.mjs
+node tests/katatib-migration.test.mjs
+python3 tests/katatib-migration-audit.test.py
 katatib_owner="$(gcloud config get-value account 2>/dev/null)"
 if [[ "$katatib_owner" != *'@'* || "$katatib_owner" == *'gserviceaccount.com' ]]; then
   printf 'Sign in to Cloud Shell with your owner Google account first.\n' >&2

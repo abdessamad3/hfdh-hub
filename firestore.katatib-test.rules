@@ -43,7 +43,13 @@ service cloud.firestore {
     }
     match /attendance/{id} {
       allow get: if historyAllowed(resource.data);
-      allow list: if request.query.limit <= 20 && historyAllowed(resource.data);
+      allow list: if request.query.limit <= 100 && historyAllowed(resource.data);
+      allow write: if false;
+    }
+    // Copied legacy activities are readable only through the student's actual scope.
+    match /{legacyCollection}/{id} {
+      allow get: if legacyCollection in ['evaluations','revisions','memorizations','next_revisions','next_evaluations'] && historyAllowed(resource.data);
+      allow list: if legacyCollection in ['evaluations','revisions','memorizations','next_revisions','next_evaluations'] && request.query.limit <= 100 && historyAllowed(resource.data);
       allow write: if false;
     }
     function validAttendance(d, id) {
@@ -75,7 +81,7 @@ service cloud.firestore {
     }
     match /katatib_attendance_history/{id} {
       allow get: if historyAllowed(resource.data);
-      allow list: if request.query.limit <= 20 && historyAllowed(resource.data);
+      allow list: if request.query.limit <= 100 && historyAllowed(resource.data);
       allow create: if request.resource.data.eventId == id &&
         validAttendance(request.resource.data, request.resource.data.recordId) &&
         getAfter(/databases/$(database)/documents/katatib_attendance/$(request.resource.data.recordId)).data == request.resource.data;

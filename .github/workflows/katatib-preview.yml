@@ -36,6 +36,8 @@ jobs:
           node tests/katatib-learning.test.mjs
           node tests/katatib-progress.test.mjs
           node tests/katatib-workspace.test.mjs
+          node tests/katatib-migration.test.mjs
+          python3 tests/katatib-migration-audit.test.py
           node --check public/katatib/live/app.mjs
           node --check public/katatib/live/gateway.mjs
           bash -n scripts/deploy-katatib-connected.sh

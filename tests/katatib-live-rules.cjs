@@ -47,7 +47,7 @@ const {doc,setDoc,getDoc,collection,getDocs,getDocsFromServer,query,where,limit,
   await assertFails(getDoc(doc(teacher,'attendance/orphan')));
   await assertSucceeds(getDocs(query(collection(teacher,'attendance'),where('studentId','==','a'),limit(20))));
   await assertFails(getDocs(query(collection(teacher,'attendance'),where('studentId','==','b'),limit(20))));
-  await assertFails(getDocs(query(collection(admin,'attendance'),where('studentId','==','a'),limit(21))));
+  await assertFails(getDocs(query(collection(admin,'attendance'),where('studentId','==','a'),limit(101))));
   await assertFails(getDocs(query(collection(teacher,'attendance'),limit(20))));
   for(const db of [admin,teacher,...strangers]) {
    await assertFails(setDoc(doc(db,'katatib_access/new@example.com'),{active:true,role:'admin'}));
@@ -56,7 +56,24 @@ const {doc,setDoc,getDoc,collection,getDocs,getDocsFromServer,query,where,limit,
    await assertFails(deleteDoc(doc(db,'students/a')));
   }
   await assertFails(getDoc(doc(admin,'users/legacy-one')));
-  await assertFails(getDoc(doc(teacher,'evaluations/a')));
+  await assertSucceeds(getDoc(doc(teacher,'evaluations/a')));
+  // Paginated V1 history reads use actual student scope, never the activity's stale kuttab fields.
+  await env.withSecurityRulesDisabled(async ctx=>{
+    const db=ctx.firestore();for(let start=0;start<621;start+=200){const batch=writeBatch(db);for(let n=start;n<Math.min(start+200,621);n++)batch.set(doc(db,'revisions','legacy-'+String(n).padStart(4,'0')),{studentId:'a',date:'2020-01-01',qualityScore:80,notes:'old'});await batch.commit();}
+    for(const c of ['evaluations','revisions','memorizations','next_revisions','next_evaluations'])await setDoc(doc(db,c,'other-student'),{studentId:'b',kuttabName:'One'});
+  });
+  for(const c of ['evaluations','revisions','memorizations','next_revisions','next_evaluations']){
+    await assertSucceeds(getDocs(query(collection(teacher,c),where('studentId','==','a'),limit(100))));
+    await assertFails(getDoc(doc(teacher,c,'other-student')));
+    await assertFails(getDocs(query(collection(teacher,c),limit(100))));
+    await assertFails(getDocs(query(collection(teacher,c),where('studentId','==','a'),limit(101))));
+    await assertFails(setDoc(doc(admin,c,'forbidden-edit'),{studentId:'a'}));
+  }
+  const {readPages}=await import('../public/katatib/live/workspace-model.mjs');
+  const legacyRows=await readPages(async after=>{
+    const snapshot=await getDocsFromServer(query(collection(teacher,'revisions'),where('studentId','==','a'),orderBy(documentId()),...(after?[startAfter(after)]:[]),limit(100)));
+    return snapshot.docs.map(d=>({...d.data(),id:d.id}));
+  });assert.equal(legacyRows.length,621);
   const {commitAttendance,attendanceId}=await import('../public/katatib/live/attendance.mjs');
   const sdk={doc,runTransaction,serverTimestamp,getDocFromServer};
   const context={date:'2026-10-18',session:'morning'};
@@ -148,6 +165,8 @@ const {doc,setDoc,getDoc,collection,getDocs,getDocsFromServer,query,where,limit,
     await assertSucceeds(getDocs(query(collection(portal,'students'),where(documentId(),'==','a'),limit(100))));
     await assertFails(getDocs(query(collection(portal,'students'),limit(100))));
     await assertSucceeds(getDoc(doc(portal,'katatib_students/a')));
+    await assertSucceeds(getDocs(query(collection(portal,'revisions'),where('studentId','==','a'),limit(100))));
+    await assertFails(getDoc(doc(portal,'revisions/other-student')));
     await assertFails(getDoc(doc(portal,'katatib_students/new-student')));
     await assertSucceeds(getDocs(query(collection(portal,'katatib_tasks'),where('studentId','==','a'),limit(100))));
     await assertSucceeds(getDocs(query(collection(portal,'katatib_attendance'),where('studentId','==','a'),limit(100))));

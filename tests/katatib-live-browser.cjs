@@ -12,14 +12,16 @@ const server=http.createServer((req,res)=>{
  res.setHeader('Content-Type',file.endsWith('.mjs')?'text/javascript':file.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync(file));
 });
 const mock=`
+import { historyProjection, mergeHistory } from './legacy.mjs';
 let observer;
-window.__role='teacher';window.__profiles={};window.__workspace={katatib_tasks:{},katatib_access:{},katatib_audit:{}};window.__workspaceFail=false;window.__workspaceLostAck=false;window.__pending=false;window.__deny=false;window.__history=[];window.__learning={};window.__learningFail=false;window.__learningLostAck=false;window.__records={};window.__events=[];window.__saveFail=false;window.__conflict=false;
+window.__legacy={};window.__attendanceCalls=[];window.__role='teacher';window.__profiles={};window.__workspace={katatib_tasks:{},katatib_access:{},katatib_audit:{}};window.__workspaceFail=false;window.__workspaceLostAck=false;window.__pending=false;window.__deny=false;window.__history=[];window.__learning={};window.__learningFail=false;window.__learningLostAck=false;window.__records={};window.__events=[];window.__saveFail=false;window.__conflict=false;
 export async function connect(){
  return {
  observe(callback){observer=callback;callback(null);},
  async login(){observer({email:'teacher@example.com',displayName:'Teacher Test',emailVerified:true});},
  async logout(){observer(null);},
- async students(){if(window.__pending)await new Promise(r=>window.__release=r);if(window.__deny)throw new Error('no-access');const original=[{id:'a',name:'<img src=x onerror=alert(1)>',kuttab:'One',age:12,hizbs:3,attendance:80},{id:'b',name:'Maryam',kuttab:'Two',age:null,hizbs:null,attendance:null}];const students=original.map(s=>({...s,teacherId:'legacy',status:'active',source:'copy',...window.__profiles[s.id]}));for(const [id,p] of Object.entries(window.__profiles))if(!students.some(s=>s.id===id))students.push({id,...p,hizbs:null,attendance:null});return {students,role:window.__role,capped:false};},
+ async students(){if(window.__pending)await new Promise(r=>window.__release=r);if(window.__deny)throw new Error('no-access');const original=[{id:'a',name:'<img src=x onerror=alert(1)>',kuttab:'One',age:12,hizbs:3,attendance:80},{id:'b',name:'Maryam',kuttab:'Two',age:null,hizbs:null,attendance:null}];const students=(window.__roster||original).map(s=>({...s,teacherId:'legacy',status:'active',source:'copy',...window.__profiles[s.id]}));for(const [id,p] of Object.entries(window.__profiles))if(!students.some(s=>s.id===id))students.push({id,...p,hizbs:null,attendance:null});return {students,role:window.__role,capped:false};},
+ async studentHistory(id){return mergeHistory([(window.__legacy[id]||[]).map(r=>historyProjection(r.collection,r.id,r.data))],id);},
  async workspaceList(name,id){if(window.__workspaceFail)throw new Error('unavailable');if(name==='katatib_attendance')return Object.entries(window.__records).filter(([key])=>key.startsWith(id+'~')).map(([key,x])=>{const [studentId,date,session]=key.split('~');return {...x,id:key,studentId,date,session};});return Object.values(window.__workspace[name]||{}).filter(r=>!id||r.studentId===id);},
  async workspaceSave(name,id,input,revision,event){
   if(window.__workspaceFail)throw new Error('unavailable');const target=name==='katatib_students'?window.__profiles:(window.__workspace[name]||={});
@@ -37,7 +39,7 @@ export async function connect(){
   if(window.__learningLostAck){window.__learningLostAck=false;throw new Error('unavailable');}
   return window.__learning[id];
  },
- async attendance(ids,context){return Object.fromEntries(ids.map(id=>[id,window.__records[id+'~'+context.date+'~'+context.session]||{status:'unmarked',note:'',revision:0}]));},
+ async attendance(ids,context){window.__attendanceCalls.push(ids);return Object.fromEntries(ids.map(id=>[id,window.__records[id+'~'+context.date+'~'+context.session]||{status:'unmarked',note:'',revision:0}]));},
  async saveAttendance(id,context,desired,revision){
   if(window.__saveFail)throw new Error('unavailable');
   if(window.__conflict)throw Object.assign(new Error('conflict'),{code:'conflict'});
@@ -346,6 +348,53 @@ let browser;
  assert.equal(await page.locator('[data-work-edit]').count(),0);
  await page.locator('[data-action=logout]').click();
  await page.evaluate(()=>window.__role='teacher');
+ // Full copied history remains visible, with source labels and explicit ambiguity flags.
+ await page.evaluate(()=>{window.__legacy.a=Array.from({length:130},(_,i)=>({collection:'evaluations',id:'evaluation-'+i,data:{studentId:'a',date:'2020-01-01',hizbNumber:2,quantity:1,accuracyScore:80,mistakesCount:2,notes:'Old note '+i}}));window.__legacy.a.push(...['old-a','old-b'].map(id=>({collection:'attendance',id,data:{studentId:'a',date:'2020-01-01',sessionIndex:0,status:'present'}})),{collection:'next_revisions',id:'old-task',data:{studentId:'a',dueDate:'2019-01-01',notes:'Keep overdue original task'}});});
+ await page.locator('[data-action=login]').click();await page.locator('[data-screen=history]').click();
+ await page.locator('[data-history-count]').waitFor();assert.ok((await page.locator('[data-history-count]').innerText()).includes('133'));
+ assert.equal(await page.locator('.workspace-table tbody tr').count(),40);
+ await page.locator('#history-kind').selectOption('attendance');
+ assert.equal(await page.locator('.workspace-table tbody tr').count(),2);
+ assert.ok((await page.locator('.workspace-table').innerText()).includes('V1'));
+ await page.locator('#history-kind').selectOption('nextRevision');
+ assert.ok((await page.locator('.workspace-table').innerText()).includes('Keep overdue original task'));
+ await page.locator('#history-kind').selectOption('evaluation');
+ await page.locator('[data-work-history-page=next]').click();
+ assert.equal(await page.locator('.workspace-table tbody tr').count(),40);
+ await page.locator('#history-student').selectOption('b');
+ await page.waitForFunction(()=>document.querySelector('[data-history-count]')?.textContent.startsWith('0'));
+ assert.equal((await page.locator('#work-root').innerText()).includes('Old note'),false,'switching a child cannot retain another child’s history');
+ await page.locator('[data-action=logout]').click();
+ // Candidate-only performance smoke: 501 students, CPU throttling, bounded DOM and reads.
+ await page.evaluate(()=>{window.__roster=Array.from({length:501},(_,i)=>({id:'s-'+String(i).padStart(4,'0'),name:'Student '+String(i).padStart(4,'0'),kuttab:i%2?'One':'Two',hizbs:null,age:12,attendance:null}));window.__profiles={};window.__attendanceCalls=[];});
+ const cdp=await page.context().newCDPSession(page);await cdp.send('Emulation.setCPUThrottlingRate',{rate:4});
+ await page.locator('[data-action=login]').click();await page.locator('[data-screen=students]').waitFor();
+ const renderStart=Date.now();await page.locator('[data-screen=students]').click();
+ await page.waitForFunction(()=>document.querySelectorAll('#live-students .student-card').length===40);const rosterMs=Date.now()-renderStart;
+ await page.locator('[data-roster-page="1"]').click();assert.equal(await page.locator('#live-students .student-card').count(),40);
+ assert.ok((await page.locator('#live-students').innerText()).includes('Student 0040'));
+ const searchStart=Date.now();await page.locator('#live-search').fill('Student 0500');
+ await page.waitForFunction(()=>document.querySelectorAll('#live-students .student-card').length===1);const searchMs=Date.now()-searchStart;
+ assert.ok((await page.locator('#live-students').innerText()).includes('Student 0500'));
+ await page.locator('#live-search').fill('');await page.locator('[data-screen=attendance]').click();
+ await page.locator('[data-cloud-student=s-0000]').first().waitFor();
+ await page.locator('[data-cloud-student=s-0000][data-cloud-status=late]').click();
+ await page.locator('[data-cloud-note=s-0000]').fill('Unsaved across pages');
+ await page.locator('[data-roster-page="1"]').click();await page.locator('[data-cloud-student=s-0040]').first().waitFor();
+ await page.locator('[data-roster-page="0"]').click();
+ assert.equal(await page.locator('[data-cloud-note=s-0000]').inputValue(),'Unsaved across pages');
+ assert.equal(await page.locator('[data-cloud-student=s-0000][data-cloud-status=late]').getAttribute('aria-pressed'),'true');
+ await page.locator('[data-cloud-note=s-0000]').fill('');await page.locator('[data-cloud-student=s-0000][data-cloud-status=unmarked]').click();
+ await page.locator('#live-school').selectOption('One');await page.locator('[data-cloud-student=s-0001]').first().waitFor();
+ assert.equal(await page.locator('[data-cloud-student=s-0000]').count(),0);
+ await page.locator('#live-school').selectOption('');
+ await page.locator('#live-search').fill('Student 0500');await page.locator('[data-cloud-student=s-0500]').first().waitFor();
+ assert.equal(await page.locator('#live-search').evaluate(el=>document.activeElement===el),true,'attendance search must not lose keyboard focus');
+ const requests=await page.evaluate(()=>window.__attendanceCalls.map(ids=>ids.length));assert.ok(requests.every(n=>n<=40));
+ assert.ok(rosterMs<5000&&searchMs<5000,'candidate UI smoke budget exceeded');
+ fs.writeFileSync('artifacts/katatib/migration-performance.json',JSON.stringify({scope:'candidate mocked-provider UI; not V1 comparison or live Firebase/phone performance',students:501,cpuSlowdown:4,rosterMs,searchMs,maxAttendanceReadsPerPage:Math.max(...requests),maxVisibleCards:40},null,2));
+ await page.screenshot({path:'artifacts/katatib/large-roster-attendance.png',fullPage:true});await cdp.send('Emulation.setCPUThrottlingRate',{rate:1});
+ await page.locator('[data-action=logout]').click();await page.evaluate(()=>window.__roster=null);
  await page.evaluate(()=>window.__deny=true);await page.locator('[data-action=login]').click();
  await page.getByRole('alert').waitFor();assert.equal(await page.locator('.student-card').count(),0);
  await page.locator('[data-action=logout]').click();

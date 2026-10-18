@@ -1,3 +1,4 @@
+import { LEGACY_COLLECTIONS, HISTORY_COLLECTIONS, historyProjection, mergeHistory } from './legacy.mjs';
 import { readPages, commitWorkspace, STAFF_ROLES } from './workspace-model.mjs';
 import { createSessionAuth } from './auth-session.mjs';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js';
@@ -43,6 +44,16 @@ export async function connect() {
         return out;
       }));
       return { students: mergeStudents(batches), role: access.data().role, capped: false };
+    },
+    async studentHistory(studentId) {
+      const batches=await Promise.all(HISTORY_COLLECTIONS.map(async name=>{
+        const rows=await readPages(async after=>{
+          const snapshot=await getDocsFromServer(query(collection(db,name),where('studentId','==',studentId),orderBy(documentId()),...(after?[startAfter(after)]:[]),limit(100)));
+          return snapshot.docs.map(d=>({...d.data(),id:d.id}));
+        });
+        return rows.map(r=>historyProjection(name,r.id,r));
+      }));
+      return mergeHistory(batches,studentId);
     },
     async workspaceList(name,studentId) {
       if(!['katatib_tasks','katatib_access','katatib_audit','katatib_attendance'].includes(name))throw new Error('invalid-collection');
@@ -96,15 +107,18 @@ export async function connect() {
       return commitAttendance(db, { doc, runTransaction, serverTimestamp, getDocFromServer }, auth.currentUser.uid, studentId, context, desired, expectedRevision, crypto.randomUUID());
     },
     async attendanceHistory(studentId) {
-      const snapshot = await getDocsFromServer(query(collection(db, 'katatib_attendance_history'), where('studentId', '==', studentId), limit(20)));
-      return snapshot.docs.map(d => { const x=d.data(); return {date:x.date,session:x.session,status:x.status,note:x.note,revision:x.revision}; }).sort((a,b)=>b.date.localeCompare(a.date)||b.revision-a.revision);
+      const rows=await readPages(async after=>{
+        const snapshot=await getDocsFromServer(query(collection(db,'katatib_attendance_history'),where('studentId','==',studentId),orderBy(documentId()),...(after?[startAfter(after)]:[]),limit(100)));
+        return snapshot.docs.map(d=>({...d.data(),id:d.id}));
+      });
+      return rows.map(x=>({date:x.date,session:x.session,status:x.status,note:x.note,revision:x.revision})).sort((a,b)=>b.date.localeCompare(a.date)||b.revision-a.revision);
     },
-    async history(id) {
-      // Recheck the student with server rules before reading a bounded history query.
-      const student = await getDocFromServer(doc(db, 'students', id));
-      if (!student.exists()) { const added=await getDocFromServer(doc(db,'katatib_students',id));if(!added.exists())throw new Error('no-access');return []; }
-      const snapshot = await getDocsFromServer(query(collection(db, 'attendance'), where('studentId', '==', id), limit(20)));
-      return snapshot.docs.map(d => { const x = d.data(); return { date: typeof x.date === 'string' ? x.date : '', status: typeof x.status === 'string' ? x.status : '', session: Number.isInteger(x.sessionIndex) ? x.sessionIndex : null }; }).sort((a,b) => b.date.localeCompare(a.date));
+    async history(studentId) {
+      const rows=await readPages(async after=>{
+        const snapshot=await getDocsFromServer(query(collection(db,'attendance'),where('studentId','==',studentId),orderBy(documentId()),...(after?[startAfter(after)]:[]),limit(100)));
+        return snapshot.docs.map(d=>({...d.data(),id:d.id}));
+      });
+      return rows.map(x=>({date:typeof x.date==='string'?x.date:'',status:typeof x.status==='string'?x.status:'',session:Number.isInteger(x.sessionIndex)?x.sessionIndex:null})).sort((a,b)=>b.date.localeCompare(a.date));
     },
   };
 }

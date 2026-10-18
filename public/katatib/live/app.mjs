@@ -1,3 +1,5 @@
+import { rosterPage } from './roster.mjs';
+import { legacyLabels } from './legacy.mjs';
 import { createLocalRecorder, recorderLabels } from './recorder.mjs';
 const localRecorder=createLocalRecorder();
 import { createWorkspace, workspaceLabels } from './workspace.mjs';
@@ -18,10 +20,10 @@ const copy = {
     network:'تعذّر الاتصال بالخدمة. تحقّق من الإنترنت ثم أعد المحاولة.', config:'تعذّر التحقق من إعداد مشروع الاختبار. تم إيقاف الاتصال لحماية البيانات.',
     error:'تعذّر تحميل البيانات. تحقّق من الاتصال وإعداد الصلاحيات ثم أعد المحاولة.', retry:'إعادة المحاولة', search:'البحث عن طالب', all:'كل الكتاتيب المتاحة', count:'طلاب محمّلون', empty:'لا يوجد طلاب مطابقون.',
     hizbs:'الرصيد السابق (أحزاب)', age:'العمر', school:'الكتّاب', unknown:'غير مسجّل', profile:'عرض الملف', close:'إغلاق', attendance:'نسبة الحضور المنسوخة', source:'هذه قيم من النسخة المنسوخة؛ لم يُعَد حسابها.',
-    history:'سجل الحضور (حتى 20 سجلاً من النسخة)', noHistory:'لا يوجد سجل حضور.', historyError:'تعذّر تحميل سجل الحضور.', capped:'تم الوصول إلى حد 100 طالب في إحدى مجموعات الوصول. قد لا تظهر جميع النتائج.',
+    history:'سجل الحضور من النسخة الأصلية', noHistory:'لا يوجد سجل حضور.', historyError:'تعذّر تحميل سجل الحضور.', capped:'تم الوصول إلى حد 100 طالب في إحدى مجموعات الوصول. قد لا تظهر جميع النتائج.',
     practice:'يحتاج تثبيت', confirmMastery:'أؤكد أن الطالب أتقن هذا المقطع', masteryHint:'الحفظ المثبت فقط يزيد التقدم. المحاولة غير المكتملة تُسجّل «يحتاج تثبيت».', progressTitle:'تقدم الحفظ', baselineLabel:'رصيد V1 المنسوخ (أحزاب)', trackedLabel:'حفظ مثبت محدد بالمقاطع في V2 (أحزاب)', eighthsLabel:'أثمان فريدة', practiceLabel:'أثمان لها محاولات تثبيت', revisionCount:'سجلات المراجعة الحالية', evaluationCount:'سجلات التقييم الحالية', baselineUnknown:'لا يحدد الرصيد القديم المقاطع المحفوظة، لذلك لا نجمعه مع V2 كي لا نكرر احتسابها.', trackedOnly:'الشريط يخص مقاطع V2 المثبتة فقط من 60 حزباً.', unreviewedLabel:'سجلات حفظ سابقة تحتاج تأكيد المعلم؛ لم تُحتسب في تقدم V2', progressConflict:'توجد تعديلات متعارضة؛ استُبعدت من الحساب حتى مراجعتها.', oldLearningLabel:'يحتاج مراجعة المعلم قبل احتسابه',
     learningTab:'الحفظ والتقييم', learningTitle:'تسجيل التعلم', learningHint:'حدد الحزب والثمن من 1 إلى 8 داخل الحزب نفسه. للمقاطع الممتدة على حزبين، سجّل كل حزب على حدة.', learningStudent:'الطالب', chooseStudent:'اختر الطالب', learningType:'نوع السجل', memorization:'حفظ مثبت', revision:'مراجعة', evaluation:'تقييم', learningHizb:'الحزب', learningFrom:'من الثمن', learningTo:'إلى الثمن', learningMistakes:'عدد الأخطاء', learningScore:'تقدير المعلم من 100', learningScoreHint:'التقدير يدخله المعلم؛ لا توجد معادلة نقاط تلقائية. يُحسب تقدم V2 من المقاطع المثبتة الفريدة، مع إبقاء رصيد V1 منفصلاً.', learningHistory:'سجل التعلم', learningNoHistory:'لا توجد سجلات معروضة. اختر طالباً لعرض سجلاته.', learningSaved:'تم حفظ السجل في قاعدة الاختبار.', learningInvalid:'تحقق من الطالب والتاريخ ونطاق الأثمان والأخطاء والتقدير.', learningRetry:'إعادة محاولة حفظ السجل نفسه', learningSaveError:'لم يُؤكد الحفظ. احتُفظ بالسجل دون تغيير لتتمكن من إعادة المحاولة من دون تكرار. يلزم الاتصال والصلاحيات.', learningConflict:'معرّف هذا السجل محفوظ بمحتوى مختلف. لم يُستبدل. راجع سجل الطالب قبل المتابعة.', learningCorrect:'تعديل', learningCorrection:'تعديل سجل موجود. بعد الحفظ ستظهر المعلومات المحدّثة في السجل نفسه.', learningCorrected:'سجل التعديلات', learningPrevious:'نسخة سابقة', learningCompeting:'توجد تعديلات متزامنة مختلفة. راجع سجل التعديلات.', learningUpdate:'حفظ التعديل', learningCancel:'إلغاء التصحيح', learningDiscard:'هل تريد استبدال مسودة التعلم غير المحفوظة؟',
-    markAttendance:'الحضور', studentsTab:'الطلاب', cloudAttendance:'تسجيل الحضور', date:'التاريخ', cloudSession:'الحصة', morning:'الصباحية', afternoon:'المسائية', evening:'الليلية', unmarked:'لم يسجّل', cloudNote:'ملاحظة', cloudSave:'حفظ', cloudSaving:'جارٍ الحفظ…', cloudSaved:'محفوظ في موقع التجربة', cloudUnsaved:'تغييرات لم تُحفظ بعد', cloudNotMarked:'لم يُحفظ سجل لهذه الحصة', cloudReload:'تحديث من الخادم', cloudHint:'احفظ حضور كل طالب على حدة. يلزم الاتصال بالإنترنت؛ لا تُحسب الحالات غير المسجلة غياباً. اختر الحصة يدوياً.', cloudLoadError:'تعذّر تحميل الحضور من الخادم. حاول مجدداً.', cloudSaveError:'لم يتم تأكيد الحفظ. احتُفظ بالتعديل هنا؛ تحقّق من الاتصال والصلاحيات ثم أعد المحاولة.', cloudConflict:'عُدّل هذا السجل من مكان آخر. لم يُستبدل. حدّثه من الخادم ثم أعد التعديل.', cloudDiscard:'سيُستبدل تعديلك غير المحفوظ بالقيمة الموجودة في الخادم. هل تتابع؟', cloudHistory:'سجل الحضور الجديد V2 (حتى 20 تعديلاً)', cloudRevision:'مراجعة', cloudLeave:'يوجد تعديل غير محفوظ. هل تريد تسجيل الخروج وفقدانه؟',
+    markAttendance:'الحضور', studentsTab:'الطلاب', cloudAttendance:'تسجيل الحضور', date:'التاريخ', cloudSession:'الحصة', morning:'الصباحية', afternoon:'المسائية', evening:'الليلية', unmarked:'لم يسجّل', cloudNote:'ملاحظة', cloudSave:'حفظ', cloudSaving:'جارٍ الحفظ…', cloudSaved:'محفوظ في موقع التجربة', cloudUnsaved:'تغييرات لم تُحفظ بعد', cloudNotMarked:'لم يُحفظ سجل لهذه الحصة', cloudReload:'تحديث من الخادم', cloudHint:'احفظ حضور كل طالب على حدة. يلزم الاتصال بالإنترنت؛ لا تُحسب الحالات غير المسجلة غياباً. اختر الحصة يدوياً.', cloudLoadError:'تعذّر تحميل الحضور من الخادم. حاول مجدداً.', cloudSaveError:'لم يتم تأكيد الحفظ. احتُفظ بالتعديل هنا؛ تحقّق من الاتصال والصلاحيات ثم أعد المحاولة.', cloudConflict:'عُدّل هذا السجل من مكان آخر. لم يُستبدل. حدّثه من الخادم ثم أعد التعديل.', cloudDiscard:'سيُستبدل تعديلك غير المحفوظ بالقيمة الموجودة في الخادم. هل تتابع؟', cloudHistory:'سجل تعديلات الحضور V2', cloudRevision:'مراجعة', cloudLeave:'يوجد تعديل غير محفوظ. هل تريد تسجيل الخروج وفقدانه؟',
     present:'حاضر', absent:'غائب', excused:'معذور', late:'متأخر', leftEarly:'انصرف مبكراً', session:'رقم الحصة في النسخة الأصلية', admin:'مسؤول الاختبار', teacher:'معلم',
   },
   fr: {
@@ -34,16 +36,16 @@ const copy = {
     network:'Connexion au service impossible. Vérifiez Internet puis réessayez.', config:'Impossible de vérifier la configuration du projet de test. Connexion interrompue pour protéger les données.',
     error:'Impossible de charger les données. Vérifiez la connexion et les droits puis réessayez.', retry:'Réessayer', search:'Rechercher un élève', all:'Tous les kuttabs autorisés', count:'élèves chargés', empty:'Aucun élève correspondant.',
     hizbs:'Acquis antérieurs (hizbs)', age:'Âge', school:'Kuttab', unknown:'Non renseigné', profile:'Voir le profil', close:'Fermer', attendance:'Taux de présence copié', source:'Valeurs issues de la copie ; elles n’ont pas été recalculées.',
-    history:'Présences (jusqu’à 20 entrées de la copie)', noHistory:'Aucune présence enregistrée.', historyError:'Impossible de charger les présences.', capped:'La limite de 100 élèves est atteinte pour un périmètre. Certains résultats peuvent manquer.',
+    history:'Présences de la copie d’origine', noHistory:'Aucune présence enregistrée.', historyError:'Impossible de charger les présences.', capped:'La limite de 100 élèves est atteinte pour un périmètre. Certains résultats peuvent manquer.',
     practice:'À consolider', confirmMastery:'Je confirme que cet élève maîtrise cette portion', masteryHint:'Seule la mémorisation confirmée augmente la progression. Une tentative incomplète se note «À consolider».', progressTitle:'Progression de mémorisation', baselineLabel:'Acquis V1 copiés (hizbs)', trackedLabel:'Portions V2 confirmées (hizbs)', eighthsLabel:'huitièmes uniques', practiceLabel:'Huitièmes avec tentatives de consolidation', revisionCount:'Fiches de révision actuelles', evaluationCount:'Fiches d’évaluation actuelles', baselineUnknown:'Les acquis anciens ne précisent pas les portions. Ils ne sont pas additionnés à V2 pour éviter les doublons.', trackedOnly:'La barre représente uniquement les portions V2 confirmées sur 60 hizbs.', unreviewedLabel:'anciennes fiches de mémorisation à confirmer ; exclues de la progression V2', progressConflict:'Des modifications concurrentes sont exclues du calcul en attendant leur vérification.', oldLearningLabel:'À vérifier par le professeur avant comptage',
     learningTab:'Apprentissage', learningTitle:'Saisir un apprentissage', learningHint:'Choisissez un hizb et les huitièmes 1 à 8 dans ce même hizb. Pour deux hizbs, saisissez une fiche par hizb.', learningStudent:'Élève', chooseStudent:'Choisir un élève', learningType:'Type de fiche', memorization:'Mémorisation confirmée', revision:'Révision', evaluation:'Évaluation', learningHizb:'Hizb', learningFrom:'Du huitième', learningTo:'Au huitième', learningMistakes:'Nombre d’erreurs', learningScore:'Note du professeur sur 100', learningScoreHint:'La note est saisie par le professeur, sans formule automatique. V2 compte les portions confirmées uniques en gardant les acquis V1 séparés.', learningHistory:'Apprentissages', learningNoHistory:'Aucune fiche affichée. Choisissez un élève pour consulter ses fiches.', learningSaved:'Fiche enregistrée dans la base de test.', learningInvalid:'Vérifiez l’élève, la date, les huitièmes, les erreurs et la note.', learningRetry:'Réessayer la même fiche', learningSaveError:'Enregistrement non confirmé. La fiche reste inchangée pour réessayer sans doublon. Vérifiez Internet et vos droits.', learningConflict:'Cet identifiant contient déjà une fiche différente. Elle n’a pas été écrasée. Consultez l’historique de l’élève.', learningCorrect:'Modifier', learningCorrection:'Modification d’une fiche existante. Après enregistrement, la fiche affichera les informations actualisées.', learningCorrected:'Historique des modifications', learningPrevious:'Version précédente', learningCompeting:'Des modifications concurrentes existent. Consultez l’historique.', learningUpdate:'Enregistrer la modification', learningCancel:'Annuler la correction', learningDiscard:'Remplacer le brouillon d’apprentissage non enregistré ?',
-    markAttendance:'Présence', studentsTab:'Élèves', cloudAttendance:'Saisir les présences', date:'Date', cloudSession:'Séance', morning:'Matin', afternoon:'Après-midi', evening:'Soir', unmarked:'Non renseigné', cloudNote:'Note', cloudSave:'Enregistrer', cloudSaving:'Enregistrement…', cloudSaved:'Enregistré dans la base de test', cloudUnsaved:'Modifications non enregistrées', cloudNotMarked:'Aucune fiche enregistrée pour cette séance', cloudReload:'Recharger du serveur', cloudHint:'Enregistrez chaque élève séparément. Internet est nécessaire ; une présence non renseignée ne compte pas comme une absence. Choisissez la séance manuellement.', cloudLoadError:'Impossible de charger les présences du serveur. Réessayez.', cloudSaveError:'Enregistrement non confirmé. La modification reste ici ; vérifiez Internet et vos droits puis réessayez.', cloudConflict:'Cette fiche a été modifiée ailleurs et n’a pas été écrasée. Rechargez-la du serveur puis refaites votre modification.', cloudDiscard:'Votre modification non enregistrée sera remplacée par la valeur du serveur. Continuer ?', cloudHistory:'Présences V2 (jusqu’à 20 modifications)', cloudRevision:'Révision', cloudLeave:'Des modifications ne sont pas enregistrées. Se déconnecter et les perdre ?',
+    markAttendance:'Présence', studentsTab:'Élèves', cloudAttendance:'Saisir les présences', date:'Date', cloudSession:'Séance', morning:'Matin', afternoon:'Après-midi', evening:'Soir', unmarked:'Non renseigné', cloudNote:'Note', cloudSave:'Enregistrer', cloudSaving:'Enregistrement…', cloudSaved:'Enregistré dans la base de test', cloudUnsaved:'Modifications non enregistrées', cloudNotMarked:'Aucune fiche enregistrée pour cette séance', cloudReload:'Recharger du serveur', cloudHint:'Enregistrez chaque élève séparément. Internet est nécessaire ; une présence non renseignée ne compte pas comme une absence. Choisissez la séance manuellement.', cloudLoadError:'Impossible de charger les présences du serveur. Réessayez.', cloudSaveError:'Enregistrement non confirmé. La modification reste ici ; vérifiez Internet et vos droits puis réessayez.', cloudConflict:'Cette fiche a été modifiée ailleurs et n’a pas été écrasée. Rechargez-la du serveur puis refaites votre modification.', cloudDiscard:'Votre modification non enregistrée sera remplacée par la valeur du serveur. Continuer ?', cloudHistory:'Historique des présences V2', cloudRevision:'Révision', cloudLeave:'Des modifications ne sont pas enregistrées. Se déconnecter et les perdre ?',
     present:'Présent', absent:'Absent', excused:'Excusé', late:'En retard', leftEarly:'Parti tôt', session:'Numéro de séance dans la copie d’origine', admin:'Administrateur du test', teacher:'Enseignant',
   },
 };
 let allStudents = [];
 let language = 'ar', gateway, user = null, students = [], role = '', capped = false, state = 'loading', error = '', search = '', school = '', epoch = 0, historyEpoch = 0, pendingLogin = false;
-const t = key => copy[language][key] || workspaceLabels[language][key] || recorderLabels[language][key] || copy[language].error;
+const t = key => copy[language][key] || workspaceLabels[language][key] || legacyLabels[language][key] || recorderLabels[language][key] || copy[language].error;
 const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const value = (n,precision=2) => n == null ? t('unknown') : new Intl.NumberFormat(language === 'ar' ? 'ar-MA' : 'fr-FR', {maximumFractionDigits:precision}).format(n);
 function errorKey(e) {
@@ -55,10 +57,13 @@ function errorKey(e) {
   if (/network|unavailable|Failed to fetch/.test(code)) return 'network';
   return 'error';
 }
+let rosterIndex=0;
+const pageView=()=>rosterPage(students,{search,school,page:rosterIndex});
+function rosterPager(){const p=pageView();return p.pages>1?`<nav class="roster-pager" aria-label="${t('studentsTab')}"><button type="button" class="secondary-button" data-roster-page="${p.page-1}" ${p.page===0?'disabled':''}>${t('previous')}</button><span>${p.from}–${p.to} / ${p.total}</span><button type="button" class="secondary-button" data-roster-page="${p.page+1}" ${p.page+1>=p.pages?'disabled':''}>${t('next')}</button></nav>`:'';}
 function renderCards() {
- const matches=students.filter(s=>(!school||s.kuttab===school)&&s.name.toLocaleLowerCase().includes(search.toLocaleLowerCase().trim()));
- return matches.map(studentCard).join('')||`<p class="empty-state">${t('empty')}</p>`;
+ return (pageView().rows.map(studentCard).join('')||`<p class="empty-state">${t('empty')}</p>`)+rosterPager();
 }
+function updateRoster(){const target=document.getElementById('live-students');if(target)target.innerHTML=renderResults();const status=document.getElementById('attendance-loading');if(status)status.textContent=attendanceState==='loading'?t('loading'):'';}
 let screen = 'today', cloudContext = {date:businessDate(),session:'morning'}, cloudRows = new Map(), attendanceState = 'idle', attendanceEpoch = 0;
 const rowKey = id => attendanceId(id, cloudContext.date, cloudContext.session);
 const cloudRow = id => cloudRows.get(rowKey(id));
@@ -66,33 +71,33 @@ const rowDirty = row => row && !sameAttendance(row.base,row.draft);
 function hasDrafts() {return localRecorder.dirty()||workspace.dirty()||learningTouched||!!learningPending||[...cloudRows.values()].some(rowDirty);}
 function hasSaves() {return localRecorder.busy()||workspace.busy()||learningSaving||[...cloudRows.values()].some(row=>row.saving);}
 function attendanceControls() {
-  return `<div class="live-filter cloud-controls"><label>${t('date')}<input id="cloud-date" type="date" value="${cloudContext.date}" ${hasSaves()?'disabled':''}></label><label>${t('cloudSession')}<select id="cloud-session" ${hasSaves()?'disabled':''}>${CLOUD_SESSIONS.map(s=>`<option value="${s}" ${cloudContext.session===s?'selected':''}>${t(s)}</option>`).join('')}</select></label></div><p class="live-status">${t('cloudHint')}</p>${attendanceState==='loading'?`<p role="status">${t('loading')}</p>`:''}${attendanceState==='error'?`<p class="notice-error" role="alert">${t('cloudLoadError')}</p><button class="secondary-button" data-action="reload-attendance">${t('retry')}</button>`:''}`;
+  return `<div class="live-filter cloud-controls"><label>${t('date')}<input id="cloud-date" type="date" value="${cloudContext.date}" ${hasSaves()?'disabled':''}></label><label>${t('cloudSession')}<select id="cloud-session" ${hasSaves()?'disabled':''}>${CLOUD_SESSIONS.map(s=>`<option value="${s}" ${cloudContext.session===s?'selected':''}>${t(s)}</option>`).join('')}</select></label></div><p class="live-status">${t('cloudHint')}</p><p id="attendance-loading" role="status">${attendanceState==='loading'?t('loading'):''}</p>`;
 }
 function attendanceCards() {
-  const matches=students.filter(s=>(!school||s.kuttab===school)&&s.name.toLocaleLowerCase().includes(search.toLocaleLowerCase().trim()));
-  return matches.map(s=>{
+  const matches=pageView().rows;
+  return (attendanceState==='error'?`<p class="notice-error" role="alert">${t('cloudLoadError')}</p><button class="secondary-button" data-action="reload-attendance">${t('retry')}</button>`:'')+matches.map(s=>{
     const row=cloudRow(s.id);
     if(!row)return `<article class="student-card"><h3>${escape(s.name)}</h3><p>${t('loading')}</p></article>`;
     const saved=row.base.revision>0;
     return `<article class="student-card cloud-card" data-cloud-row="${escape(s.id)}"><h3>${escape(s.name||t('unknown'))}</h3><p>${escape(s.kuttab||t('unknown'))}</p><div class="status-grid" role="group" aria-label="${escape(t('markAttendance')+' · '+s.name)}">${CLOUD_STATUSES.map(status=>`<button class="status-button ${status}" data-cloud-student="${escape(s.id)}" data-cloud-status="${status}" aria-pressed="${row.draft.status===status}" ${row.saving?'disabled':''}>${t(status)}</button>`).join('')}</div><label>${t('cloudNote')}<textarea data-cloud-note="${escape(s.id)}" maxlength="500" ${row.saving?'disabled':''}>${escape(row.draft.note)}</textarea></label><p class="cloud-save-state ${row.error?'live-error':''}" role="status" data-cloud-message="${escape(s.id)}">${t(row.error || (row.saving?'cloudSaving':rowDirty(row)?'cloudUnsaved':saved?'cloudSaved':'cloudNotMarked'))}</p><div class="cloud-buttons"><button class="primary-button" data-cloud-save="${escape(s.id)}" ${row.saving||!rowDirty(row)?'disabled':''}>${t('cloudSave')}</button><button class="secondary-button" data-cloud-reload="${escape(s.id)}" ${row.saving?'disabled':''}>${t('cloudReload')}</button></div></article>`;
-  }).join('')||`<p class="empty-state">${t('empty')}</p>`;
+  }).join('')+rosterPager()||`<p class="empty-state">${t('empty')}</p>`;
 }
 function renderResults() {return screen==='learning'?learningView():screen==='attendance'?attendanceCards():renderCards();}
-async function loadAttendance() {
+async function loadAttendance(soft=false) {
   if(!user||state!=='ready')return;
   const generation=++attendanceEpoch, authGeneration=epoch;
-  const context={...cloudContext};
-  attendanceState='loading';render();
+  const context={...cloudContext},visible=pageView().rows;
+  attendanceState='loading';if(soft)updateRoster();else render();
   try {
-    const records=await gateway.attendance(students.map(s=>s.id),context);
+    const records=await gateway.attendance(visible.map(s=>s.id),context);
     if(generation!==attendanceEpoch||authGeneration!==epoch||!user)return;
-    for(const s of students){
+    for(const s of visible){
       const key=attendanceId(s.id,context.date,context.session), old=cloudRows.get(key), base=records[s.id];
       if(!old||(!rowDirty(old)&&!old.saving)) cloudRows.set(key,{base:{...base},draft:{status:base.status,note:base.note},saving:false,error:''});
     }
     attendanceState='ready';
   }catch{if(generation!==attendanceEpoch||authGeneration!==epoch)return;attendanceState='error';}
-  render();
+  if(soft)updateRoster();else render();
 }
 async function saveCloud(id) {
   const row=cloudRow(id);if(!row||row.saving||!rowDirty(row)||!user)return;
@@ -174,9 +179,9 @@ async function saveLearning(event) {
   if(generation===epoch&&learningSaved)loadLearning();
 }
 
-const icons={today:'◈',students:'◉',attendance:'✓',learning:'▤',tasks:'◷',reports:'▥',manage:'⚙',access:'♙',audit:'≡',recording:'◉'};
-const extraScreens=['tasks','reports','manage','access','audit'];
-const screens=()=>['today','students',...(['parent','student'].includes(role)?[]:['attendance','learning','recording']),'tasks','reports',...(['admin','manager'].includes(role)?['manage']:[]),...(role==='admin'?['access','audit']:[])];
+const icons={today:'◈',students:'◉',attendance:'✓',learning:'▤',tasks:'◷',reports:'▥',manage:'⚙',access:'♙',audit:'≡',recording:'◉',history:'▦'};
+const extraScreens=['tasks','reports','manage','access','audit','history'];
+const screens=()=>['today','students',...(['parent','student'].includes(role)?[]:['attendance','learning','recording']),'history','tasks','reports',...(['admin','manager'].includes(role)?['manage']:[]),...(role==='admin'?['access','audit']:[])];
 const titleKey=s=>({today:'today',students:'studentsTab',attendance:'cloudAttendance',learning:'learningTab'}[s]||s);
 const screenTitle=()=>t(titleKey(screen));
 const displayName=()=>user?.displayName?.trim()||user?.email||t('workspaceTitle');
@@ -209,7 +214,7 @@ function render(){
 }
 
 function clearData() {
-  localRecorder.reset();workspace.reset();allStudents=[];
+  localRecorder.reset();workspace.reset();allStudents=[];rosterIndex=0;
   learningEpoch++;learningForm=blankLearning();learningRecords=[];learningState='idle';learningError='';learningSaved=false;learningSaving=false;learningPending=null;learningTouched=false;
   attendanceEpoch++; cloudRows.clear(); attendanceState='idle'; screen='today'; cloudContext={date:businessDate(),session:'morning'};
   epoch++; historyEpoch++; students = []; role = ''; capped = false; search = ''; school = ''; dialog.close(); dialog.replaceChildren();
@@ -256,6 +261,7 @@ root.addEventListener('click', async e => {
   if(nextScreen&&(!screens().includes(nextScreen)||workspace.busy()||extraScreens.includes(screen)&&nextScreen!==screen&&!workspace.canLeave()||screen==='recording'&&nextScreen!==screen&&!localRecorder.canLeave()))return;
   if(nextScreen&&nextScreen!==screen&&extraScreens.includes(screen))workspace.reset();
   if(nextScreen&&nextScreen!==screen&&screen==='recording')localRecorder.reset();
+  if(b.dataset.rosterPage!==undefined){rosterIndex=Number(b.dataset.rosterPage);if(screen==='attendance')loadAttendance();else render();return;}
   if(b.dataset.action?.startsWith('open-')){screen=b.dataset.action.slice(5);if(screen==='attendance')loadAttendance();else if(screen==='learning')loadLearning();else render();window.scrollTo(0,0);}
   else if (b.dataset.screen) {screen=b.dataset.screen;if(screen==='attendance')loadAttendance();else if(screen==='learning')loadLearning();else render();}
   else if(b.dataset.learningCorrect){
@@ -283,7 +289,7 @@ root.addEventListener('click', async e => {
   } else if (b.dataset.action === 'retry') { if (user) loadStudents(); else if (gateway) {state='signed-out';error='';render();} else start(); }
 });
 root.addEventListener('submit',e=>{if(e.target.id==='learning-form')saveLearning(e);});
-root.addEventListener('input', e=>{if(e.target.closest('#learning-form')&&e.target.name){if(!learningPending&&e.target.tagName!=='SELECT'){learningForm[e.target.name]=e.target.type==='checkbox'?e.target.checked:e.target.value;learningTouched=true;learningSaved=false;}}else if(e.target.dataset.cloudNote){const row=cloudRow(e.target.dataset.cloudNote);if(row&&!row.saving){row.draft.note=e.target.value;row.error='';const card=e.target.closest('[data-cloud-row]');card.querySelector('[data-cloud-save]').disabled=!rowDirty(row);card.querySelector('[data-cloud-message]').textContent=t(rowDirty(row)?'cloudUnsaved':row.base.revision?'cloudSaved':'cloudNotMarked');}}else if(e.target.id === 'live-search'){search=e.target.value;document.getElementById('live-students').innerHTML=renderResults();}});
+root.addEventListener('input', e=>{if(e.target.closest('#learning-form')&&e.target.name){if(!learningPending&&e.target.tagName!=='SELECT'){learningForm[e.target.name]=e.target.type==='checkbox'?e.target.checked:e.target.value;learningTouched=true;learningSaved=false;}}else if(e.target.dataset.cloudNote){const row=cloudRow(e.target.dataset.cloudNote);if(row&&!row.saving){row.draft.note=e.target.value;row.error='';const card=e.target.closest('[data-cloud-row]');card.querySelector('[data-cloud-save]').disabled=!rowDirty(row);card.querySelector('[data-cloud-message]').textContent=t(rowDirty(row)?'cloudUnsaved':row.base.revision?'cloudSaved':'cloudNotMarked');}}else if(e.target.id === 'live-search'){search=e.target.value;rosterIndex=0;if(screen==='attendance')loadAttendance(true);else updateRoster();}});
 root.addEventListener('change', e=>{if(e.target.closest('#learning-form')&&e.target.name){
   if(learningPending)return;
   if(e.target.name==='studentId'){
@@ -293,7 +299,7 @@ root.addEventListener('change', e=>{if(e.target.closest('#learning-form')&&e.tar
   learningForm[e.target.name]=e.target.type==='checkbox'?e.target.checked:e.target.value;learningTouched=true;learningSaved=false;learningError='';
   if(e.target.name==='kind'){learningForm.confirmMastered=false;learningForm.mistakes='';learningForm.score='';render();}
 
-}else if(e.target.id==='cloud-date'||e.target.id==='cloud-session'){const next={...cloudContext,...(e.target.id==='cloud-date'?{date:e.target.value}:{session:e.target.value})};try{attendanceId('validate',next.date,next.session);cloudContext=next;loadAttendance();}catch{render();}}else if(e.target.id === 'live-school'){school=e.target.value;render();}});
+}else if(e.target.id==='cloud-date'||e.target.id==='cloud-session'){const next={...cloudContext,...(e.target.id==='cloud-date'?{date:e.target.value}:{session:e.target.value})};try{attendanceId('validate',next.date,next.session);cloudContext=next;loadAttendance();}catch{render();}}else if(e.target.id === 'live-school'){school=e.target.value;rosterIndex=0;if(screen==='attendance')loadAttendance();else render();}});
 window.addEventListener('beforeunload',event=>{if(hasDrafts()||hasSaves()){event.preventDefault();event.returnValue='';}});
 // Browser history restoration must not resurrect a previous account's records.
 window.addEventListener('pagehide',()=>{clearData();user=null;state='signed-out';render();});
