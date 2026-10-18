@@ -4,7 +4,7 @@ const path = require('node:path');
 const {createRequire} = require('node:module');
 const requireTools = createRequire(path.resolve(process.env.KATATIB_TEST_TOOLS, 'package.json'));
 const {initializeTestEnvironment, assertSucceeds, assertFails} = requireTools('@firebase/rules-unit-testing');
-const {doc,setDoc,getDoc,collection,getDocs,query,where,limit,updateDoc,deleteDoc,runTransaction,serverTimestamp,getDocFromServer,writeBatch} = requireTools('firebase/firestore');
+const {doc,setDoc,getDoc,collection,getDocs,query,where,limit,orderBy,documentId,startAfter,updateDoc,deleteDoc,runTransaction,serverTimestamp,getDocFromServer,writeBatch} = requireTools('firebase/firestore');
 (async()=>{
  const env = await initializeTestEnvironment({projectId:'demo-katatib-test',firestore:{rules:fs.readFileSync('firestore.katatib-test.rules','utf8')}});
  try {
@@ -132,10 +132,20 @@ const {doc,setDoc,getDoc,collection,getDocs,query,where,limit,updateDoc,deleteDo
    await assertFails(setDoc(doc(teacher,'katatib_learning','learning-invalid-001'),bad));
   }
   await assert.rejects(learningSave(teacher,'new-teacher@example.com',{...learningInput,supersedesId:'learning-evaluation-0001'},'learning-wrong-kind-01'));
+  const {readLearningPages,currentLearning}=await import('../public/katatib/live/learning.mjs');
+  const more=writeBatch(teacher);
+  for(let i=0;i<33;i++)more.set(doc(teacher,'katatib_learning','page-learning-'+String(i).padStart(5,'0')),{...storedLearning,createdAt:serverTimestamp(),supersedesId:null});
+  await assertSucceeds(more.commit());
+  const paged=await readLearningPages(async after=>{
+   const cursor=after?[startAfter(after)]:[];
+   const snap=await getDocsFromServer(query(collection(teacher,'katatib_learning'),where('studentId','==','a'),orderBy(documentId()),...cursor,limit(30)));
+   return snap.docs.map(d=>({...d.data(),id:d.id}));
+  });
+  assert.equal(paged.length,37);assert.equal(currentLearning(paged).length,36);
   await env.withSecurityRulesDisabled(ctx=>updateDoc(doc(ctx.firestore(),'katatib_access/teacher@example.com'),{active:false}));
   await assertFails(getDoc(doc(teacher,'students/a')));
   await assertFails(save(teacher,'new-teacher@example.com','a',context,{status:'present',note:'revoked'},3,'event-revoked-001'));
   await assertFails(learningSave(teacher,'new-teacher@example.com',learningInput,'learning-revoked-001'));
-  console.log('PASS: test rules reject strangers, wrong providers, unverified accounts, other kuttabs, forged history scope, privilege escalation and all legacy-data writes; bounded reads, scoped V2 save/reload, atomic history, revisions, conflicts, retries, session isolation and revocation work; learning saves, retries, immutable corrections, grades and teacher isolation work.');
+  console.log('PASS: test rules reject strangers, wrong providers, unverified accounts, other kuttabs, forged history scope, privilege escalation and all legacy-data writes; bounded reads, scoped V2 save/reload, atomic history, revisions, conflicts, retries, session isolation and revocation work; learning saves, retries, immutable corrections, grades, teacher isolation and complete paged correction resolution work.');
  } finally {await env.cleanup();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

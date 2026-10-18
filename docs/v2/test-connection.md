@@ -80,3 +80,11 @@ Both the Learning tab and student profile read **up to 30 V2 learning entries** 
 Actual emulator tests cover all three types, server-side scope/schema checks, teacher-grade boundaries, original-record preservation, linked corrections, idempotent retries, unauthorized reads/writes and revocation. Browser tests mock auth/server responses and exercise form entry, corrections, failure/retry, profile history, Arabic/French and mobile layout. The owner live smoke test remains: save each type, reload/sign in, verify history, and append a correction.
 
 Deploy this update with the same fixed-test-project script after pulling the branch. The script now runs **32 model tests**. Google setup and owner access need not be repeated if the previous test app already works.
+
+## Fix: edits update one displayed learning record
+
+The Learning tab and student profile now show **one current row per logical learning record**. Editing updates that row's portion, grade and note. Previous values are collapsed under **Change history**. The action is labeled **Edit / تعديل / Modifier**, and the form saves an edit rather than presenting it as another lesson. Separate new learning entries remain separate even if their student, date and portion match.
+
+This also applies to existing corrections already saved during testing: linked versions are resolved at read time without rewriting or deleting them. Complete correction chains are fetched in student-scoped pages of 30 before displaying current records, so a correction beyond the first page cannot leave an obsolete original in the main list. The safety cap is 1,000 versions per student; exceeding it fails with a history error instead of displaying a misleading partial result. A paginated current-record projection is future scaling work.
+
+Concurrent branches are grouped as one record, choose the newest saved leaf deterministically and display a warning to review the change history; the interface does not silently discard competing versions. Missing/cyclic/cross-student links fail closed. Current displays use the shared resolution function, preventing the Learning tab and profile from disagreeing. Original entries and previous versions remain preserved; this fix does not change copied V1 data or require a migration. There are now **40 model tests**, plus browser and real-emulator checks.

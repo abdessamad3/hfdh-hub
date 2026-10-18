@@ -34,3 +34,41 @@ export async function commitLearning(db,sdk,userId,input,id) {
     return {id,...clean};
   });
 }
+
+// A correction is another version of one logical record, never another lesson.
+export function currentLearning(records) {
+  const byId=new Map(records.map(r=>[r.id,r]));
+  if(byId.size!==records.length)throw new Error('invalid-learning-history');
+  const parent=new Map(records.map(r=>[r.id,r.id]));
+  function find(id){let root=id;while(parent.get(root)!==root)root=parent.get(root);while(id!==root){const next=parent.get(id);parent.set(id,root);id=next;}return root;}
+  const replaced=new Set();
+  for(const record of records){
+    if(!record.supersedesId)continue;
+    const prior=byId.get(record.supersedesId);
+    if(!prior||prior.studentId!==record.studentId||prior.kind!==record.kind)throw new Error('invalid-learning-history');
+    const a=find(record.id),b=find(prior.id);
+    if(a===b)throw new Error('invalid-learning-history');
+    parent.set(a,b);replaced.add(prior.id);
+  }
+  const chains=new Map();
+  for(const r of records){const key=find(r.id);if(!chains.has(key))chains.set(key,[]);chains.get(key).push(r);}
+  const newest=(a,b)=>(b.createdAt?.seconds??0)-(a.createdAt?.seconds??0)||(b.createdAt?.nanoseconds??0)-(a.createdAt?.nanoseconds??0)||b.id.localeCompare(a.id);
+  return [...chains.values()].map(versions=>{
+    const leaves=versions.filter(r=>!replaced.has(r.id)).sort(newest);
+    if(!leaves.length)throw new Error('invalid-learning-history');
+    return {...leaves[0],previousVersions:versions.filter(r=>r.id!==leaves[0].id).sort(newest),competingEdits:leaves.length>1};
+  }).sort((a,b)=>b.date.localeCompare(a.date)||newest(a,b));
+}
+
+// Resolve full chains before rendering; a truncated page could resurrect an old version.
+export async function readLearningPages(readPage,maxRecords=1000) {
+  const records=[],seen=new Set();let after=null;
+  while(true){
+    const page=await readPage(after);
+    if(!Array.isArray(page)||page.length>30)throw new Error('invalid-learning-page');
+    for(const record of page){if(typeof record.id!=='string'||seen.has(record.id))throw new Error('invalid-learning-page');seen.add(record.id);records.push(record);}
+    if(records.length>maxRecords)throw new Error('learning-history-limit');
+    if(page.length<30)return records;
+    after=page[page.length-1].id;
+  }
+}
