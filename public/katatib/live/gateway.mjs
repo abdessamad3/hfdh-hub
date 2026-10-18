@@ -1,5 +1,6 @@
+import { createSessionAuth } from './auth-session.mjs';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js';
-import { getAuth, setPersistence, inMemoryPersistence, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js';
+import { initializeAuth, browserSessionPersistence, browserPopupRedirectResolver, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js';
 import { initializeFirestore, memoryLocalCache, collection, doc, getDocFromServer, getDocsFromServer, query, where, limit, orderBy, documentId, startAfter, runTransaction, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js';
 import { commitLearning, readLearningPages } from './learning.mjs';
 import { attendanceId, emptyAttendance, commitAttendance } from './attendance.mjs';
@@ -8,8 +9,7 @@ export async function connect() {
   const response = await fetch('/__/firebase/init.json', { cache: 'no-store', credentials: 'omit' });
   if (!response.ok) throw new Error('config-unavailable');
   const app = initializeApp(validateConfig(await response.json()), 'katatib-test-reader');
-  const auth = getAuth(app);
-  await setPersistence(auth, inMemoryPersistence);
+  const auth = createSessionAuth(app, { initializeAuth, browserSessionPersistence, browserPopupRedirectResolver });
   const db = initializeFirestore(app, { localCache: memoryLocalCache() });
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });

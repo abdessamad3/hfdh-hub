@@ -6,7 +6,7 @@ const dialog = document.getElementById('student-dialog');
 const copy = {
   ar: {
     title:'كتاتيب · قاعدة الاختبار', notice:'نسخة من بيانات الطلاب في مشروع الاختبار katatib-64049. سجل الطلاب المنسوخ للقراءة فقط؛ الحضور الجديد يُحفظ في سجل V2 منفصل داخل مشروع الاختبار. هذه ليست قاعدة الموقع الأصلي.',
-    login:'تسجيل الدخول بحساب Google', logout:'تسجيل الخروج', demo:'العودة إلى المعاينة الوهمية', welcome:'أهلاً بك في كتاتيب', intro:'سجّل الدخول لعرض الطلاب المسموح لك بالاطلاع عليهم. لا يُحفظ سجل الطلاب في تخزين المتصفح الدائم. إعادة تحميل الصفحة تتطلب تسجيل الدخول مجدداً.',
+    login:'تسجيل الدخول بحساب Google', logout:'تسجيل الخروج', demo:'العودة إلى المعاينة الوهمية', welcome:'أهلاً بك في كتاتيب', intro:'سجّل الدخول لعرض الطلاب المسموح لك بالاطلاع عليهم. لا يُحفظ سجل الطلاب في تخزين المتصفح الدائم. تبقى مسجّلاً في علامة التبويب هذه عند تحديث الصفحة. سجّل الخروج عند الانتهاء.',
     loading:'جارٍ التحميل…', denied:'هذا الحساب غير مخوّل، أو تم إيقاف وصوله. على المسؤول منحه الوصول في مشروع الاختبار.',
     setup:'تسجيل الدخول غير مفعّل بعد. فعّل Google في Authentication بمشروع katatib-64049 وأضف هذا الموقع إلى النطاقات المصرّح بها.',
     popup:'تعذّر إكمال نافذة الدخول. اسمح بالنوافذ المنبثقة وافتح الصفحة في Chrome ثم حاول مجدداً.',
@@ -21,7 +21,7 @@ const copy = {
   },
   fr: {
     title:'Katatib · Base de test', notice:'Copie des élèves dans le projet de test katatib-64049. Élèves copiés en lecture seule ; les nouvelles présences sont enregistrées séparément dans V2, dans le projet de test. Ce n’est pas la base du site d’origine.',
-    login:'Se connecter avec Google', logout:'Se déconnecter', demo:'Retour aux données fictives', welcome:'Bienvenue dans Katatib', intro:'Connectez-vous pour consulter les élèves autorisés. Les données élèves ne sont pas conservées dans le stockage persistant du navigateur. Un rechargement demande une nouvelle connexion.',
+    login:'Se connecter avec Google', logout:'Se déconnecter', demo:'Retour aux données fictives', welcome:'Bienvenue dans Katatib', intro:'Connectez-vous pour consulter les élèves autorisés. Les données élèves ne sont pas conservées dans le stockage persistant du navigateur. La connexion reste active dans cet onglet après actualisation. Déconnectez-vous à la fin.',
     loading:'Chargement…', denied:'Ce compte n’a pas accès, ou son accès est suspendu. Un administrateur doit lui accorder un accès dans le projet de test.',
     setup:'La connexion n’est pas encore configurée. Activez Google dans Authentication du projet katatib-64049 et autorisez le domaine de ce site.',
     popup:'La fenêtre de connexion n’a pas abouti. Autorisez les fenêtres contextuelles et ouvrez la page dans Chrome, puis réessayez.',

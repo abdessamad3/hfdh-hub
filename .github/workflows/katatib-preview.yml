@@ -8,6 +8,7 @@ on:
       - 'scripts/deploy-katatib-preview.sh'
       - 'firebase.katatib-preview.json'
       - 'firebase.katatib-connected.json'
+      - 'firebase.katatib-auth-test.json'
       - 'firestore.katatib-test.rules'
       - 'scripts/*katatib*'
       - '.github/workflows/katatib-preview.yml'
@@ -75,3 +76,20 @@ jobs:
         env:
           KATATIB_TEST_TOOLS: ${{ runner.temp }}/katatib-security
         run: '"$RUNNER_TEMP/katatib-security/node_modules/.bin/firebase" emulators:exec --project demo-katatib-test --config firebase.katatib-connected.json --only firestore "node tests/katatib-live-rules.cjs"'
+
+  auth-session-persistence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Install isolated Firebase SDK and browser tools
+        run: |
+          npm install --prefix "$RUNNER_TEMP/katatib-auth" --no-package-lock --ignore-scripts firebase@12.12.0 firebase-tools@15.33.0 esbuild@0.25.10 playwright@1.56.1
+          "$RUNNER_TEMP/katatib-auth/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Verify real SDK login restoration and logout in Chromium
+        env:
+          KATATIB_AUTH_TOOLS: ${{ runner.temp }}/katatib-auth
+        run: '"$RUNNER_TEMP/katatib-auth/node_modules/.bin/firebase" emulators:exec --project demo-katatib-auth --config firebase.katatib-auth-test.json --only auth "node tests/katatib-auth-browser.cjs"'
