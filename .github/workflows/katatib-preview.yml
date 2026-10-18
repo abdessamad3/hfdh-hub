@@ -7,6 +7,9 @@ on:
       - 'tests/katatib-*'
       - 'scripts/deploy-katatib-preview.sh'
       - 'firebase.katatib-preview.json'
+      - 'firebase.katatib-connected.json'
+      - 'firestore.katatib-test.rules'
+      - 'scripts/*katatib*'
       - '.github/workflows/katatib-preview.yml'
   workflow_dispatch:
 
@@ -27,6 +30,11 @@ jobs:
           node --check public/katatib/app.mjs
           node --check public/katatib/domain.mjs
           node tests/katatib-domain.test.mjs
+          node tests/katatib-live-model.test.mjs
+          node --check public/katatib/live/app.mjs
+          node --check public/katatib/live/gateway.mjs
+          bash -n scripts/deploy-katatib-connected.sh
+          python3 -m py_compile scripts/katatib-test-access.py
           bash -n scripts/deploy-katatib-preview.sh
       - name: Install browser test tools outside the application
         run: |
@@ -35,7 +43,9 @@ jobs:
       - name: Exercise the teacher preview in Chromium
         env:
           PLAYWRIGHT_MODULE: ${{ runner.temp }}/katatib-browser/node_modules/playwright
-        run: node tests/katatib-browser.cjs
+        run: |
+          node tests/katatib-browser.cjs
+          node tests/katatib-live-browser.cjs
       - name: Upload preview screenshots
         if: always()
         uses: actions/upload-artifact@v6
@@ -43,3 +53,22 @@ jobs:
           name: katatib-preview-screenshots
           path: artifacts/katatib
           if-no-files-found: ignore
+
+  test-project-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Install isolated Firestore test tools
+        run: npm install --prefix "$RUNNER_TEMP/katatib-security" --no-package-lock --ignore-scripts firebase@12.12.0 @firebase/rules-unit-testing@5.0.0 firebase-tools@15.33.0
+      - name: Test read-only permissions in a local emulator
+        env:
+          KATATIB_TEST_TOOLS: ${{ runner.temp }}/katatib-security
+        run: '"$RUNNER_TEMP/katatib-security/node_modules/.bin/firebase" emulators:exec --project demo-katatib-test --config firebase.katatib-connected.json --only firestore "node tests/katatib-live-rules.cjs"'

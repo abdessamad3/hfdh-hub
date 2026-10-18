@@ -1,0 +1,40 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function googleUser() {
+      return request.auth != null && request.auth.token.get('email_verified', false) == true &&
+        request.auth.token.get('firebase', {}).get('sign_in_provider', '') == 'google.com' &&
+        request.auth.token.get('email', null) is string;
+    }
+    function email() { return request.auth.token.email.lower(); }
+    function access() { return get(/databases/$(database)/documents/katatib_access/$(email())).data; }
+    function member() {
+      return googleUser() && exists(/databases/$(database)/documents/katatib_access/$(email())) &&
+        access().get('active', false) == true && access().get('role', '') in ['admin', 'teacher'];
+    }
+    function studentAllowed(data) {
+      return member() && (access().role == 'admin' ||
+        data.get('kuttabName', '') in access().get('kuttabNames', []) ||
+        data.get('teacherId', '') in access().get('teacherIds', []));
+    }
+    function historyAllowed(data) {
+      return data.get('studentId', null) is string &&
+        studentAllowed(get(/databases/$(database)/documents/students/$(data.studentId)).data);
+    }
+    match /katatib_access/{address} {
+      allow get: if googleUser() && address == email();
+      allow list, write: if false;
+    }
+    match /students/{id} {
+      allow get: if studentAllowed(resource.data);
+      allow list: if request.query.limit <= 100 && studentAllowed(resource.data);
+      allow write: if false;
+    }
+    match /attendance/{id} {
+      allow get: if historyAllowed(resource.data);
+      allow list: if request.query.limit <= 20 && historyAllowed(resource.data);
+      allow write: if false;
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}
