@@ -121,6 +121,7 @@ let browser;
  assert.ok((await page.locator('.learning-history').innerText()).includes('حفظ <img'));
  assert.equal(await page.locator('.learning-history img').count(),0);
  assert.equal(await page.evaluate(()=>Object.values(window.__learning)[0].quantity),3);
+ assert.equal(await page.locator('[data-confirmed-hizbs]').innerText(),await page.evaluate(()=>new Intl.NumberFormat(document.documentElement.lang==='ar'?'ar-MA':'fr-FR',{maximumFractionDigits:3}).format(3/8)));
  assert.equal(await page.locator('[data-progress] [role=progressbar]').getAttribute('aria-valuenow'),'3');
  // Editing changes one visible lesson; previous content appears only in collapsed change history.
  await page.locator('[data-learning-correct]').first().click();
