@@ -1,3 +1,4 @@
+import { readinessLabels } from './readiness.mjs';
 import { rosterPage } from './roster.mjs';
 import { legacyLabels } from './legacy.mjs';
 import { createLocalRecorder, recorderLabels } from './recorder.mjs';
@@ -45,7 +46,7 @@ const copy = {
 };
 let allStudents = [];
 let language = 'ar', gateway, user = null, students = [], role = '', capped = false, state = 'loading', error = '', search = '', school = '', epoch = 0, historyEpoch = 0, pendingLogin = false;
-const t = key => copy[language][key] || workspaceLabels[language][key] || legacyLabels[language][key] || recorderLabels[language][key] || copy[language].error;
+const t = key => copy[language][key] || workspaceLabels[language][key] || legacyLabels[language][key] || readinessLabels[language][key] || recorderLabels[language][key] || copy[language].error;
 const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const value = (n,precision=2) => n == null ? t('unknown') : new Intl.NumberFormat(language === 'ar' ? 'ar-MA' : 'fr-FR', {maximumFractionDigits:precision}).format(n);
 function errorKey(e) {
@@ -179,10 +180,10 @@ async function saveLearning(event) {
   if(generation===epoch&&learningSaved)loadLearning();
 }
 
-const icons={today:'◈',students:'◉',attendance:'✓',learning:'▤',tasks:'◷',reports:'▥',manage:'⚙',access:'♙',audit:'≡',recording:'◉',history:'▦'};
-const extraScreens=['tasks','reports','manage','access','audit','history'];
-const screens=()=>['today','students',...(['parent','student'].includes(role)?[]:['attendance','learning','recording']),'history','tasks','reports',...(['admin','manager'].includes(role)?['manage']:[]),...(role==='admin'?['access','audit']:[])];
-const titleKey=s=>({today:'today',students:'studentsTab',attendance:'cloudAttendance',learning:'learningTab'}[s]||s);
+const icons={today:'◈',students:'◉',attendance:'✓',learning:'▤',tasks:'◷',reports:'▥',manage:'⚙',access:'♙',audit:'≡',recording:'◉',history:'▦',readiness:'◇'};
+const extraScreens=['tasks','reports','manage','access','audit','history','readiness'];
+const screens=()=>['today','students',...(['parent','student'].includes(role)?[]:['attendance','learning','recording']),'history','tasks','reports',...(['admin','manager'].includes(role)?['manage']:[]),...(role==='admin'?['access','audit','readiness']:[])];
+const titleKey=s=>({today:'today',students:'studentsTab',attendance:'cloudAttendance',learning:'learningTab',history:'legacyTitle'}[s]||s);
 const screenTitle=()=>t(titleKey(screen));
 const displayName=()=>user?.displayName?.trim()||user?.email||t('workspaceTitle');
 const initials=name=>Array.from(name.trim()).slice(0,2).join('').toLocaleUpperCase();

@@ -1,3 +1,4 @@
+import { readinessLabels, readinessView, parseComparisonReport } from './readiness.mjs';
 import { legacyLabels } from './legacy.mjs';
 import { STAFF_ROLES, cleanProfile, cleanTask, cleanAccess, parseStudentCSV, monthlyAttendance, excelWorkbook } from './workspace-model.mjs';
 import { learningProgress } from './progress.mjs';
@@ -11,14 +12,14 @@ const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const array=x=>String(x||'').split('\n').map(s=>s.trim()).filter(Boolean);
 function download(name,body,type){const url=URL.createObjectURL(new Blob([body],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);}
 export function createWorkspace(){
- let ctx,host,page='',generation=0,loaded=false,loading=false,busy=false,error='',notice='',rows=[],report=[],draft=null,pending=null,preview=[],reportStudent='',historyStudentId='',historyMonth='',historyKind='',historyPage=0;
- const t=k=>labels[ctx.language][k]||legacyLabels[ctx.language][k]||k;
+ let ctx,host,page='',generation=0,loaded=false,loading=false,busy=false,error='',notice='',rows=[],report=[],draft=null,pending=null,preview=[],reportStudent='',historyStudentId='',historyMonth='',historyKind='',historyPage=0,comparisonReport=null,comparisonError=false;
+ const t=k=>labels[ctx.language][k]||legacyLabels[ctx.language][k]||readinessLabels[ctx.language][k]||k;
  const staff=()=>STAFF_ROLES.includes(ctx.role);
  const manage=()=>['admin','manager'].includes(ctx.role);
  const student=id=>ctx.students.find(s=>s.id===id);
  const reportRows=()=>report.filter(r=>!reportStudent||r.id===reportStudent);
  const profileData=s=>({name:s.name,kuttabName:s.kuttab,teacherId:s.teacherId||'',group:s.group||'',age:s.age,status:s.status||'active',source:s.source||'copy'});
- const reset=()=>{generation++;ctx=null;host=null;page='';loaded=false;loading=false;busy=false;error='';notice='';rows=[];report=[];draft=null;pending=null;preview=[];reportStudent='';historyStudentId='';historyMonth='';historyKind='';historyPage=0;};
+ const reset=()=>{generation++;ctx=null;host=null;page='';loaded=false;loading=false;busy=false;error='';notice='';rows=[];report=[];draft=null;pending=null;preview=[];reportStudent='';historyStudentId='';historyMonth='';historyKind='';historyPage=0;comparisonReport=null;comparisonError=false;};
  function formField(key,{type='text',min,max,value,readonly=false,options}={}){
   const v=value??draft?.data?.[key]??'';return `<label>${t(key)}${options?`<select name="${key}" ${readonly?'disabled':''}>${options.map(o=>{const [val,label]=Array.isArray(o)?o:[o,t(o)];return `<option value="${esc(val)}" ${v===val?'selected':''}>${esc(label)}</option>`;}).join('')}</select>`:type==='textarea'?`<textarea name="${key}" maxlength="${['studentIds','teacherIds','kuttabNames'].includes(key)?1500:500}">${esc(v)}</textarea>`:`<input name="${key}" type="${type}" value="${esc(v)}" ${min!=null?`min="${min}"`:''} ${max!=null?`max="${max}"`:''} maxlength="${key==='name'||key==='kuttabName'?120:key==='group'?80:254}" ${readonly?'readonly':''} ${['age','teacherId','group'].includes(key)?'':'required'}>`}</label>`;
  }
@@ -28,6 +29,7 @@ export function createWorkspace(){
  formField('studentId',{readonly:draft.revision>0,options:ctx.students.filter(s=>s.status!=='archived'||s.id===draft.data.studentId).map(s=>[s.id,s.name])}),formField('kind',{options:['memorization','revision']}),formField('due',{type:'date'}),formField('hizb',{type:'number',min:1,max:60}),formField('fromEighth',{type:'number',min:1,max:8}),formField('toEighth',{type:'number',min:1,max:8}),formField('status',{options:['planned','done','cancelled']}),formField('note',{type:'textarea'})].join(''):[
  formField('email',{type:'email',value:draft.id,readonly:draft.revision>0}),formField('role',{options:['teacher','manager','parent','student','admin']}),formField('active',{options:[['true',t('enabled')],['false',t('disabled')]],value:String(draft.data.active)}),...['kuttabNames','teacherIds','studentIds'].map(k=>formField(k,{type:'textarea',value:draft.data[k].join('\n')}))].join('')}</div></fieldset><div class="workspace-toolbar"><button class="primary-button" type="submit" ${busy?'disabled':''}>${t(busy?'loading':'save')}</button><button class="secondary-button" type="button" data-work-action="cancel" ${busy||pending?'disabled':''}>${t('cancel')}</button></div></form></section>`;}
  function body(){
+  if(page==='readiness')return readinessView(ctx.language,comparisonReport,comparisonError);
   if(page==='manage')return `<p>${t('scopeHint')}</p><div class="workspace-toolbar"><button class="primary-button" data-work-action="new-profile">${t('enroll')}</button></div>${form()}${dataTable(['name','id','kuttabName','group','status','edit'],ctx.students.map(s=>[esc(s.name),esc(s.id),esc(s.kuttab),esc(s.group),t(s.status||'active'),`<button class="text-button" data-work-edit="${esc(s.id)}">${t('edit')}</button><button class="text-button" data-work-archive="${esc(s.id)}">${t(s.status==='archived'?'restore':'archive')}</button>`]))}<section class="panel"><h2>${t('import')}</h2><p>${t('importHint')}</p><div class="workspace-toolbar"><button class="secondary-button" data-work-action="template">${t('template')}</button><label>${t('preview')}<input type="file" id="student-csv" accept=".csv,text/csv" ${busy||pending?'disabled':''}></label></div>${preview.length?`<p>${t('importReady')}</p>${dataTable(['id','name','kuttabName'],preview.map(r=>[esc(r.id),esc(r.name),esc(r.kuttabName)]))}<button class="primary-button" data-work-action="import" ${busy||pending?'disabled':''}>${t('importConfirm')} (${preview.length})</button>`:''}</section>`;
   if(page==='history'){
    const matches=rows.filter(r=>(!historyMonth||r.date.startsWith(historyMonth+'-'))&&(!historyKind||r.kind===historyKind));
@@ -88,6 +90,8 @@ export function createWorkspace(){
   await save(d);
  }
  function changed(e){
+  if(e.target.id==='comparison-report'){const token=generation,file=e.target.files[0];comparisonReport=null;comparisonError=false;if(!file||file.size>65536){comparisonError=true;paint();return;}file.text().then(text=>{if(token!==generation)return;try{comparisonReport=parseComparisonReport(text);}catch{comparisonError=true;}paint();});return;}
+
   if(e.target.id==='history-student'){historyStudentId=student(e.target.value)?e.target.value:'';historyPage=0;load();return;}
   if(e.target.id==='history-month'||e.target.id==='history-kind'){if(e.target.id==='history-month')historyMonth=e.target.value;else historyKind=e.target.value;historyPage=0;paint();return;}
 if(e.target.id==='report-student'){reportStudent=student(e.target.value)?e.target.value:'';paint();return;}if(e.target.id==='report-month'){ctx.month=e.target.value;load();return;}
@@ -100,7 +104,7 @@ if(e.target.id==='report-student'){reportStudent=student(e.target.value)?e.targe
  return {reset,dirty:()=>!!draft||!!pending,busy:()=>busy,canLeave:()=>!busy&&(!draft&&!pending||confirm(t('discard'))),mount(target,context){
   const changedPage=page!==context.page;ctx={month:ctx?.month||businessDate().slice(0,7),...context};host=target;
   if(changedPage){generation++;page=context.page;historyStudentId=ctx.students[0]?.id||'';historyPage=0;loaded=false;loading=false;rows=[];draft=null;pending=null;error='';notice='';preview=[];}
-  if(page==='manage'&&!manage()||['access','audit'].includes(page)&&ctx.role!=='admin'){host.textContent=t('failed');return;}
+  if(page==='manage'&&!manage()||['access','audit','readiness'].includes(page)&&ctx.role!=='admin'){host.textContent=t('failed');return;}
   host.onclick=click;host.onsubmit=submit;host.onchange=changed;host.oninput=input;paint();if(!loaded&&!loading)load();
  }};
 }

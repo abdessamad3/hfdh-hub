@@ -34,3 +34,11 @@ test('paginated legacy history does not stop at 20, 100 or 500 records',async()=
  const loaded=await readPages(async after=>{const start=after?rows.findIndex(r=>r.id===after)+1:0;return rows.slice(start,start+100);});
  assert.equal(loaded.length,621);assert.equal(loaded.at(-1).id,'0620');
 });
+
+import {parseComparisonReport} from '../public/katatib/live/readiness.mjs';
+test('a clone report cannot authorize migration or silently accept inconsistent evidence',()=>{
+ const report={source_documents:1,matched_documents:1,missing_documents:0,different_documents:0,unexplained_target_documents:0,typed_clone_matches:true,missing_parent_paths_match:true,source_snapshot:'2026-10-18T00:00:00Z',source_relationship_issues:{},production_migration_ready:false};
+ assert.equal(parseComparisonReport(JSON.stringify(report)).typed_clone_matches,true);
+ assert.equal(parseComparisonReport(JSON.stringify(report)).production_migration_ready,undefined);
+ for(const change of [{production_migration_ready:true},{matched_documents:2},{source_snapshot:'bad'},{source_relationship_issues:{orphan:-1}},{typed_clone_matches:false}])assert.throws(()=>parseComparisonReport(JSON.stringify({...report,...change})));
+});
