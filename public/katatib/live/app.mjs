@@ -217,7 +217,7 @@ async function loadStudents() {
   try {
     const result = await gateway.students(user);
     if (generation !== epoch) return;
-    allStudents = result.students; role = result.role; students = allStudents.filter(s=>['parent','student'].includes(role)||s.status!=='archived'); capped = result.capped; state = 'ready';
+    allStudents = result.students; role = result.role; students = allStudents.filter(s=>['parent','student'].includes(role)||s.status!=='archived'); capped = result.capped; if(!screens().includes(screen)){screen='today';workspace.reset();} state = 'ready';
   } catch (e) { if (generation !== epoch) return; students = [];allStudents=[];workspace.reset(); state = 'error'; error = errorKey(e); }
   render();
 }

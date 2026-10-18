@@ -244,7 +244,7 @@ let browser;
  await page.evaluate(()=>window.__workspaceLostAck=true);
  await page.locator('[data-work-form] button[type=submit]').click();
  await page.getByRole('alert').waitFor();
- assert.equal(await page.locator('[data-work-form] fieldset').isDisabled(),true);
+ assert.equal(await page.locator('[data-work-form] [name=name]').isDisabled(),true);
  await page.locator('[data-work-form] button[type=submit]').click();
  await page.waitForFunction(()=>!document.querySelector('[data-work-form]'));
  const added=await page.evaluate(()=>Object.keys(window.__profiles).find(id=>window.__profiles[id].name==='New student'));

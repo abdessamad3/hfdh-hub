@@ -18,7 +18,7 @@ test('portal links and staff assignments are explicit and bounded',()=>{
 test('CSV import validates all rows and preserves Unicode and quoted delimiters',()=>{
  const rows=parseStudentCSV('id,name,kuttabName,teacherId,group,age\r\na,"مريم, A",One,t,"Group ""A""",12\r\nb,B,One,t,,\r\n');
  assert.equal(rows[0].name,'مريم, A');assert.equal(rows[0].group,'Group "A"');assert.equal(rows[1].age,null);
- for(const csv of ['id,name\na,A','id,name,kuttabName,teacherId,group,age\na,A,One,t,,12\na,B,One,t,,13','id,name,kuttabName,teacherId,group,age\na,"bad,One,t,,12','id,name,kuttabName,teacherId,group,age\na,A,One,t,,x'])assert.throws(()=>parseStudentCSV(csv));
+ for(const csv of ['id,name\na,A','id,name,kuttabName,teacherId,group,age\na,"A"x,One,t,,12','id,name,kuttabName,teacherId,group,age\na,A,One,t,,12\na,B,One,t,,13','id,name,kuttabName,teacherId,group,age\na,"bad,One,t,,12','id,name,kuttabName,teacherId,group,age\na,A,One,t,,x'])assert.throws(()=>parseStudentCSV(csv));
 });
 test('monthly attendance keeps unrecorded separate and rejects duplicate sessions',()=>{
  const students=[{id:'a',name:'A',kuttab:'One'},{id:'b',name:'B',kuttab:'One'}];

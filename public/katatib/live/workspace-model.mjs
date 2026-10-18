@@ -47,10 +47,16 @@ export async function readPages(readPage,pageSize=100,max=5000){
 // RFC 4180 CSV import: bounded, explicit headers, duplicate IDs rejected before any write.
 export function parseStudentCSV(content){
  if(typeof content!=='string'||content.length>200000)throw new Error('invalid-csv');
- const rows=[];let row=[],cell='',quoted=false;
- for(let i=0;i<content.length;i++){const c=content[i];if(c==='"'){if(quoted&&content[i+1]==='"'){cell+='"';i++;}else if(!quoted&&cell!==''||!quoted&&content[i-1]==='"')throw new Error('invalid-csv');else quoted=!quoted;}
- else if(!quoted&&(c===','||c==='\n'||c==='\r')){row.push(cell);cell='';if(c!==','){if(c==='\r'&&content[i+1]==='\n')i++;if(row.some(x=>x.trim()))rows.push(row);row=[];}}
- else cell+=c;}
+ const rows=[];let row=[],cell='',quoted=false,closed=false;
+ for(let i=0;i<content.length;i++){
+  const c=content[i];
+  if(quoted){if(c==='"'){if(content[i+1]==='"'){cell+='"';i++;}else{quoted=false;closed=true;}}else cell+=c;continue;}
+  if(c==='"'){if(cell!==''||closed)throw new Error('invalid-csv');quoted=true;continue;}
+  if(c===','||c==='\n'||c==='\r'){
+   row.push(cell);cell='';closed=false;
+   if(c!==','){if(c==='\r'&&content[i+1]==='\n')i++;if(row.some(x=>x.trim()))rows.push(row);row=[];}
+  }else{if(closed)throw new Error('invalid-csv');cell+=c;}
+ }
  if(quoted)throw new Error('invalid-csv');row.push(cell);if(row.some(x=>x.trim()))rows.push(row);
  const headers=(rows.shift()||[]).map(x=>x.replace(/^\uFEFF/,'').trim());
  if(headers.join(',')!=='id,name,kuttabName,teacherId,group,age'||!rows.length||rows.length>100)throw new Error('invalid-csv');

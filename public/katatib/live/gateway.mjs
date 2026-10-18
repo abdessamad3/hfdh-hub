@@ -27,11 +27,11 @@ export async function connect() {
         const filters = scope.field ? [where(scope.field==='__name__'?documentId():scope.field, '==', scope.value)] : [];
         const original=await readPages(async after=>{
           const snapshot=await getDocsFromServer(query(collection(db,'students'),...filters,orderBy(documentId()),...(after?[startAfter(after)]:[]),limit(100)));
-          return snapshot.docs.map(d=>({id:d.id,...d.data()}));
+          return snapshot.docs.map(d=>({...d.data(),id:d.id}));
         });
         const added=await readPages(async after=>{
           const snapshot=await getDocsFromServer(query(collection(db,'katatib_students'),...filters,orderBy(documentId()),...(after?[startAfter(after)]:[]),limit(100)));
-          return snapshot.docs.map(d=>({id:d.id,...d.data()}));
+          return snapshot.docs.map(d=>({...d.data(),id:d.id}));
         });
         const overlays=new Map(added.map(r=>[r.id,r]));
         // Source permissions and identity fields stay unchanged. Only explicit V2 profile fields overlay the copy.
@@ -59,13 +59,15 @@ export async function connect() {
     async importStudents(rows) {
       // All records are checked before writing. Fixed IDs make a partial retry resume without duplication.
       for(const r of rows){const snap=await getDocFromServer(doc(db,'students',r.id));if(snap.exists())throw new Error('import-id-exists');}
-      const results=[];
+      const pending=[],results=[];
       for(const row of rows){
         const {id,...input}=row,snap=await getDocFromServer(doc(db,'katatib_students',id));
         if(snap.exists()){
           const stored=snap.data();if(Object.entries(input).some(([k,v])=>stored[k]!==v))throw new Error('import-id-exists');
-          results.push(id);continue;
-        }
+          results.push(id);
+        }else pending.push({id,input});
+      }
+      for(const {id,input} of pending){
         await commitWorkspace(db,{doc,runTransaction,serverTimestamp},auth.currentUser.uid,'katatib_students',id,input,0,crypto.randomUUID());results.push(id);
       }
       return results;
