@@ -15,7 +15,7 @@ This is the connected teacher/management release in PR #11, on `katatib-v2/teach
 | Learning | Confirmed memorization, practice, revision and evaluation. Editing displays one current record with collapsed previous versions. Unique confirmed portions determine V2 progress; V1 baseline stays separate. |
 | Local teacher recording | Teacher-only browser microphone recording, playback and device download. Audio is in memory only, never uploaded to Firebase. Stopping/leaving releases microphone tracks; leaving undownloaded audio requires a discard confirmation. 45-minute/32-MiB automatic-stop limits, with actual format/bitrate chosen by the browser. Physical-phone acceptance remains pending. |
 | Planned work | Assigned student, memorization/revision portion, due date, notes and planned/done/cancelled status. Overdue work is identified. Finishing work does not fabricate an evaluation or confirm mastery. |
-| Reports | Month-by-student V2 session status counts, old baseline versus confirmed V2 coverage, Excel-compatible XML export with explicit string cells, and print/Save as PDF. Missing sessions are never counted as absences. This is not a full historical V1/V2 combined attendance calculation. |
+| Reports | Month-by-student V2 session status counts, old baseline versus confirmed V2 coverage, Excel-compatible XML export with explicit string cells, and print/Save as PDF. Select one authorized student to print a student card with identity, group, archive status and that month’s counts. Missing sessions are never counted as absences. This is not a full historical V1/V2 combined attendance calculation. |
 | Roles | Admin, assigned manager, assigned teacher, parent and student. An admin assigns verified Google addresses and explicit child/student IDs. Parents/students are read-only. PIN login is not implemented. |
 | Permissions | Scope checks enforced by Firestore, not only navigation. Own-admin-grant editing is blocked to prevent accidental self-lockout. Original copies remain unwritable. |
 | Audit | Management, task and permission changes require an immutable audit snapshot in the same transaction. The administrator can inspect it. This does not claim to audit every authentication event or client read. |
@@ -41,7 +41,7 @@ This is the connected teacher/management release in PR #11, on `katatib-v2/teach
 | Kuttab settings, schedules, group memberships | Stable IDs, versioned session occurrences, ownership migration and calendar overrides. Current sessions are the explicit three choices, not a manager-configured schedule. |
 | Shared ranking | Minimal trusted projection and verified eligibility/coverage. Private student documents are not opened to build a ranking. |
 | Notices and notifications | Recipient-scoped records, delivery expectations and consent; no notifications are sent automatically. |
-| Remaining original capabilities | Teacher attendance, English support, Smart Challenge UI, certificates, student cards, kuttab comparisons and richer historical reports still need their V2 implementation. Original V1 remains available. |
+| Remaining original capabilities | Teacher attendance, English support, Smart Challenge UI, certificates, kuttab comparisons and richer historical reports still need their V2 implementation. Original V1 remains available. |
 | Production cutover | Fresh backup including new V1 data since the old snapshot, reconciliation of source records/relationships and auth, migration rehearsal, rollback evidence and explicit production authorization. |
 
 ## Verified infrastructure constraints
