@@ -355,10 +355,10 @@ let browser;
  // Full copied history remains visible, with source labels and explicit ambiguity flags.
  await page.evaluate(()=>{window.__legacy.a=Array.from({length:130},(_,i)=>({collection:'evaluations',id:'evaluation-'+i,data:{studentId:'a',date:'2020-01-01',hizbNumber:2,quantity:1,accuracyScore:80,mistakesCount:2,notes:'Old note '+i}}));window.__legacy.a.push(...['old-a','old-b'].map(id=>({collection:'attendance',id,data:{studentId:'a',date:'2020-01-01',sessionIndex:0,status:'present'}})),{collection:'next_revisions',id:'old-task',data:{studentId:'a',dueDate:'2019-01-01',notes:'Keep overdue original task'}});});
  await page.locator('[data-action=login]').click();await page.locator('[data-screen=history]').click();
- await page.locator('[data-history-count]').waitFor();assert.ok((await page.locator('[data-history-count]').innerText()).includes('133'));
+ await page.locator('[data-history-count]').waitFor();const v2HistoryCount=await page.evaluate(()=>Object.keys(window.__records).filter(key=>key.startsWith('a~')).length);assert.ok((await page.locator('[data-history-count]').innerText()).startsWith(String(133+v2HistoryCount)+' '));
  assert.equal(await page.locator('.workspace-table tbody tr').count(),40);
  await page.locator('#history-kind').selectOption('attendance');
- assert.equal(await page.locator('.workspace-table tbody tr').count(),2);
+ assert.equal(await page.locator('.workspace-table tbody tr').count(),2+v2HistoryCount);
  assert.ok((await page.locator('.workspace-table').innerText()).includes('V1'));
  await page.locator('#history-kind').selectOption('nextRevision');
  assert.ok((await page.locator('.workspace-table').innerText()).includes('Keep overdue original task'));
@@ -366,7 +366,7 @@ let browser;
  await page.locator('[data-work-history-page=next]').click();
  assert.equal(await page.locator('.workspace-table tbody tr').count(),40);
  await page.locator('#history-student').selectOption('b');
- await page.waitForFunction(()=>document.querySelector('[data-history-count]')?.textContent.startsWith('0'));
+ await page.waitForFunction(()=>document.querySelector('[data-history-count]')?.textContent.startsWith(String(Object.keys(window.__records).filter(key=>key.startsWith('b~')).length)+' '));
  assert.equal((await page.locator('#work-root').innerText()).includes('Old note'),false,'switching a child cannot retain another child’s history');
  // Historical monthly report includes every original evaluation and flags both duplicate attendance rows.
  await page.locator('[data-screen=reports]').click();await page.locator('#katatib-print').waitFor();
