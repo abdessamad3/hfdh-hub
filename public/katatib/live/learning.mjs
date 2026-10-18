@@ -1,12 +1,14 @@
 import { attendanceId } from './attendance.mjs';
-export const LEARNING_KINDS = Object.freeze(['memorization','revision','evaluation']);
+export const LEARNING_KINDS = Object.freeze(['memorization','practice','revision','evaluation']);
+export const isGradedLearning = kind => ['revision','evaluation'].includes(kind);
+export const sameLearningFamily = (a,b) => a===b || (['memorization','practice'].includes(a)&&['memorization','practice'].includes(b));
 export function cleanLearning(input) {
   if(!input || !LEARNING_KINDS.includes(input.kind)) throw new Error('invalid-learning');
   attendanceId(input.studentId,input.date,input.session);
   const integer=(n,min,max)=>Number.isInteger(n)&&n>=min&&n<=max;
   if(!integer(input.hizb,1,60)||!integer(input.fromEighth,1,8)||!integer(input.toEighth,input.fromEighth,8))throw new Error('invalid-portion');
   if(typeof input.note!=='string'||input.note.length>500)throw new Error('invalid-note');
-  const graded=input.kind!=='memorization';
+  const graded=isGradedLearning(input.kind);
   if(graded&&(!integer(input.mistakes,0,999)||!integer(input.score,0,100)))throw new Error('invalid-grade');
   if(!graded&&(input.mistakes!==null||input.score!==null))throw new Error('invalid-grade');
   const supersedesId=input.supersedesId??null;
@@ -28,9 +30,9 @@ export async function commitLearning(db,sdk,userId,input,id) {
     }
     if(clean.supersedesId){
       const prior=await tx.get(sdk.doc(db,'katatib_learning',clean.supersedesId));
-      if(!prior.exists()||prior.data().studentId!==clean.studentId||prior.data().kind!==clean.kind)throw new Error('invalid-correction');
+      if(!prior.exists()||prior.data().studentId!==clean.studentId||!sameLearningFamily(prior.data().kind,clean.kind))throw new Error('invalid-correction');
     }
-    tx.set(ref,{schemaVersion:1,...clean,createdBy:userId,createdAt:sdk.serverTimestamp()});
+    tx.set(ref,{schemaVersion:2,...clean,createdBy:userId,createdAt:sdk.serverTimestamp()});
     return {id,...clean};
   });
 }
@@ -45,7 +47,7 @@ export function currentLearning(records) {
   for(const record of records){
     if(!record.supersedesId)continue;
     const prior=byId.get(record.supersedesId);
-    if(!prior||prior.studentId!==record.studentId||prior.kind!==record.kind)throw new Error('invalid-learning-history');
+    if(!prior||prior.studentId!==record.studentId||!sameLearningFamily(prior.kind,record.kind))throw new Error('invalid-learning-history');
     const a=find(record.id),b=find(prior.id);
     if(a===b)throw new Error('invalid-learning-history');
     parent.set(a,b);replaced.add(prior.id);

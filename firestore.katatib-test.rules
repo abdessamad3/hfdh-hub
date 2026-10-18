@@ -74,16 +74,16 @@ service cloud.firestore {
       return id.matches('[A-Za-z0-9-]{16,80}') &&
         d.keys().hasAll(['schemaVersion','studentId','kind','date','session','hizb','fromEighth','toEighth','quantity','mistakes','score','note','supersedesId','createdBy','createdAt']) &&
         d.keys().hasOnly(['schemaVersion','studentId','kind','date','session','hizb','fromEighth','toEighth','quantity','mistakes','score','note','supersedesId','createdBy','createdAt']) &&
-        d.schemaVersion == 1 && historyAllowed(d) &&
-        d.kind in ['memorization','revision','evaluation'] &&
+        d.schemaVersion == 2 && historyAllowed(d) &&
+        d.kind in ['memorization','practice','revision','evaluation'] &&
         d.date is string && d.date.matches('[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])') &&
         d.session in ['morning','afternoon','evening'] &&
         d.hizb is int && d.hizb >= 1 && d.hizb <= 60 &&
         d.fromEighth is int && d.fromEighth >= 1 && d.fromEighth <= 8 &&
         d.toEighth is int && d.toEighth >= d.fromEighth && d.toEighth <= 8 &&
         d.quantity is int && d.quantity == d.toEighth - d.fromEighth + 1 &&
-        ((d.kind == 'memorization' && d.mistakes == null && d.score == null) ||
-         (d.kind != 'memorization' && d.mistakes is int && d.mistakes >= 0 && d.mistakes <= 999 && d.score is int && d.score >= 0 && d.score <= 100)) &&
+        ((d.kind in ['memorization','practice'] && d.mistakes == null && d.score == null) ||
+         (d.kind in ['revision','evaluation'] && d.mistakes is int && d.mistakes >= 0 && d.mistakes <= 999 && d.score is int && d.score >= 0 && d.score <= 100)) &&
         d.note is string && d.note.size() <= 500 && d.createdBy == request.auth.uid && d.createdAt == request.time &&
         (d.supersedesId == null || validCorrection(d, id));
     }
@@ -91,7 +91,8 @@ service cloud.firestore {
       return d.supersedesId is string && d.supersedesId != id &&
         exists(/databases/$(database)/documents/katatib_learning/$(d.supersedesId)) &&
         get(/databases/$(database)/documents/katatib_learning/$(d.supersedesId)).data.studentId == d.studentId &&
-        get(/databases/$(database)/documents/katatib_learning/$(d.supersedesId)).data.kind == d.kind;
+        (get(/databases/$(database)/documents/katatib_learning/$(d.supersedesId)).data.kind == d.kind ||
+         (get(/databases/$(database)/documents/katatib_learning/$(d.supersedesId)).data.kind in ['memorization','practice'] && d.kind in ['memorization','practice']));
     }
     match /katatib_learning/{id} {
       allow get: if member() && (!exists(/databases/$(database)/documents/katatib_learning/$(id)) || historyAllowed(resource.data));

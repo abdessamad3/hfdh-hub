@@ -142,10 +142,24 @@ const {doc,setDoc,getDoc,collection,getDocs,getDocsFromServer,query,where,limit,
    return snap.docs.map(d=>({...d.data(),id:d.id}));
   });
   assert.equal(paged.length,37);assert.equal(currentLearning(paged).length,36);
+  const {learningProgress}=await import('../public/katatib/live/progress.mjs');
+  let progress=learningProgress(paged,3);
+  assert.equal(progress.confirmedEighths,3);assert.equal(progress.baselineHizbs,3);assert.equal(progress.combinedHizbs,null);
+  await assertSucceeds(learningSave(teacher,'new-teacher@example.com',{...learningInput,kind:'practice',hizb:5,toEighth:2},'progress-practice-01'));
+  await assertSucceeds(learningSave(teacher,'new-teacher@example.com',{...learningInput,hizb:5,toEighth:2,supersedesId:'progress-practice-01'},'progress-confirm-001'));
+  const readProgress=async()=>learningProgress(await readLearningPages(async after=>{const cursor=after?[startAfter(after)]:[];const snap=await getDocsFromServer(query(collection(teacher,'katatib_learning'),where('studentId','==','a'),orderBy(documentId()),...cursor,limit(30)));return snap.docs.map(d=>({...d.data(),id:d.id}));}),3);
+  assert.equal((await readProgress()).confirmedEighths,5);
+  await assertSucceeds(learningSave(teacher,'new-teacher@example.com',{...learningInput,kind:'practice',hizb:5,toEighth:2,supersedesId:'progress-confirm-001'},'progress-retract-001'));
+  assert.equal((await readProgress()).confirmedEighths,3);
+  await assertFails(setDoc(doc(teacher,'katatib_learning','progress-schema-old1'),{...storedLearning,schemaVersion:1,createdAt:serverTimestamp()}));
+  await env.withSecurityRulesDisabled(ctx=>setDoc(doc(ctx.firestore(),'katatib_learning','progress-legacy-0001'),{...storedLearning,schemaVersion:1,hizb:6,toEighth:4,quantity:4}));
+  const legacyProgress=await readProgress();assert.equal(legacyProgress.unreviewed,1);assert.equal(legacyProgress.confirmedEighths,3);
+  await assertSucceeds(learningSave(teacher,'new-teacher@example.com',{...learningInput,hizb:6,toEighth:4,supersedesId:'progress-legacy-0001'},'progress-review-0001'));
+  const reviewed=await readProgress();assert.equal(reviewed.unreviewed,0);assert.equal(reviewed.confirmedEighths,7);
   await env.withSecurityRulesDisabled(ctx=>updateDoc(doc(ctx.firestore(),'katatib_access/teacher@example.com'),{active:false}));
   await assertFails(getDoc(doc(teacher,'students/a')));
   await assertFails(save(teacher,'new-teacher@example.com','a',context,{status:'present',note:'revoked'},3,'event-revoked-001'));
   await assertFails(learningSave(teacher,'new-teacher@example.com',learningInput,'learning-revoked-001'));
-  console.log('PASS: test rules reject strangers, wrong providers, unverified accounts, other kuttabs, forged history scope, privilege escalation and all legacy-data writes; bounded reads, scoped V2 save/reload, atomic history, revisions, conflicts, retries, session isolation and revocation work; learning saves, retries, immutable corrections, grades, teacher isolation and complete paged correction resolution work.');
+  console.log('PASS: test rules reject strangers, wrong providers, unverified accounts, other kuttabs, forged history scope, privilege escalation and all legacy-data writes; bounded reads, scoped V2 save/reload, atomic history, revisions, conflicts, retries, session isolation and revocation work; learning saves, retries, immutable corrections, grades, teacher isolation and complete paged correction resolution work; confirmed/practice transitions, overlap-safe progress and legacy review work.');
  } finally {await env.cleanup();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
