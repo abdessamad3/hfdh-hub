@@ -10,7 +10,7 @@ Serve the repository's `public/katatib` directory with any static server, for ex
 python3 -m http.server 8000 --directory public/katatib
 ```
 
-Open `http://localhost:8000/`. This preview uses standard browser modules and has no npm runtime/build dependencies. It lives separately from the existing React application; its model/interaction decisions can be carried into the V2 React app after the first workflow review. It is not the completed V2 foundation or an authentication implementation.
+Open `http://localhost:8000/demo/`. The root now opens the connected app; the standalone fictional preview is under `/demo/`. This preview uses standard browser modules and has no npm runtime/build dependencies. It lives separately from the existing React application; its model/interaction decisions can be carried into the V2 React app after the first workflow review. It is not the completed V2 foundation or an authentication implementation.
 
 1. Switch between Arabic and French.
 2. Select a fictional circle, date and morning/afternoon/evening session.

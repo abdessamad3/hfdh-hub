@@ -10,7 +10,8 @@ fs.mkdirSync(output, { recursive: true });
 const errors = [], databaseRequests = [];
 const server = http.createServer((request, response) => {
   const relative = decodeURIComponent(new URL(request.url, 'http://localhost').pathname).replace(/^\/+/, '') || 'index.html';
-  const file = path.resolve(directory, relative);
+  let file = path.resolve(directory, relative);
+  if (file.startsWith(directory + path.sep) && fs.existsSync(file) && fs.statSync(file).isDirectory()) file = path.join(file, 'index.html');
   if (!file.startsWith(directory + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) { response.writeHead(404); response.end(); return; }
   response.setHeader('Content-Type', file.endsWith('.mjs') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : 'text/html');
   response.setHeader('Cache-Control', 'no-store');
@@ -34,7 +35,7 @@ async function waitFor(condition, page) {
 
 (async () => {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  const base = `http://127.0.0.1:${server.address().port}/`;
+  const base = `http://127.0.0.1:${server.address().port}/demo/`;
   browser = await chromium.launch({ headless: true, ...(process.env.CHROMIUM_EXECUTABLE ? { executablePath: process.env.CHROMIUM_EXECUTABLE } : {}) });
   const desktop = await browser.newContext({ viewport: { width: 1440, height: 1080 } });
   const page = await trackedPage(desktop);

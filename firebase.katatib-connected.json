@@ -1,14 +1,57 @@
 {
-  "firestore": { "rules": "firestore.katatib-test.rules" },
-  "hosting": {
-    "site": "katatib-64049", "public": "public/katatib",
-    "ignore": ["**/.*", "**/node_modules/**"],
-    "headers": [{ "source": "**", "headers": [
-      { "key": "X-Robots-Tag", "value": "noindex, nofollow" },
-      { "key": "X-Content-Type-Options", "value": "nosniff" },
-      { "key": "Referrer-Policy", "value": "no-referrer" },
-      { "key": "Cache-Control", "value": "no-store" }
-    ]}]
+  "firestore": {
+    "rules": "firestore.katatib-test.rules"
   },
-  "emulators": { "firestore": { "port": 8080 }, "ui": { "enabled": false }, "singleProjectMode": true }
+  "hosting": {
+    "site": "katatib-64049",
+    "public": "public/katatib",
+    "ignore": [
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          },
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "no-referrer"
+          },
+          {
+            "key": "Cache-Control",
+            "value": "no-store"
+          }
+        ]
+      }
+    ],
+    "redirects": [
+      {
+        "source": "/",
+        "destination": "/live/",
+        "type": 302
+      },
+      {
+        "source": "/index.html",
+        "destination": "/live/",
+        "type": 302
+      }
+    ]
+  },
+  "emulators": {
+    "firestore": {
+      "port": 8080
+    },
+    "ui": {
+      "enabled": false
+    },
+    "singleProjectMode": true
+  }
 }

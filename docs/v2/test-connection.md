@@ -113,3 +113,11 @@ Explicit sign-out clears both the Firebase session and visible student data; a l
 Auth account/token persistence in **sessionStorage** is the intentional change. Copied student records, attendance drafts, learning drafts and Firestore caching remain in memory; there is no long-term localStorage/IndexedDB data cache. Auth restoration reruns the same server authorization and roster reads. Pagehide clears displayed data but does not sign out; explicit Sign out does.
 
 CI now runs a separate Chromium integration using the actual Firebase Auth SDK, the same auth initialization helper and a local Auth emulator. It verifies restoration after repeated reloads, no Auth login in localStorage, an independent tab being signed out, and sign-out persisting across reload. The emulator creates fictional email/password accounts to isolate persistence; live Google OAuth remains the owner's smoke test. This change does not affect Cloud Shell/gcloud/Firebase CLI authorization.
+
+## Fix: homepage opens the connected app
+
+The test site's homepage `/` and `/index.html` now redirect to `/live/` with exact Hosting 302 rules. `/live/` remains the connected app and requires a real authorized sign-in. The fictional preview is explicitly at `/demo/`; its fictional teacher chip is sample UI and never creates or selects a Firebase account. The connected app's demo link points there, and the demo's sign-in link points back to the connected app.
+
+The root HTML also has a small fallback link/refresh to the connected app. Existing demo assets and localStorage keys are retained, so moving the demo URL does not wipe its device-local saves. Both test Hosting configs agree on entry routing; original production Hosting is unchanged. Browser checks now exercise the homepage redirect to the sign-in screen and run the original fictional workflow at `/demo/`.
+
+Deploy using the existing `scripts/deploy-katatib-connected.sh`. After deployment, open `https://katatib-64049.web.app/`: it should land at `/live/`, showing sign-in or the authorized user's restored session. `/demo/` is available only when explicitly chosen. This routing change does not remove Google sign-in or grant anyone access.

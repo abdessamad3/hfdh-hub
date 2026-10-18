@@ -1,7 +1,10 @@
 const assert=require('node:assert/strict'),http=require('node:http'),fs=require('node:fs'),path=require('node:path');
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const root=path.resolve('public/katatib');
+const redirects=JSON.parse(fs.readFileSync('firebase.katatib-connected.json','utf8')).hosting.redirects;
 const server=http.createServer((req,res)=>{
+ const route=redirects.find(r=>r.source===new URL(req.url,'http://localhost').pathname);
+ if(route){res.writeHead(route.type,{Location:route.destination});res.end();return;}
  let file=path.resolve(root,'.'+new URL(req.url,'http://localhost').pathname);
  if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return;}
  if(fs.existsSync(file)&&fs.statSync(file).isDirectory()) file=path.join(file,'index.html');
@@ -45,8 +48,10 @@ let browser;
  page.on('pageerror',e=>errors.push(e.message));
  await page.route('**/live/gateway.mjs',r=>r.fulfill({contentType:'text/javascript',body:mock}));
  const url=`http://127.0.0.1:${server.address().port}/live/`;
- await page.goto(url);
+ await page.goto(new URL('/',url).href);
+ assert.equal(new URL(page.url()).pathname,'/live/');
  await page.locator('[data-action=login]').waitFor();
+ assert.equal(await page.locator('a.live-link').getAttribute('href'),'../demo/');
  assert.equal(await page.locator('.student-card').count(),0);
  await page.locator('[data-lang=fr]').click();
  await page.locator('[data-action=login]').click();
