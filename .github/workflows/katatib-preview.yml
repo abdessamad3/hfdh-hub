@@ -31,6 +31,7 @@ jobs:
           node --check public/katatib/app.mjs
           node --check public/katatib/domain.mjs
           node tests/katatib-domain.test.mjs
+          node tests/katatib-student-login.test.mjs
           node tests/katatib-live-model.test.mjs
           node tests/katatib-cloud-attendance.test.mjs
           node tests/katatib-teacher-attendance.test.mjs

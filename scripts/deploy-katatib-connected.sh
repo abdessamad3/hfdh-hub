@@ -9,6 +9,7 @@ const c = JSON.parse(fs.readFileSync('firebase.katatib-connected.json', 'utf8'))
 if (c.hosting.site !== 'katatib-64049' || c.hosting.public !== 'public/katatib' || c.firestore.rules !== 'firestore.katatib-test.rules' || Object.keys(c).some(k => !['hosting', 'firestore', 'emulators'].includes(k))) throw new Error('Unexpected deployment configuration.');
 NODE
 node tests/katatib-domain.test.mjs
+node tests/katatib-student-login.test.mjs
 node tests/katatib-live-model.test.mjs
 node tests/katatib-cloud-attendance.test.mjs
 node tests/katatib-teacher-attendance.test.mjs

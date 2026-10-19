@@ -64,6 +64,33 @@ const {doc,setDoc,getDoc,collection,getDocs,getDocsFromServer,query,where,limit,
   }
   await assertFails(getDoc(doc(admin,'users/legacy-one')));
   await assertSucceeds(getDoc(doc(teacher,'evaluations/a')));
+  // Code/PIN accounts are UID-bound, student-only and atomically rotated with audit history.
+  const {commitStudentCredential,studentAddress}=await import('../public/katatib/live/student-login.mjs');
+  const credentialSdk={doc,runTransaction,serverTimestamp};
+  const login1={code:'a'.repeat(20)},login2={code:'b'.repeat(20)};
+  const address1=studentAddress(login1.code),address2=studentAddress(login2.code);
+  const password=(address,uid)=>env.authenticatedContext(uid,{email:address,email_verified:false,firebase:{sign_in_provider:'password'}}).firestore();
+  const child1=password(address1,'coded-child-one'),child2=password(address2,'coded-child-two');
+  await assertFails(getDoc(doc(child1,'students/a')));
+  await assertFails(commitStudentCredential(teacher,credentialSdk,'new-teacher@example.com','a',login1,'coded-child-one',0,'credential-teacher'));
+  await assertSucceeds(commitStudentCredential(admin,credentialSdk,'new-admin@example.com','a',login1,'coded-child-one',0,'credential-first'));
+  await assertSucceeds(getDoc(doc(child1,'students/a')));
+  await assertFails(getDoc(doc(child1,'students/b')));
+  await assertFails(getDoc(doc(child1,'katatib_student_credentials/a')));
+  await assertFails(getDoc(doc(child1,'katatib_audit/credential-first')));
+  await assertFails(getDoc(doc(password(address1,'wrong-uid'),'students/a')));
+  await assertFails(commitStudentCredential(child1,credentialSdk,'coded-child-one','b',login2,'coded-child-two',0,'credential-self-escalate'));
+  assert.equal((await assertSucceeds(commitStudentCredential(admin,credentialSdk,'new-admin@example.com','a',login1,'coded-child-one',0,'credential-first'))).revision,1);
+  await assertSucceeds(commitStudentCredential(admin,credentialSdk,'new-admin@example.com','a',login2,'coded-child-two',1,'credential-rotate'));
+  await assertFails(getDoc(doc(child1,'students/a')));
+  await assertSucceeds(getDoc(doc(child2,'students/a')));
+  await assertFails(getDoc(doc(child2,'students/b')));
+  const {commitWorkspace:saveGrant}=await import('../public/katatib/live/workspace-model.mjs');
+  await assertFails(saveGrant(admin,credentialSdk,'new-admin@example.com','katatib_access',address2,{active:true,role:'admin',kuttabNames:[],teacherIds:[],studentIds:[]},1,'credential-no-promote'));
+  await assertFails(commitStudentCredential(admin,credentialSdk,'new-admin@example.com','a',{code:'c'.repeat(20)},'third-child',1,'credential-stale'));
+  // Even privileged fixture corruption cannot give a password token staff rights.
+  await env.withSecurityRulesDisabled(async ctx=>{await setDoc(doc(ctx.firestore(),'katatib_access',studentAddress('d'.repeat(20))),{active:true,role:'admin'});});
+  await assertFails(getDoc(doc(password(studentAddress('d'.repeat(20)),'forged-staff'),'students/b')));
   // Paginated V1 history reads use actual student scope, never the activity's stale kuttab fields.
   await env.withSecurityRulesDisabled(async ctx=>{
     const db=ctx.firestore();for(let start=0;start<621;start+=200){const batch=writeBatch(db);for(let n=start;n<Math.min(start+200,621);n++)batch.set(doc(db,'revisions','legacy-'+String(n).padStart(4,'0')),{studentId:'a',date:'2020-01-01',qualityScore:80,notes:'old'});await batch.commit();}

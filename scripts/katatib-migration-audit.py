@@ -17,7 +17,7 @@ import zipfile
 
 SOURCE = 'hifd-kouttab'
 TARGET = 'katatib-64049'
-V2_COLLECTIONS = {'katatib_legacy_task_states','katatib_schedules','katatib_legacy_corrections','katatib_questions','katatib_challenge_attempts','katatib_teacher_attendance','katatib_teacher_attendance_history','katatib_students','katatib_tasks','katatib_attendance','katatib_attendance_history','katatib_learning','katatib_access','katatib_audit'}
+V2_COLLECTIONS = {'katatib_student_credentials','katatib_legacy_task_states','katatib_schedules','katatib_legacy_corrections','katatib_questions','katatib_challenge_attempts','katatib_teacher_attendance','katatib_teacher_attendance_history','katatib_students','katatib_tasks','katatib_attendance','katatib_attendance_history','katatib_learning','katatib_access','katatib_audit'}
 MAX_BYTES = 128 * 1024 * 1024
 
 

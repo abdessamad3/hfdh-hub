@@ -6,11 +6,19 @@ service cloud.firestore {
         request.auth.token.get('firebase', {}).get('sign_in_provider', '') == 'google.com' &&
         request.auth.token.get('email', null) is string;
     }
+    function codedAddress(address) { return address.matches('[a-z2-7]{20}@students[.]katatib[.]invalid'); }
+    function codeUser() {
+      return request.auth != null && request.auth.token.get('email',null) is string &&
+        request.auth.token.get('firebase',{}).get('sign_in_provider','') == 'password' && codedAddress(request.auth.token.email);
+    }
     function email() { return request.auth.token.email.lower(); }
     function access() { return get(/databases/$(database)/documents/katatib_access/$(email())).data; }
     function member() {
-      return googleUser() && exists(/databases/$(database)/documents/katatib_access/$(email())) &&
-        access().get('active', false) == true && access().get('role', '') in ['admin', 'manager', 'teacher', 'parent', 'student'];
+      return (googleUser() || codeUser()) && exists(/databases/$(database)/documents/katatib_access/$(email())) &&
+        access().get('active', false) == true && access().get('role', '') in ['admin', 'manager', 'teacher', 'parent', 'student'] &&
+        (googleUser() || access().role == 'student' && access().get('authUid','') == request.auth.uid &&
+          access().studentIds.size() == 1 && access().kuttabNames.size() == 0 && access().teacherIds.size() == 0 &&
+          get(/databases/$(database)/documents/katatib_student_credentials/$(access().studentIds[0])).data.address == email());
     }
     function scopeAllowed(data) {
       let a = access();
@@ -87,7 +95,7 @@ service cloud.firestore {
       allow update, delete: if false;
     }
     match /katatib_access/{address} {
-      allow get: if member() && access().role == 'admin' || googleUser() && address == email();
+      allow get: if member() && access().role == 'admin' || (googleUser() || codeUser()) && address == email();
       allow list: if member() && access().role == 'admin' && request.query.limit <= 100;
       allow create, update: if member() && access().role == 'admin' && address != email() && validAccess(request.resource.data, address) && workspaceRevision() && audited('katatib_access',address,request.resource.data);
       allow delete: if false;
@@ -216,16 +224,37 @@ service cloud.firestore {
       allow delete: if false;
     }
     function validAccess(d,address) {
-      return d.keys().hasOnly(['schemaVersion','active','role','kuttabNames','teacherIds','studentIds','revision','updatedBy','updatedAt','eventId']) && validMeta(d) &&
+      return d.keys().hasOnly(['schemaVersion','active','role','kuttabNames','teacherIds','studentIds','authUid','revision','updatedBy','updatedAt','eventId']) && validMeta(d) &&
         address.matches('[^/ @]+@[^/ @]+\\.[^/ @]+') && address == address.lower() &&
         d.active is bool && d.role in ['admin','manager','teacher','parent','student'] &&
+        (!codedAddress(address) ? !d.keys().hasAny(['authUid']) :
+          d.role == 'student' && d.studentIds.size() == 1 && d.teacherIds.size() == 0 && d.kuttabNames.size() == 0 &&
+          d.authUid is string && d.authUid.size() > 0 && d.authUid.size() <= 128 &&
+          (!d.active || getAfter(/databases/$(database)/documents/katatib_student_credentials/$(d.studentIds[0])).data.address == address &&
+            getAfter(/databases/$(database)/documents/katatib_student_credentials/$(d.studentIds[0])).data.authUid == d.authUid)) &&
         d.kuttabNames is list && d.kuttabNames.size() <= 10 && d.teacherIds is list && d.teacherIds.size() <= 10 && d.studentIds is list && d.studentIds.size() <= 10 &&
         (d.role == 'admin' || (d.role in ['parent','student'] ? d.studentIds.size() > 0 : d.kuttabNames.size() + d.teacherIds.size() > 0));
+    }
+    function validCredential(d,id) {
+      let grant=getAfter(/databases/$(database)/documents/katatib_access/$(d.address)).data;
+      return d.keys().hasOnly(['schemaVersion','studentId','address','authUid','revision','updatedBy','updatedAt','eventId']) &&
+        validMeta(d) && d.studentId == id && studentIdAllowed(id) && codedAddress(d.address) &&
+        grant.active == true && grant.role == 'student' && grant.authUid == d.authUid && grant.studentIds == [id] &&
+        audited('katatib_student_credentials',id,d);
+    }
+    match /katatib_student_credentials/{id} {
+      allow get: if member() && access().role == 'admin';
+      allow list: if member() && access().role == 'admin' && request.query.limit <= 100;
+      allow create: if member() && access().role == 'admin' && validCredential(request.resource.data,id) && request.resource.data.revision == 1;
+      allow update: if member() && access().role == 'admin' && validCredential(request.resource.data,id) && workspaceRevision() &&
+        request.resource.data.address != resource.data.address &&
+        getAfter(/databases/$(database)/documents/katatib_access/$(resource.data.address)).data.active == false;
+      allow delete: if false;
     }
     match /katatib_audit/{id} {
       allow get, list: if member() && (access().role == 'admin' || resource.data.collection in ['katatib_legacy_corrections','katatib_legacy_task_states'] && historyAllowed(resource.data.snapshot)) && (request.method == 'get' || request.query.limit <= 100);
       allow create: if member() && request.resource.data.keys().hasOnly(['collection','recordId','snapshot']) &&
-        request.resource.data.collection in ['katatib_students','katatib_tasks','katatib_access','katatib_schedules','katatib_legacy_corrections','katatib_questions','katatib_challenge_attempts','katatib_legacy_task_states'] &&
+        request.resource.data.collection in ['katatib_students','katatib_tasks','katatib_access','katatib_schedules','katatib_legacy_corrections','katatib_questions','katatib_challenge_attempts','katatib_legacy_task_states','katatib_student_credentials'] &&
         request.resource.data.recordId is string && request.resource.data.snapshot.eventId == id &&
         request.resource.data.snapshot.updatedBy == request.auth.uid && request.resource.data.snapshot.updatedAt == request.time &&
         getAfter(/databases/$(database)/documents/$(request.resource.data.collection)/$(request.resource.data.recordId)).data == request.resource.data.snapshot;

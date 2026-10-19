@@ -1,3 +1,4 @@
+import { loginOptions, studentLoginLabels } from './student-login-ui.mjs';
 import { english } from './english.mjs';
 import { readinessLabels } from './readiness.mjs';
 import { rosterPage } from './roster.mjs';
@@ -47,8 +48,8 @@ const copy = {
 };
 copy.en=english;
 let allStudents = [];
-let language = 'ar', gateway, user = null, students = [], role = '', capped = false, state = 'loading', error = '', search = '', school = '', epoch = 0, historyEpoch = 0, pendingLogin = false;
-const t = key => copy[language][key] || workspaceLabels[language][key] || legacyLabels[language][key] || readinessLabels[language][key] || recorderLabels[language][key] || copy[language].error;
+let language = 'ar', gateway, user = null, students = [], role = '', capped = false, state = 'loading', error = '', search = '', school = '', epoch = 0, historyEpoch = 0, pendingLogin = false, loginTab='staff';
+const t = key => copy[language][key] || studentLoginLabels[language][key] || workspaceLabels[language][key] || legacyLabels[language][key] || readinessLabels[language][key] || recorderLabels[language][key] || copy[language].error;
 const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const value = (n,precision=2) => n == null ? t('unknown') : new Intl.NumberFormat(language === 'ar' ? 'ar-MA' : language==='en'?'en-GB':'fr-FR', {maximumFractionDigits:precision}).format(n);
 function errorKey(e) {
@@ -182,9 +183,9 @@ async function saveLearning(event) {
   if(generation===epoch&&learningSaved)loadLearning();
 }
 
-const icons={today:'◈',students:'◉',attendance:'✓',learning:'▤',tasks:'◷',reports:'▥',manage:'⚙',access:'♙',audit:'≡',recording:'◉',history:'▦',readiness:'◇',teacherAttendance:'✓',schedules:'◷',corrections:'✎',questions:'?',challenge:'◇',ranking:'▥'};
-const extraScreens=['schedules','corrections','questions','challenge','ranking','teacherAttendance','tasks','reports','manage','access','audit','history','readiness'];
-const screens=()=>['today','students',...(['parent','student'].includes(role)?[]:['attendance','learning','recording','schedules','corrections','ranking']),'history','tasks','reports','challenge',...(['admin','manager'].includes(role)?['teacherAttendance','manage']:[]),...(role==='admin'?['access','audit','readiness','questions']:[])];
+const icons={today:'◈',students:'◉',attendance:'✓',learning:'▤',tasks:'◷',reports:'▥',manage:'⚙',access:'♙',audit:'≡',credentials:'♙',recording:'◉',history:'▦',readiness:'◇',teacherAttendance:'✓',schedules:'◷',corrections:'✎',questions:'?',challenge:'◇',ranking:'▥'};
+const extraScreens=['credentials','schedules','corrections','questions','challenge','ranking','teacherAttendance','tasks','reports','manage','access','audit','history','readiness'];
+const screens=()=>['today','students',...(['parent','student'].includes(role)?[]:['attendance','learning','recording','schedules','corrections','ranking']),'history','tasks','reports','challenge',...(['admin','manager'].includes(role)?['teacherAttendance','manage']:[]),...(role==='admin'?['credentials','access','audit','readiness','questions']:[])];
 const titleKey=s=>({today:'today',students:'studentsTab',attendance:'cloudAttendance',learning:'learningTab',history:'legacyTitle'}[s]||s);
 const screenTitle=()=>t(titleKey(screen));
 const displayName=()=>user?.displayName?.trim()||user?.email||t('workspaceTitle');
@@ -207,7 +208,7 @@ function render(){
  document.documentElement.lang=language;document.documentElement.dir=language==='ar'?'rtl':'ltr';document.title=`${user?screenTitle():t('welcome')} · Katatib`;root.setAttribute('aria-busy',String(state==='loading'));
  const brand=`<div class="unified-brand"><span class="brand-symbol">${bookIcon()}</span><span class="brand-name">${t('brand')}</span></div>`;
  if(!user){
-  root.innerHTML=`<div class="login-shell"><header class="unified-login-header">${brand}<div class="live-actions"><span class="demo-pill">${t('testBadge')}</span>${languageSwitch()}</div></header><div class="unified-login-grid"><section class="login-story"><p class="eyebrow">${t('brandCaption')}</p><h1>${t('loginHero')}</h1><p>${t('loginStory')}</p><div class="login-story-mark" aria-hidden="true">${bookIcon()}</div></section><section class="panel live-panel login-panel"><p class="eyebrow">${t('workspaceTitle')}</p><h2>${state==='loading'?t('loading'):t('welcome')}</h2><p>${t('intro')}</p>${errorNotice()}${gateway?`<button data-action="login" class="primary-button" ${pendingLogin?'disabled':''}>${t('login')}</button>`:''}${state==='error'?`<button data-action="retry" class="secondary-button">${t('retry')}</button>`:''}<p class="login-footnote">${t('notice')}</p></section></div></div>`;
+  root.innerHTML=`<div class="login-shell"><header class="unified-login-header">${brand}<div class="live-actions"><span class="demo-pill">${t('testBadge')}</span>${languageSwitch()}</div></header><div class="unified-login-grid"><section class="login-story"><p class="eyebrow">${t('brandCaption')}</p><h1>${t('loginHero')}</h1><p>${t('loginStory')}</p><div class="login-story-mark" aria-hidden="true">${bookIcon()}</div></section><section class="panel live-panel login-panel"><p class="eyebrow">${t('workspaceTitle')}</p><h2>${state==='loading'?t('loading'):t('welcome')}</h2><p>${t('intro')}</p>${errorNotice()}${gateway?`${loginOptions(language,loginTab,pendingLogin)}${loginTab!=='student'?`<button data-action="login" class="primary-button" ${pendingLogin?'disabled':''}>${t('login')}</button>`:''}`:''}${state==='error'?`<button data-action="retry" class="secondary-button">${t('retry')}</button>`:''}<p class="login-footnote">${t('notice')}</p></section></div></div>`;
   return;
  }
  const body=state==='ready'?(screen==='today'?todayView():screen==='recording'?'<div id="recording-root"></div>':extraScreens.includes(screen)?'<div id="work-root"></div>':`${screen==='attendance'?attendanceControls():''}${capped?`<p class="notice-error">${t('capped')}</p>`:''}${screen!=='learning'?rosterFilters():''}<div id="live-students" class="${screen==='learning'?'learning-layout':'student-cards'}">${renderResults()}</div>`):`<section class="panel live-panel"><h2>${state==='loading'?t('loading'):t('welcome')}</h2>${state==='error'?`<button data-action="retry" class="secondary-button">${t('retry')}</button>`:''}</section>`;
@@ -281,6 +282,7 @@ root.addEventListener('click', async e => {
   else if (b.dataset.action==='reload-attendance')loadAttendance();
   else if (b.dataset.lang) { language = b.dataset.lang; render(); }
   else if (b.dataset.profile) profile(b.dataset.profile, b);
+  else if (b.dataset.loginTab) {loginTab=b.dataset.loginTab;error='';render();}
   else if (b.dataset.action === 'login') {
     pendingLogin = true; error = ''; render();
     try { await gateway.login(); } catch (e) { error = errorKey(e); } finally { pendingLogin = false; render(); }
@@ -291,7 +293,16 @@ root.addEventListener('click', async e => {
     try { await gateway.logout(); } catch { error = 'error'; render(); }
   } else if (b.dataset.action === 'retry') { if (user) loadStudents(); else if (gateway) {state='signed-out';error='';render();} else start(); }
 });
-root.addEventListener('submit',e=>{if(e.target.id==='learning-form')saveLearning(e);});
+root.addEventListener('submit',async e=>{
+ if(e.target.id==='learning-form')saveLearning(e);
+ if(e.target.id==='student-login-form'){
+   e.preventDefault();if(pendingLogin)return;
+   const data=new FormData(e.target),code=data.get('code'),pin=data.get('pin');
+   pendingLogin=true;error='';render();
+   try{await gateway.studentLogin(code,pin);}catch(e){error=/operation-not-allowed|configuration-not-found/.test(e.code||'')?'setup':'loginFailed';}
+   finally{pendingLogin=false;render();}
+ }
+});
 root.addEventListener('input', e=>{if(e.target.closest('#learning-form')&&e.target.name){if(!learningPending&&e.target.tagName!=='SELECT'){learningForm[e.target.name]=e.target.type==='checkbox'?e.target.checked:e.target.value;learningTouched=true;learningSaved=false;}}else if(e.target.dataset.cloudNote){const row=cloudRow(e.target.dataset.cloudNote);if(row&&!row.saving){row.draft.note=e.target.value;row.error='';const card=e.target.closest('[data-cloud-row]');card.querySelector('[data-cloud-save]').disabled=!rowDirty(row);card.querySelector('[data-cloud-message]').textContent=t(rowDirty(row)?'cloudUnsaved':row.base.revision?'cloudSaved':'cloudNotMarked');}}else if(e.target.id === 'live-search'){search=e.target.value;rosterIndex=0;if(screen==='attendance')loadAttendance(true);else updateRoster();}});
 root.addEventListener('change', e=>{if(e.target.closest('#learning-form')&&e.target.name){
   if(learningPending)return;

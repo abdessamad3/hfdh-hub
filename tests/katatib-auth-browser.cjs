@@ -6,16 +6,26 @@ const {build}=requireTools('esbuild');
 const {chromium}=requireTools('playwright');
 let browser,server;
 (async()=>{
+ const studentHelper=path.resolve('public/katatib/live/student-login.mjs');
  const helper=path.resolve('public/katatib/live/auth-session.mjs');
  const entry=`
- import {initializeApp} from 'firebase/app';
- import {initializeAuth,browserSessionPersistence,browserPopupRedirectResolver,connectAuthEmulator,onAuthStateChanged,createUserWithEmailAndPassword,signOut} from 'firebase/auth';
+ import {initializeApp,deleteApp} from 'firebase/app';
+ import {initializeAuth,browserSessionPersistence,browserPopupRedirectResolver,connectAuthEmulator,onAuthStateChanged,createUserWithEmailAndPassword,signInWithEmailAndPassword,inMemoryPersistence,signOut} from 'firebase/auth';
  import {createSessionAuth} from ${JSON.stringify(helper)};
+ import {provisionStudentAuth,newStudentLogin} from ${JSON.stringify(studentHelper)};
  const app=initializeApp({apiKey:'demo-test-key',authDomain:'demo-katatib-auth.firebaseapp.com',projectId:'demo-katatib-auth'});
  const auth=createSessionAuth(app,{initializeAuth,browserSessionPersistence,browserPopupRedirectResolver});
  connectAuthEmulator(auth,'http://127.0.0.1:9099',{disableWarnings:true});
  onAuthStateChanged(auth,user=>{document.body.dataset.user=user?user.uid:'signed-out';});
  window.testLogin=()=>createUserWithEmailAndPassword(auth,'persistence-'+crypto.randomUUID()+'@example.com','test-only-example-password');
+ window.testStudent=async()=>{
+   const before=auth.currentUser.uid,login=newStudentLogin();
+   const initializeSecondary=(app,options)=>{const secondary=initializeAuth(app,options);connectAuthEmulator(secondary,'http://127.0.0.1:9099',{disableWarnings:true});return secondary;};
+   const sdk={initializeApp,deleteApp,initializeAuth:initializeSecondary,inMemoryPersistence,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut};
+   const uid=await provisionStudentAuth(app.options,login,sdk);
+   const retried=await provisionStudentAuth(app.options,login,sdk);
+   return {staffUnchanged:auth.currentUser.uid===before,sameAccount:retried===uid,differentAccount:uid!==before};
+ };
  window.testLogout=()=>signOut(auth);
  `;
  const result=await build({stdin:{contents:entry,resolveDir:process.env.KATATIB_AUTH_TOOLS,sourcefile:'session-test.mjs'},bundle:true,format:'esm',write:false,platform:'browser'});
@@ -40,6 +50,7 @@ let browser,server;
   await page.reload();await page.waitForFunction(uid=>document.body.dataset.user===uid,uid);
   assert.equal(await page.getAttribute('body','data-user'),uid);
  }
+ assert.deepEqual(await page.evaluate(()=>window.testStudent()),{staffUnchanged:true,sameAccount:true,differentAccount:true});
  const anotherTab=await context.newPage();await anotherTab.goto(url);
  await anotherTab.waitForFunction(()=>document.body.dataset.user==='signed-out');
  await page.evaluate(()=>window.testLogout());

@@ -2,9 +2,10 @@ import { applyLegacyCorrections, applyLegacyTaskStates } from './advanced-model.
 import { teacherView, commitTeacherAttendance, TEACHER_CURRENT, TEACHER_HISTORY } from './teacher-attendance.mjs';
 import { LEGACY_COLLECTIONS, HISTORY_COLLECTIONS, historyProjection, mergeHistory } from './legacy.mjs';
 import { readPages, commitWorkspace, STAFF_ROLES } from './workspace-model.mjs';
+import { permittedIdentity, checkStudentGrant, studentAddress, studentSecret, provisionStudentAuth, commitStudentCredential } from './student-login.mjs';
 import { createSessionAuth } from './auth-session.mjs';
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js';
-import { initializeAuth, browserSessionPersistence, browserPopupRedirectResolver, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js';
+import { initializeApp, deleteApp } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js';
+import { initializeAuth, inMemoryPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, browserSessionPersistence, browserPopupRedirectResolver, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js';
 import { initializeFirestore, memoryLocalCache, collection, doc, getDocFromServer, getDocsFromServer, query, where, limit, orderBy, documentId, startAfter, runTransaction, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js';
 import { commitLearning, readLearningPages } from './learning.mjs';
 import { attendanceId, emptyAttendance, commitAttendance } from './attendance.mjs';
@@ -12,7 +13,8 @@ import { validateConfig, accessScopes, studentView, mergeStudents } from './mode
 export async function connect() {
   const response = await fetch('/__/firebase/init.json', { cache: 'no-store', credentials: 'omit' });
   if (!response.ok) throw new Error('config-unavailable');
-  const app = initializeApp(validateConfig(await response.json()), 'katatib-test-reader');
+  const config=validateConfig(await response.json());
+  const app = initializeApp(config, 'katatib-test-reader');
   const auth = createSessionAuth(app, { initializeAuth, browserSessionPersistence, browserPopupRedirectResolver });
   const db = initializeFirestore(app, { localCache: memoryLocalCache() });
   const provider = new GoogleAuthProvider();
@@ -20,11 +22,26 @@ export async function connect() {
   return {
     observe: callback => onAuthStateChanged(auth, callback),
     login: () => signInWithPopup(auth, provider),
+    studentLogin: (code,pin) => signInWithEmailAndPassword(auth,studentAddress(code),studentSecret(pin)),
+    async studentCredential(studentId) {
+      const snapshot=await getDocFromServer(doc(db,'katatib_student_credentials',studentId));
+      return snapshot.exists()?snapshot.data():null;
+    },
+    async provisionStudent(studentId,login,revision,eventId) {
+      if(!auth.currentUser)throw new Error('no-access');
+      const adminUid=auth.currentUser.uid;
+      const grant=await getDocFromServer(doc(db,'katatib_access',auth.currentUser.email.toLowerCase()));
+      if(!grant.exists()||grant.data().role!=='admin'||!grant.data().active)throw new Error('no-access');
+      const authUid=await provisionStudentAuth(config,login,{initializeApp,deleteApp,initializeAuth,inMemoryPersistence,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut});
+      if(auth.currentUser?.uid!==adminUid)throw new Error('no-access');
+      return commitStudentCredential(db,{doc,runTransaction,serverTimestamp},adminUid,studentId,login,authUid,revision,eventId);
+    },
     logout: () => signOut(auth),
     async students(user) {
-      if (!user.emailVerified || !user.email) throw new Error('no-access');
-      const access = await getDocFromServer(doc(db, 'katatib_access', user.email.toLowerCase()));
+      const identity=await permittedIdentity(user);
+      const access = await getDocFromServer(doc(db, 'katatib_access', identity.address));
       if (!access.exists()) throw new Error('no-access');
+      checkStudentGrant(identity,user,access.data());
       const scopes = accessScopes(access.data());
       const batches = await Promise.all(scopes.map(async scope => {
         const filters = scope.field ? [where(scope.field==='__name__'?documentId():scope.field, '==', scope.value)] : [];
