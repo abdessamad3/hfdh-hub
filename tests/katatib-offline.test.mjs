@@ -46,3 +46,9 @@ test('a slow sync never blocks saving another local change',async()=>{
  f.online();const syncing=f.api.offline.sync();await started;f.offline();await f.api.saveAttendance('a',context,{status:'late',note:'Saved during slow network'},1);assert.equal(f.api.offlinePending(),2);release();await syncing;
  f.raw.saveAttendance=save;f.online();await f.api.offline.sync();assert.equal(f.events.size,2);assert.equal(f.api.offlinePending(),0);
 });
+
+test('device quota failures do not claim a save or discard the existing queue',async()=>{
+ const f=fixture();await f.init();f.offline();const update=f.store.update;f.store.update=async()=>{throw Error('QuotaExceededError');};
+ await assert.rejects(f.api.saveAttendance('a',context,{status:'present',note:'Still a draft'},0),/QuotaExceeded/);assert.equal(f.api.offlinePending(),0);assert.equal(f.events.size,0);
+ f.store.update=update;assert.equal((await f.api.attendance(['a'],context)).a.revision,0);
+});

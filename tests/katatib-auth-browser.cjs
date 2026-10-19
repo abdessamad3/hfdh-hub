@@ -59,9 +59,9 @@ let browser,server;
  await page.reload();await page.waitForFunction(()=>document.body.dataset.user==='signed-out');
  // Opt-in trusted-device persistence restores a real SDK identity in a newly opened offline tab.
  await page.evaluate(()=>window.testLogin());await page.waitForFunction(()=>document.body.dataset.user!=='signed-out');
- const trustedUid=await page.getAttribute('body','data-user');await page.evaluate(()=>window.testTrust());
+ const trustedUid=await page.getAttribute('body','data-user');await page.evaluate(()=>window.testTrust());await page.close();await anotherTab.close();
  await context.route(url+'**',route=>route.fulfill({contentType:route.request().url().endsWith('/bundle.mjs')?'text/javascript':'text/html',body:route.request().url().endsWith('/bundle.mjs')?result.outputFiles[0].text:'<!doctype html><html><body><script type="module" src="/bundle.mjs"></script></body></html>'}));
- await context.setOffline(true);const offlineTab=await context.newPage();await offlineTab.goto(url);await offlineTab.waitForFunction(uid=>document.body.dataset.user===uid,trustedUid);
+ await context.setOffline(true);const offlineTab=await context.newPage();offlineTab.on('pageerror',e=>errors.push(e.message));await offlineTab.goto(url);await offlineTab.waitForFunction(uid=>document.body.dataset.user===uid,trustedUid);
  assert.equal(await offlineTab.getAttribute('body','data-user'),trustedUid);
  await offlineTab.evaluate(()=>window.testLogout());await offlineTab.waitForFunction(()=>document.body.dataset.user==='signed-out');await context.setOffline(false);
  assert.deepEqual(errors,[]);

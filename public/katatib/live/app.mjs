@@ -167,6 +167,7 @@ async function saveLearning(event) {
   event.preventDefault();if(!user||learningSaving)return;
   if(!learningPending){
     try {
+      const data=new FormData(event.target);for(const key of ['studentId','kind','date','session','hizb','fromEighth','toEighth','mistakes','score','note'])if(data.has(key))learningForm[key]=data.get(key);learningForm.confirmMastered=data.has('confirmMastered');
       const f=learningForm,graded=isGradedLearning(f.kind);
       if(f.kind==='memorization'&&!f.confirmMastered)throw new Error('mastery-unconfirmed');
       const input=cleanLearning({...f,hizb:Number(f.hizb),fromEighth:Number(f.fromEighth),toEighth:Number(f.toEighth),mistakes:graded?Number(f.mistakes):null,score:graded?Number(f.score):null});

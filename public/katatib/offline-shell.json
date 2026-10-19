@@ -31,7 +31,7 @@
     },
     {
       "path": "/live/app.mjs",
-      "sha256": "c0c776cac8e620193e0f72466a5daeefb96d9fdc3b76af2244ceafb236bd668f"
+      "sha256": "3352d66a2021b8f2513f54ece9c120d9399819758033a38b5a56785bf99e7435"
     },
     {
       "path": "/live/attendance.mjs",
@@ -103,7 +103,7 @@
     },
     {
       "path": "/live/offline-ui.mjs",
-      "sha256": "c146c7e38e46e56c3607a467c74a83ec5fa69ecf18c04cf6c20d2a13f64915cf"
+      "sha256": "d8ccfd40ccf16bb6f8dcb4bd57d7de64f2814ec586d4f55ed1265bbefb9a0f04"
     },
     {
       "path": "/live/planning.mjs",
