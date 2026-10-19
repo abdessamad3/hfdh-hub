@@ -64,13 +64,13 @@ export async function connect(){
  async history(){return window.__history;}
  };
 }`;
-let browser;
+let browser,failurePage,observedErrors;
 (async()=>{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  browser=await chromium.launch({headless:true,args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});
- const errors=[];
+ const errors=[];observedErrors=errors;
  fs.mkdirSync('artifacts/katatib',{recursive:true});
- const page=await browser.newPage({viewport:{width:390,height:844}});
+ const page=await browser.newPage({viewport:{width:390,height:844}});failurePage=page;
  page.on('pageerror',e=>errors.push(e.message));
  await page.route('**/live/gateway.mjs',r=>r.fulfill({contentType:'text/javascript',body:mock}));
  const url=`http://127.0.0.1:${server.address().port}/live/`;
@@ -561,4 +561,4 @@ let browser;
  await page.locator('[data-card-clear]').click();await page.locator('[data-action=logout]').click();
  assert.deepEqual(errors,[]);
  console.log('PASS: mocked-provider reader login, denied access, logout and stale-request clearing, no persistent student storage, escaped copied data, history, Arabic/French and responsive unified homepage/design with actual account/roster,  cloud attendance save/reload, date/session isolation, unsaved errors and conflicts; learning types, one current row per edit with collapsed prior versions, lost-ack retries and profile consistency; explicit confirmation, practice exclusion and edited progress. Real Google OAuth requires owner setup and a live smoke test.');
-})().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{await browser?.close();server.close();});
+})().catch(async e=>{console.error(e);if(failurePage){await failurePage.screenshot({path:'artifacts/katatib/live-failure.png',fullPage:true}).catch(()=>{});console.error(await failurePage.evaluate(()=>({alerts:[...document.querySelectorAll('[role=alert]')].map(e=>e.textContent),form:[...document.querySelectorAll('#learning-form input,#learning-form select,#learning-form textarea')].map(e=>({name:e.name,value:e.value,checked:e.checked,valid:e.checkValidity()}))})).catch(()=>({})));console.error(observedErrors);}process.exitCode=1;}).finally(async()=>{await browser?.close();server.close();});

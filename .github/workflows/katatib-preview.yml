@@ -59,11 +59,11 @@ jobs:
         env:
           PLAYWRIGHT_MODULE: ${{ runner.temp }}/katatib-browser/node_modules/playwright
         run: |
-          node tests/katatib-browser.cjs
-          node tests/katatib-live-browser.cjs
-          node tests/katatib-mushaf-browser.cjs
-          node tests/katatib-audio-browser.cjs
-          node tests/katatib-offline-browser.cjs
+          katatib_browser_failed=0
+          for katatib_test in tests/katatib-browser.cjs tests/katatib-live-browser.cjs tests/katatib-mushaf-browser.cjs tests/katatib-audio-browser.cjs tests/katatib-offline-browser.cjs; do
+            if ! node "$katatib_test"; then katatib_browser_failed=1; fi
+          done
+          exit "$katatib_browser_failed"
       - name: Upload preview screenshots
         if: always()
         uses: actions/upload-artifact@v6
