@@ -3,18 +3,18 @@ import {cleanAttendance,attendanceId} from './attendance.mjs';
 import {cleanLearning} from './learning.mjs';
 import {cleanVerseMark} from './mushaf-model.mjs';
 import {CLEANERS,STAFF_ROLES} from './workspace-model.mjs';
-import {historyProjection} from './legacy.mjs';
+import {historyProjection,mergeHistory} from './legacy.mjs';
 const READS=new Set(['students','kuttabs','scheduleRows','teachers','teacherAttendance','teacherHistory','history','attendanceHistory','studentHistory','workspaceList','learningHistory','verseMarks','attendance','noticeAcks']);
 const WORKSPACE=new Set(['katatib_tasks','katatib_legacy_task_states','katatib_legacy_corrections','katatib_schedules']);
 const WRITES=new Set(['saveAttendance','saveTeacherAttendance','saveLearning','saveVerseMark','workspaceSave']);
 const blockedRead=(name,args)=>name==='workspaceList'&&['katatib_access','katatib_audit'].includes(args[0]);
-const stamp=()=>({seconds:Math.floor(Date.now()/1000),nanoseconds:0});
+const stamp=()=>{const now=Date.now();return {seconds:Math.floor(now/1000),nanoseconds:(now%1000)*1000000};};
 function revive(v){if(Array.isArray(v))return v.map(revive);if(v&&typeof v==='object'){const r=Object.fromEntries(Object.entries(v).map(([k,x])=>[k,revive(x)]));if(Number.isFinite(r.seconds))Object.defineProperty(r,'toDate',{value:()=>new Date(r.seconds*1000+(r.nanoseconds||0)/1e6)});return r;}return v;}
 function resultFor(op,uid){const a=op.args,createdAt=op.createdAt;
  if(op.name==='saveAttendance'||op.name==='saveTeacherAttendance')return {...a[2],revision:a[3]+1,...op.confirmed,queued:!op.confirmed};
- if(op.name==='saveLearning')return {schemaVersion:2,...a[0],id:a[1],createdBy:uid,createdAt,queued:true};
- if(op.name==='saveVerseMark')return {schemaVersion:1,...a[0],id:a[1],createdBy:uid,createdAt,queued:true};
- return {schemaVersion:1,...a[2],id:a[1],revision:a[3]+1,updatedBy:uid,updatedAt:createdAt,eventId:a[4],queued:true};
+ if(op.name==='saveLearning')return {schemaVersion:2,...a[0],id:a[1],createdBy:uid,createdAt,...op.confirmed,queued:!op.confirmed};
+ if(op.name==='saveVerseMark')return {schemaVersion:1,...a[0],id:a[1],createdBy:uid,createdAt,...op.confirmed,queued:!op.confirmed};
+ return {schemaVersion:1,...a[2],id:a[1],revision:a[3]+1,updatedBy:uid,updatedAt:createdAt,eventId:a[4],...op.confirmed,queued:!op.confirmed};
 }
 export function projectPending(name,args,base,operations,uid){
  let value=plain(base);
@@ -33,13 +33,13 @@ export function projectPending(name,args,base,operations,uid){
   if(op.name==='workspaceSave'&&name==='studentHistory'&&args[0]===a[2].studentId&&a[0]==='katatib_legacy_task_states')value=value.map(x=>x.collection===a[2].sourceCollection&&x.id===a[2].sourceId?{...x,status:a[2].status,note:a[2].note,taskState:r,original:x.original||plain(x)}:x);
   if(op.name==='workspaceSave'&&name==='studentHistory'&&args[0]===a[2].studentId&&a[0]==='katatib_legacy_corrections')value=value.map(x=>x.collection===a[2].sourceCollection&&x.id===a[2].sourceId?{...x,...Object.fromEntries(Object.entries(a[2]).filter(([k])=>!['sourceCollection','sourceId','studentId','reason'].includes(k))),validDate:true,correction:r,original:x.original||plain(x)}:x);
  }
- return value;
+ return name==='studentHistory'?mergeHistory([value],args[0]):value;
 }
 export function createOfflineGateway(raw,{store=deviceStore(),online=()=>navigator.onLine,locks=globalThis.navigator?.locks,onChange=()=>{}}={}){
  let identity=null,state={enabled:false,cache:{},queue:[]},syncing=false,preparing=false,authEpoch=0,prepareDone=0,prepareTotal=0;
  const syncLock=fn=>{if(!locks?.request)throw Error('offline-locks-unavailable');return locks.request('katatib-device-sync',fn);};
  const lock=fn=>{if(!locks?.request)throw Error('offline-locks-unavailable');return locks.request('katatib-device-writes',fn);};
- const current=uid=>{if(!identity||identity.uid!==uid)throw Error('offline-account-changed');};
+ const current=uid=>{if(!identity||identity.uid!==uid||raw.authUid&&raw.authUid()!==uid)throw Error('offline-account-changed');};
  const notify=()=>onChange({enabled:state.enabled,pending:pendingRows(state).length,syncing,preparing,preparedAt:state.preparedAt,prepareDone,prepareTotal});
  async function refresh(uid){state=await store.read(uid);current(uid);return state;}
  async function markBlocked(uid,op,error){await store.update(uid,s=>{const r=s.queue.find(x=>x.id===op.id);if(r){r.status='blocked';r.error=/conflict/.test(error.code||error.message||'')?'conflict':'permission-or-validation';}return s;});await refresh(uid);notify();}
@@ -79,7 +79,7 @@ export function createOfflineGateway(raw,{store=deviceStore(),online=()=>navigat
   try{await syncLock(async()=>{await refresh(uid); // Recheck access on the server before replaying any queued operation.
    try{const roster=await raw.students(identity);current(uid);if(!STAFF_ROLES.includes(roster.role))throw Error('no-access');await store.update(uid,s=>{const previous=s.cache[readKey('students',[])];if(previous?.students.some(old=>!roster.students.some(x=>x.id===old.id))||previous&&previous.role!==roster.role){s.cache={};s.preparedAt=null;}s.enabled=true;s.cache[readKey('students',[])]=plain(roster);return s;});}catch(e){if(!networkFailure(e)){await store.update(uid,s=>({...s,enabled:false,preparedAt:null,cache:{}}));}return;}
    while(online()){await refresh(uid);const op=pendingRows(state)[0];if(!op||op.status==='blocked')break;
-    try{const confirmed=await raw[op.name](...op.args);current(uid);op.confirmed=plain(confirmed??resultFor(op,uid));await store.update(uid,s=>{for(const [key,base] of Object.entries(s.cache)){const [name,...args]=JSON.parse(key);s.cache[key]=projectPending(name,args,base,[op],uid);}const saved=s.queue.find(x=>x.id===op.id);if(saved){saved.status='synced';delete saved.args;}s.queue=s.queue.filter(x=>x.status!=='synced');return s;});}
+    try{if(!WRITES.has(op.name)||!Array.isArray(op.args))throw Error('invalid-offline-intent');validate(op.name,op.args);current(uid);const confirmed=await raw[op.name](...op.args);current(uid);op.confirmed=plain(confirmed??resultFor(op,uid));await store.update(uid,s=>{for(const [key,base] of Object.entries(s.cache)){const [name,...args]=JSON.parse(key);s.cache[key]=projectPending(name,args,base,[op],uid);}const saved=s.queue.find(x=>x.id===op.id);if(saved){saved.status='synced';delete saved.args;}s.queue=s.queue.filter(x=>x.status!=='synced');return s;});}
     catch(e){if(networkFailure(e))break;await markBlocked(uid,op,e);break;}
    }
   });}finally{syncing=false;if(identity?.uid===uid)await refresh(uid);notify();}

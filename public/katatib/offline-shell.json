@@ -22,6 +22,10 @@
       "sha256": "a8839bc4c0a9bbdcd9e1aa6107b9fb47842fea4a5653d1607e0cbbacacc661c1"
     },
     {
+      "path": "/mushaf/source-license.txt",
+      "sha256": "3d39dd696ff4a39d6abb6528ce71696b00805a666f5bd1c248719cf505f16d97"
+    },
+    {
       "path": "/live/advanced-model.mjs",
       "sha256": "e3ebb6d1b52c0ceabbeb19369e7b7b6c4e5a1db2b19bab0c8b3bc45b94d453c0"
     },
@@ -67,7 +71,7 @@
     },
     {
       "path": "/live/gateway.mjs",
-      "sha256": "4813c84be55d95b7730f572983ce722ebe26e296340cddfe7612c480f9e6fac3"
+      "sha256": "e11ab48810935f80920f3a77e22be5a6a142e4fe30b1616feab6fe147f26d00a"
     },
     {
       "path": "/live/learning.mjs",
@@ -95,7 +99,7 @@
     },
     {
       "path": "/live/offline-gateway.mjs",
-      "sha256": "acdac5ff72c4efb43bf784bc771708493b0d5b49e55ab5848b340566e7491eec"
+      "sha256": "77df99bcdd9d2ed3edcaa7a3d017b2a05d0ec9b70c7a87ca2a384fbdf9fddaed"
     },
     {
       "path": "/live/offline-store.mjs",

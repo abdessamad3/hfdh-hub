@@ -5,7 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 root = Path(__file__).resolve().parents[1] / 'public/katatib'
-paths = [root/'index.html',root/'styles.css',root/'favicon.svg',root/'manifest.webmanifest',root/'mushaf/manifest.json', *sorted((root/'live').glob('*.mjs')), root/'live/live.css',root/'live/mushaf.css']
+paths = [root/'index.html',root/'styles.css',root/'favicon.svg',root/'manifest.webmanifest',root/'mushaf/manifest.json',root/'mushaf/source-license.txt', *sorted((root/'live').glob('*.mjs')), root/'live/live.css',root/'live/mushaf.css']
 manifest = {'schemaVersion': 1, 'assets': [{'path': '/' if p.name=='index.html' else '/'+str(p.relative_to(root)), 'sha256': hashlib.sha256(p.read_bytes()).hexdigest()} for p in paths]}
 content=json.dumps(manifest,indent=2)+'\n'
 if '--check' in sys.argv:

@@ -21,6 +21,7 @@ export async function connect() {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });
   return {
+    authUid: () => auth.currentUser?.uid,
     observe: callback => onAuthStateChanged(auth, callback),
     login: () => signInWithPopup(auth, provider),
     studentLogin: (code,pin) => signInWithEmailAndPassword(auth,studentAddress(code),studentSecret(pin)),

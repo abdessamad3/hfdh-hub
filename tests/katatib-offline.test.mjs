@@ -52,3 +52,8 @@ test('device quota failures do not claim a save or discard the existing queue',a
  await assert.rejects(f.api.saveAttendance('a',context,{status:'present',note:'Still a draft'},0),/QuotaExceeded/);assert.equal(f.api.offlinePending(),0);assert.equal(f.events.size,0);
  f.store.update=update;assert.equal((await f.api.attendance(['a'],context)).a.revision,0);
 });
+
+test('a delayed Auth observer cannot save under a different SDK identity',async()=>{
+ const f=fixture();await f.init();f.offline();f.raw.authUid=()=> 'different-sdk-user';
+ await assert.rejects(f.api.saveAttendance('a',context,{status:'present',note:''},0),/offline-account-changed/);assert.equal((await f.store.read(user.uid)).queue.length,0);
+});
