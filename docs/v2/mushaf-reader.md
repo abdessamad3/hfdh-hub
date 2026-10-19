@@ -43,3 +43,7 @@ The reader links teachers to the existing local recorder. It explicitly says tha
 Model tests cover all page references, Warsh/Hafs boundaries, source-byte fingerprints, malformed inputs, immutable retries and history. Chromium tests use actual pinned opening/middle/final/hizb pages to check selection, unchanged glyph paths, letters, marking/history, lost acknowledgements, family view, mobile zoom, loading failure and tamper rejection. Firestore emulator tests enforce real mark permissions and exact page validation. Physical-device and qualified-content acceptance remain separate.
 
 The change stays on `katatib-v2/teacher-preview`; no production merge, original-database writes or billing changes. Once checks pass, the owner deploys the existing test project from Cloud Shell using `git pull --ff-only` then `bash scripts/deploy-katatib-connected.sh`. No new Mushaf-specific Firebase provider or credentials are required.
+
+### Passed release checks
+
+Commit `75a0bf9a81bfae47e97657f6ae0cdf21331aba1a` passed [Katatib model/browser/Auth/Firestore checks](https://github.com/abdessamad3/hfdh-hub/actions/runs/39241275192) and [the application build](https://github.com/abdessamad3/hfdh-hub/actions/runs/39241275148). The page/surah tables use encoded immutable constants to stay within Firestore’s expression limit while preserving full reference validation. The emulator checks ordinary and boundary pages through page 604. No Firebase deployment was executed from this environment.
