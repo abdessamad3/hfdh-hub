@@ -1,6 +1,8 @@
 import {createOfflineGateway} from './offline-gateway.mjs';
 import {createOfflineControls,offlineLabels} from './offline-ui.mjs';
 const offlineControls=createOfflineControls();
+let offlineObservedPending=0;
+function offlineChanged(s){offlineControls.paint();const finished=offlineObservedPending>0&&s.pending===0&&!s.syncing;offlineObservedPending=s.pending;if(finished&&state==='ready'&&!hasSaves()&&!hasDrafts())void refreshDeviceData().catch(()=>{});}
 import { loginOptions, studentLoginLabels } from './student-login-ui.mjs';
 import { english } from './english.mjs';
 import { readinessLabels } from './readiness.mjs';
@@ -245,7 +247,7 @@ async function start() {
   try {
     // Tests replace the module at the HTTP boundary; there is no production mock bypass.
     const {connect} = await import('./gateway.mjs');
-    gateway = createOfflineGateway(await connect(),{onChange:()=>offlineControls.paint()});
+    gateway = createOfflineGateway(await connect(),{onChange:offlineChanged});
     gateway.observe(next => { clearData(); user = next; error = ''; if (user) loadStudents(); else { state = 'signed-out'; render(); } });
   } catch (e) { state = 'error'; error = errorKey(e); render(); }
 }

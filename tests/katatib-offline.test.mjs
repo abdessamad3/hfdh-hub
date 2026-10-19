@@ -57,3 +57,9 @@ test('a delayed Auth observer cannot save under a different SDK identity',async(
  const f=fixture();await f.init();f.offline();f.raw.authUid=()=> 'different-sdk-user';
  await assert.rejects(f.api.saveAttendance('a',context,{status:'present',note:''},0),/offline-account-changed/);assert.equal((await f.store.read(user.uid)).queue.length,0);
 });
+
+test('quota blocks preserve work and can be explicitly retried after recovery',async()=>{
+ const f=fixture();await f.init();f.offline();await f.api.saveAttendance('a',context,{status:'present',note:''},0);const save=f.raw.saveAttendance;f.raw.saveAttendance=async()=>{throw Object.assign(Error('quota'),{code:'resource-exhausted'});};
+ f.online();await f.api.offline.sync();assert.equal(f.api.offline.status().queue[0].error,'quota');assert.equal(f.api.offlinePending(),1);
+ f.raw.saveAttendance=save;await f.api.offline.retry();assert.equal(f.api.offlinePending(),0);assert.equal(f.events.size,1);
+});

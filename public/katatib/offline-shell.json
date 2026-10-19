@@ -35,7 +35,7 @@
     },
     {
       "path": "/live/app.mjs",
-      "sha256": "3352d66a2021b8f2513f54ece9c120d9399819758033a38b5a56785bf99e7435"
+      "sha256": "4a7d328521b25b2768b0c8fded0edaba947d20ba5ca6396a8724599cb4e953a9"
     },
     {
       "path": "/live/attendance.mjs",
@@ -99,7 +99,7 @@
     },
     {
       "path": "/live/offline-gateway.mjs",
-      "sha256": "77df99bcdd9d2ed3edcaa7a3d017b2a05d0ec9b70c7a87ca2a384fbdf9fddaed"
+      "sha256": "73b9ba6436d8459e4fbb1ff42a629865dc91755f8edee534fe666b57fd02936d"
     },
     {
       "path": "/live/offline-store.mjs",
@@ -107,7 +107,7 @@
     },
     {
       "path": "/live/offline-ui.mjs",
-      "sha256": "d8ccfd40ccf16bb6f8dcb4bd57d7de64f2814ec586d4f55ed1265bbefb9a0f04"
+      "sha256": "208d5383ca4bfa8907d07fc55f9b08aebf437eb258b0a2d46cb730085a2e926c"
     },
     {
       "path": "/live/planning.mjs",
