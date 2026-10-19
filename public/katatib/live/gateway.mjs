@@ -47,6 +47,13 @@ export async function connect() {
       }));
       return { students: mergeStudents(batches), role: access.data().role, capped: false };
     },
+    async legacyVersions(name,id,studentId) {
+      if(!['katatib_legacy_corrections','katatib_legacy_task_states'].includes(name))throw new Error('invalid-collection');
+      const rows=await readPages(async after=>{
+        const snapshot=await getDocsFromServer(query(collection(db,'katatib_audit'),where('collection','==',name),where('recordId','==',id),where('snapshot.studentId','==',studentId),orderBy(documentId()),...(after?[startAfter(after)]:[]),limit(100)));
+        return snapshot.docs.map(d=>({...d.data(),id:d.id}));
+      });return rows.sort((a,b)=>b.snapshot.revision-a.snapshot.revision);
+    },
     async kuttabs() {
       if(!auth.currentUser?.email)throw new Error('no-access');
       const grant=await getDocFromServer(doc(db,'katatib_access',auth.currentUser.email.toLowerCase()));

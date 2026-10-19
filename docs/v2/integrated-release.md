@@ -42,10 +42,10 @@ See [the V1/V2 migration-readiness review](migration-readiness.md). A new scoped
 | Authentic Warsh Mushaf and verse history | Verified licensed text/edition and exact verse/portion mapping. The historical lab's Hafs experiment is not presented as Warsh. |
 | Teacher classroom recording | Actual-phone codec/clipping tests, access-controlled storage and retention. Cloud Storage for Firebase requires Blaze, conflicting with the recorded no-card requirement. No audio is uploaded by this release; the local teacher recorder is the free alternative, without shared playback or automatic mistake clipping. |
 | Durable offline mode | Encrypted/identity-bound queue, explicit device retention policy, reload recovery, server reconciliation and device tests. Current in-tab drafts and save retry are not this feature. |
-| Kuttab settings, schedules, group memberships | Stable IDs, versioned session occurrences, ownership migration and calendar overrides. Current sessions are the explicit three choices, not a manager-configured schedule. |
-| Shared ranking | Minimal trusted projection and verified eligibility/coverage. Private student documents are not opened to build a ranking. |
+| Kuttab settings / ownership migration | Weekly schedules and dated closures are implemented as audited overlays. Sessions remain the explicit three named choices. Automatic ownership migration and arbitrary original session labels are not inferred. |
+| Public/shared ranking | Staff-scoped ranking is implemented from unique confirmed V2 coverage. No public student directory is published; a public leaderboard would require a separate privacy decision. |
 | Notices and notifications | Recipient-scoped records, delivery expectations and consent; no notifications are sent automatically. |
-| Remaining original capabilities | English support, Smart Challenge UI, certificates, kuttab comparisons and richer historical reports still need their V2 implementation. Original V1 remains available. |
+| Optional additional capabilities | English, reviewed practice challenges, old-record corrections and historical report counts/mean scores are implemented. Specialized certificates and additional kuttab comparison dashboards are outside this release. Original V1 remains available. |
 | Production cutover | Fresh backup including new V1 data since the old snapshot, reconciliation of source records/relationships and auth, migration rehearsal, rollback evidence and explicit production authorization. |
 
 ## Verified infrastructure constraints
@@ -91,3 +91,5 @@ Admin/scoped manager teacher attendance is available with explicit statuses, dat
 ### Remaining-feature implementation
 
 The test app now has weekly and dated schedule overlays/closures, protected old-record corrections, admin review of copied/new questions, ten-question practice rounds with server-checked answers, staff-scoped confirmed-coverage rankings, English and planned evaluation tasks. Originals remain unchanged. A private recovery inventory and release-acceptance/rollback procedure are provided. These do not establish live-account recovery, actual-phone acceptance, V1-specific grading parity or production cutover readiness.
+
+Staff can inspect scoped immutable audit versions when editing old learning records or old planned-work states. These reads use the actual linked student scope, never an unfiltered audit collection. Parents/students retain read access to their linked records and may create only their own linked practice answers, not profile/attendance/learning/correction writes.

@@ -251,6 +251,8 @@ const {doc,setDoc,getDoc,collection,getDocs,getDocsFromServer,query,where,limit,
   await assertSucceeds(workspaceSave(teacher,'new-teacher@example.com','katatib_legacy_task_states','next_evaluations~old-plan',legacyTask,0,'legacy-task-completed'));
   await assertFails(workspaceSave(as('student@example.com'),'new-student@example.com','katatib_legacy_task_states','next_evaluations~old-plan',{...legacyTask,status:'cancelled'},1,'legacy-task-portal-deny'));
   assert.equal((await getDoc(doc(teacher,'next_evaluations/old-plan'))).data().notes,'Original plan');
+  assert.equal((await assertSucceeds(getDocs(query(collection(teacher,'katatib_audit'),where('collection','==','katatib_legacy_corrections'),where('recordId','==','evaluations~a'),where('snapshot.studentId','==','a'),limit(100))))).size,2);
+  await assertFails(getDocs(query(collection(teacher,'katatib_audit'),where('collection','==','katatib_legacy_corrections'),where('snapshot.studentId','==','b'),limit(100))));
   const question={prompt:'Reviewed general question',options:['Yes','No'],answerIndex:0,edition:'general',reference:'Teacher-reviewed reference',reviewed:true,active:true,sourceId:'copied-question'};
   await assertSucceeds(workspaceSave(admin,'new-admin@example.com','katatib_questions','reviewed-question',question,0,'question-reviewed-first'));
   await assertFails(workspaceSave(teacher,'new-teacher@example.com','katatib_questions','teacher-question',question,0,'question-teacher-deny'));

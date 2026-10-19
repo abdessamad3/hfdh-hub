@@ -223,7 +223,7 @@ service cloud.firestore {
         (d.role == 'admin' || (d.role in ['parent','student'] ? d.studentIds.size() > 0 : d.kuttabNames.size() + d.teacherIds.size() > 0));
     }
     match /katatib_audit/{id} {
-      allow get, list: if member() && access().role == 'admin' && (request.method == 'get' || request.query.limit <= 100);
+      allow get, list: if member() && (access().role == 'admin' || resource.data.collection in ['katatib_legacy_corrections','katatib_legacy_task_states'] && historyAllowed(resource.data.snapshot)) && (request.method == 'get' || request.query.limit <= 100);
       allow create: if member() && request.resource.data.keys().hasOnly(['collection','recordId','snapshot']) &&
         request.resource.data.collection in ['katatib_students','katatib_tasks','katatib_access','katatib_schedules','katatib_legacy_corrections','katatib_questions','katatib_challenge_attempts','katatib_legacy_task_states'] &&
         request.resource.data.recordId is string && request.resource.data.snapshot.eventId == id &&

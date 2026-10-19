@@ -22,6 +22,7 @@ export async function connect(){
  async login(){observer({email:'teacher@example.com',displayName:'Teacher Test',emailVerified:true});},
  async logout(){observer(null);},
  async students(){if(window.__pending)await new Promise(r=>window.__release=r);if(window.__deny)throw new Error('no-access');const original=[{id:'a',name:'<img src=x onerror=alert(1)>',kuttab:'One',age:12,hizbs:3,attendance:80},{id:'b',name:'Maryam',kuttab:'Two',age:null,hizbs:null,attendance:null}];const students=(window.__roster||original).map(s=>({...s,teacherId:'legacy',status:'active',source:'copy',...window.__profiles[s.id]}));for(const [id,p] of Object.entries(window.__profiles))if(!students.some(s=>s.id===id))students.push({id,...p,hizbs:null,attendance:null});return {students,role:window.__role,capped:false};},
+ async legacyVersions(){return [];},
  async kuttabs(){return [{id:'one',name:'One',teacherId:'legacy',schedule:{lessons:{'1':{lessons:['Original session']}}}}];},
  async scheduleRows(id){return Object.values(window.__workspace.katatib_schedules).filter(r=>r.kuttabId===id);},
  async questions(review=false){return review?[{id:'copied-question',prompt:'Copied general question',options:['Yes','No'],correctAnswer:'Yes'}]:Object.values(window.__workspace.katatib_questions).filter(q=>q.active&&q.reviewed);},
