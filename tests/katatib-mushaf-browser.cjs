@@ -1,7 +1,7 @@
-const assert=require('node:assert/strict'),http=require('node:http'),fs=require('node:fs'),path=require('node:path');
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const root=path.resolve('public/katatib');
-let browser,server;
+let browser;
 const harness=`<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/live/live.css"><link rel="stylesheet" href="/live/mushaf.css"></head><body><main id="reader"></main><script type="module">
 import {createMushaf} from '/live/mushaf-ui.mjs';
 window.__rows=[];window.__attempts=[];window.__failHistory=false;window.__lostAck=false;window.__clock=1800000000;
@@ -11,11 +11,12 @@ window.__open=(role='teacher')=>{viewer.reset();viewer.mount(document.querySelec
 window.__open();
 </script></body></html>`;
 (async()=>{
- server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http://localhost').pathname;if(pathname==='/test-reader'){res.setHeader('Content-Type','text/html');res.end(harness);return;}const file=path.resolve(root,'.'+pathname);if(!file.startsWith(root+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404).end();return;}res.setHeader('Content-Type',file.endsWith('.mjs')?'text/javascript':file.endsWith('.css')?'text/css':file.endsWith('.json')?'application/json':'text/plain');res.end(fs.readFileSync(file));});
- await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));browser=await chromium.launch({headless:true});const context=await browser.newContext(),page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ fs.mkdirSync('artifacts/katatib',{recursive:true});
+ browser=await chromium.launch({headless:true,...(process.env.KATATIB_CHROMIUM_EXECUTABLE?{executablePath:process.env.KATATIB_CHROMIUM_EXECUTABLE}:{})});const context=await browser.newContext(),page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.route('http://localhost:8421/**',async route=>{const pathname=new URL(route.request().url()).pathname;if(pathname==='/test-reader'){await route.fulfill({contentType:'text/html',body:harness});return;}const file=path.resolve(root,'.'+pathname);if(!file.startsWith(root+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile()){await route.fulfill({status:404,body:''});return;}await route.fulfill({contentType:file.endsWith('.mjs')?'text/javascript':file.endsWith('.css')?'text/css':file.endsWith('.json')?'application/json':'text/plain',body:fs.readFileSync(file)});});
  let tamper=false;const external=[];
  await page.route('https://raw.githubusercontent.com/**',async route=>{const url=route.request().url();external.push(url);const match=url.match(/\/svg\/(\d{3})\.svg$/);assert.ok(match);const fixture=path.resolve('tests/fixtures/warsh-'+match[1]+'.svg');if(!fs.existsSync(fixture)){await route.fulfill({status:503,body:'not in test'});return;}let body=fs.readFileSync(fixture);if(tamper){body=Buffer.from(body);body[100]^=1;}await route.fulfill({contentType:'image/svg+xml',body});});
- await page.goto(`http://127.0.0.1:${server.address().port}/test-reader`);await page.locator('.mushaf-svg .ayahPolygon').first().waitFor();
+ await page.goto('http://localhost:8421/test-reader');await page.locator('.mushaf-svg .ayahPolygon').first().waitFor();
  assert.equal(await page.locator('.ayahPolygon').count(),7);assert.equal(await page.locator('#mushaf-art script,#mushaf-art image,#mushaf-art foreignObject').count(),0);
  const glyphsBefore=await page.locator('#mushaf-art g#content').innerHTML();
  await page.locator('#mushaf-verse-1-2').focus();await page.keyboard.press('Enter');assert.equal(await page.locator('#mushaf-verse-1-2').getAttribute('aria-pressed'),'true');
@@ -49,4 +50,4 @@ window.__open();
  // The parser independently rejects executable content even if a different caller supplies an SVG string.
  assert.equal(await page.evaluate(async()=>{const {mountMushafPage}=await import('/live/mushaf-pages.mjs');try{mountMushafPage(document.createElement('div'),'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',{},1,()=>{});return false;}catch{return true;}}),true);
  assert.deepEqual(errors,[]);console.log('PASS: real printed Warsh artwork, exact verse geometry/navigation, keyboard selection, unchanged glyph paths, immutable marks/lost-ack retry, scoped history, phone zoom/layout, family read-only view, failed-load clearing and source-integrity protection. Physical-device acceptance remains separate.');
-})().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{await browser?.close();server?.close();});
+})().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{await browser?.close();});

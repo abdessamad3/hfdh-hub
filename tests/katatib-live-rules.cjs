@@ -209,7 +209,7 @@ const {doc,setDoc,getDoc,collection,getDocs,getDocsFromServer,query,where,limit,
     await assertFails(getDocs(query(collection(portal,'katatib_access'),limit(100))));
   }
   // Immutable verse marks validate the pinned Warsh numbering and exact printed page on the server.
-  const {commitVerseMark}=await import('../public/katatib/live/mushaf-model.mjs');
+  const {commitVerseMark,pageReferences}=await import('../public/katatib/live/mushaf-model.mjs');
   const mushafManifest=JSON.parse(fs.readFileSync('public/katatib/mushaf/manifest.json','utf8'));
   const verseInput={studentId:'a',edition:'warsh-kfqc-1442',sourceVersion:'b4155f07e4aea087d2c458069acff9f7c7e749f6',page:1,surah:1,ayah:1,mark:'forgot',note:'Teacher note'};
   const verseSave=(db,uid,input,event)=>commitVerseMark(db,sdk,uid,input,event,mushafManifest);
@@ -226,6 +226,10 @@ const {doc,setDoc,getDoc,collection,getDocs,getDocsFromServer,query,where,limit,
   await assertFails(verseSave(teacher,'new-teacher@example.com',{...verseInput,studentId:'b'},'verse-other-child-event'));
   const rawVerse={schemaVersion:1,...verseInput,createdBy:'new-teacher@example.com',createdAt:serverTimestamp()};
   for(const [key,change] of Object.entries({wrongPage:{page:2},hafs:{edition:'hafs'},wrongVersion:{sourceVersion:'latest'},invalidVerse:{surah:2,ayah:286,page:49},forgedAuthor:{createdBy:'admin'},badMark:{mark:'perfect'}}))await assertFails(setDoc(doc(teacher,'katatib_verse_marks','verse-invalid-event-'+key),{...rawVerse,...change}));
+  for(const pageNumber of [42,100,101,200,201,300,301,400,401,500,501,591,600,601,604]){
+    const reference=pageReferences(mushafManifest,pageNumber)[0];
+    await assertSucceeds(verseSave(teacher,'new-teacher@example.com',{...verseInput,...reference,page:pageNumber},'verse-page-boundary-'+pageNumber));
+  }
   await assertFails(updateDoc(doc(admin,'katatib_verse_marks','verse-first-event-0001'),{mark:'correct'}));
   await assertFails(deleteDoc(doc(admin,'katatib_verse_marks','verse-first-event-0001')));
   // Family notices stay in actual student scope; read receipts bind the current revision and reader.

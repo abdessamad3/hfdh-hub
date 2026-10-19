@@ -41,7 +41,7 @@ See [the V1/V2 migration-readiness review](migration-readiness.md). A new scoped
 | Requirement | Remaining work / critical dependency |
 | --- | --- |
 | Code/PIN authentication and reset | Implemented using a separate ephemeral Firebase Auth instance, random synthetic student accounts, UID-bound grants and atomic card replacement/revocation. No privileged signing credentials are placed in the browser. Owner must enable the test password provider and verify an actual card; see [details](student-login.md). |
-| Authentic Warsh Mushaf and verse history | Verified licensed text/edition and exact verse/portion mapping. The historical lab's Hafs experiment is not presented as Warsh. |
+| Authentic Warsh Mushaf and verse history | Printed Madinah Warsh pages, exact page/surah/verse selection, manual highlight, four teacher marks, notes and immutable scoped history are now implemented; see [reader evidence](mushaf-reader.md). Qualified-content/physical-phone acceptance and shared verse audio remain. Verified eighth-hizb boundaries are not fabricated. |
 | Teacher classroom recording | Actual-phone codec/clipping tests, access-controlled storage and retention. Cloud Storage for Firebase requires Blaze, conflicting with the recorded no-card requirement. No audio is uploaded by this release; the local teacher recorder is the free alternative, without shared playback or automatic mistake clipping. |
 | Durable offline mode | Encrypted/identity-bound queue, explicit device retention policy, reload recovery, server reconciliation and device tests. Current in-tab drafts and save retry are not this feature. |
 | Kuttab settings / ownership migration | Weekly schedules and dated closures are implemented as audited overlays. Sessions remain the explicit three named choices. Automatic ownership migration and arbitrary original session labels are not inferred. |
@@ -99,3 +99,7 @@ Staff can inspect scoped immutable audit versions when editing old learning reco
 ### Family notices and choices
 
 Authorized staff can publish/edit/withdraw a notice for one student. Linked family can read and acknowledge the exact revision; editing it makes the newer revision unread. Read receipts bind the current account. A linked parent can agree, refuse or withdraw their own test-project audio/ranking choice, with prior decisions retained in the immutable audit. Neither teachers nor administrators can manufacture a parent decision. This page does not activate shared recordings or cross-kuttab rankings, and does not claim legal review. These consumers remain part of the pending full PDF scope.
+
+### Printed Warsh Mushaf
+
+The same website now includes the 604-page printed Madinah Warsh reader, page/surah/hizb navigation, zoom and manual verse selection. Staff save immutable marks/notes per authorized student; linked family can read history. Pages are fetched on demand from a pinned public source and checked before display. See [Mushaf reader](mushaf-reader.md) for source notices, security checks, connectivity and audio limitations. This does not claim the entire PDF product or production migration is complete.
