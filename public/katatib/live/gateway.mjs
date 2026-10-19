@@ -1,3 +1,4 @@
+import { applyLegacyCorrections, applyLegacyTaskStates } from './advanced-model.mjs';
 import { teacherView, commitTeacherAttendance, TEACHER_CURRENT, TEACHER_HISTORY } from './teacher-attendance.mjs';
 import { LEGACY_COLLECTIONS, HISTORY_COLLECTIONS, historyProjection, mergeHistory } from './legacy.mjs';
 import { readPages, commitWorkspace, STAFF_ROLES } from './workspace-model.mjs';
@@ -46,6 +47,27 @@ export async function connect() {
       }));
       return { students: mergeStudents(batches), role: access.data().role, capped: false };
     },
+    async kuttabs() {
+      if(!auth.currentUser?.email)throw new Error('no-access');
+      const grant=await getDocFromServer(doc(db,'katatib_access',auth.currentUser.email.toLowerCase()));
+      if(!grant.exists())throw new Error('no-access');
+      const batches=await Promise.all(accessScopes(grant.data()).map(scope=>readPages(async after=>{
+        const filters=scope.field?[where(scope.field==='kuttabName'?'name':scope.field,'==',scope.value)]:[];
+        const rows=await getDocsFromServer(query(collection(db,'kuttabs'),...filters,orderBy(documentId()),...(after?[startAfter(after)]:[]),limit(100)));
+        return rows.docs.map(d=>({...d.data(),id:d.id}));
+      })));
+      return [...new Map(batches.flat().map(k=>[k.id,k])).values()];
+    },
+    async scheduleRows(id) {
+      return readPages(async after=>{const rows=await getDocsFromServer(query(collection(db,'katatib_schedules'),where('kuttabId','==',id),orderBy(documentId()),...(after?[startAfter(after)]:[]),limit(100)));return rows.docs.map(d=>({...d.data(),id:d.id}));});
+    },
+    async questions(review=false) {
+      const name=review?'smart_questions':'katatib_questions';
+      return readPages(async after=>{const filters=review?[]:[where('active','==',true),where('reviewed','==',true)];const rows=await getDocsFromServer(query(collection(db,name),...filters,orderBy(documentId()),...(after?[startAfter(after)]:[]),limit(100)));return rows.docs.map(d=>({...d.data(),id:d.id}));});
+    },
+    async questionBank() {
+      return readPages(async after=>{const rows=await getDocsFromServer(query(collection(db,'katatib_questions'),orderBy(documentId()),...(after?[startAfter(after)]:[]),limit(100)));return rows.docs.map(d=>({...d.data(),id:d.id}));});
+    },
     async teachers() {
       if(!auth.currentUser?.email)throw new Error('no-access');
       const snapshot=await getDocFromServer(doc(db,'katatib_access',auth.currentUser.email.toLowerCase()));
@@ -84,10 +106,12 @@ export async function connect() {
         });
         return rows.map(r=>historyProjection(name,r.id,r));
       }));
-      return mergeHistory(batches,studentId);
+      const corrections=await this.workspaceList('katatib_legacy_corrections',studentId);
+      const states=await this.workspaceList('katatib_legacy_task_states',studentId);
+      return mergeHistory([applyLegacyTaskStates(applyLegacyCorrections(batches.flat(),corrections),states)],studentId);
     },
     async workspaceList(name,studentId) {
-      if(!['katatib_tasks','katatib_access','katatib_audit','katatib_attendance'].includes(name))throw new Error('invalid-collection');
+      if(!['katatib_tasks','katatib_access','katatib_audit','katatib_attendance','katatib_legacy_corrections','katatib_challenge_attempts','katatib_legacy_task_states'].includes(name))throw new Error('invalid-collection');
       return readPages(async after=>{
         const filters=studentId?[where('studentId','==',studentId)]:[];
         const snapshot=await getDocsFromServer(query(collection(db,name),...filters,orderBy(documentId()),...(after?[startAfter(after)]:[]),limit(100)));

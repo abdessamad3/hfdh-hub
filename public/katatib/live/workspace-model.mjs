@@ -1,3 +1,4 @@
+import { cleanSchedule, cleanLegacyCorrection, cleanQuestion, cleanAttempt, cleanLegacyTaskState } from './advanced-model.mjs';
 import { attendanceId } from './attendance.mjs';
 export const STAFF_ROLES = ['admin','manager','teacher'];
 export const PORTAL_ROLES = ['parent','student'];
@@ -9,7 +10,7 @@ export function cleanProfile(x){
  return {name:x.name.trim(),kuttabName:x.kuttabName,teacherId:x.teacherId,group:x.group.trim(),status:x.status,source:x.source,age:x.age};
 }
 export function cleanTask(x){
- if(!x||!['memorization','revision'].includes(x.kind)||!['planned','done','cancelled'].includes(x.status)||!text(x.note,500))fail();
+ if(!x||!['memorization','revision','evaluation'].includes(x.kind)||!['planned','done','cancelled'].includes(x.status)||!text(x.note,500))fail();
  attendanceId(x.studentId,x.due,'morning');
  if(!Number.isInteger(x.hizb)||x.hizb<1||x.hizb>60||!Number.isInteger(x.fromEighth)||x.fromEighth<1||x.fromEighth>8||!Number.isInteger(x.toEighth)||x.toEighth<x.fromEighth||x.toEighth>8)fail();
  return {studentId:x.studentId,kind:x.kind,due:x.due,hizb:x.hizb,fromEighth:x.fromEighth,toEighth:x.toEighth,note:x.note,status:x.status};
@@ -23,11 +24,12 @@ export function cleanAccess(x){
  if(x.role!=='admin'&&!(PORTAL_ROLES.includes(x.role)?arrays.studentIds.length:arrays.kuttabNames.length+arrays.teacherIds.length))fail();
  return {active:x.active,role:x.role,...arrays};
 }
-export const CLEANERS={katatib_students:cleanProfile,katatib_tasks:cleanTask,katatib_access:cleanAccess};
+export const CLEANERS={katatib_legacy_task_states:cleanLegacyTaskState,katatib_schedules:cleanSchedule,katatib_legacy_corrections:cleanLegacyCorrection,katatib_questions:cleanQuestion,katatib_challenge_attempts:cleanAttempt,katatib_students:cleanProfile,katatib_tasks:cleanTask,katatib_access:cleanAccess};
 // A write and its immutable audit snapshot succeed together. Stable intent IDs make lost-ack retries safe.
 export async function commitWorkspace(db,sdk,uid,collection,id,input,expectedRevision,eventId){
  if(!uid||!CLEANERS[collection]||!text(id,254,true)||id.includes('/')||!validId(eventId)||!Number.isInteger(expectedRevision)||expectedRevision<0)fail();
  const clean=CLEANERS[collection](input),ref=sdk.doc(db,collection,id);
+ if(collection==='katatib_schedules'&&id!==clean.kuttabId+'~'+clean.key||['katatib_legacy_corrections','katatib_legacy_task_states'].includes(collection)&&id!==clean.sourceCollection+'~'+clean.sourceId)fail();
  return sdk.runTransaction(db,async tx=>{
   const snap=await tx.get(ref),prior=snap.exists()?snap.data():null;
   if(prior?.eventId===eventId&&Object.entries(clean).every(([k,v])=>JSON.stringify(prior[k])===JSON.stringify(v)))return {...prior,id};

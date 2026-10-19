@@ -18,6 +18,9 @@ const {doc,setDoc,getDoc,collection,getDocs,getDocsFromServer,query,where,limit,
     'attendance/b':{studentId:'b',kuttabName:'One',status:'absent'},
     'attendance/orphan':{studentId:'missing',status:'present'},
     'users/legacy-one':{role:'admin',email:'legacy@example.com'},
+    'kuttabs/one':{name:'One',teacherId:'legacy-one',schedule:{lessons:{'1':{lessons:['Original session']}}}},
+    'kuttabs/two':{name:'Two',teacherId:'legacy-two'},
+    'smart_questions/copied-question':{prompt:'Copied general question',options:['Yes','No'],correctAnswer:'Yes'},
     'users/teacher-one':{role:'teacher',displayName:'Teacher One',kuttabName:'One'},
     'users/teacher-two':{role:'teacher',displayName:'Teacher Two',kuttabName:'Two'},
     'teacher_attendance/old-teacher-one':{teacherId:'teacher-one',date:'2026-10-01',sessionIndex:0,status:'present'},
@@ -225,6 +228,48 @@ const {doc,setDoc,getDoc,collection,getDocs,getDocsFromServer,query,where,limit,
   await assertFails(getDocFromServer(doc(manager,TEACHER_CURRENT,teacherRecordId)));
   await assertFails(teacherSave(manager,'new-manager@example.com','teacher-one',context,{status:'absent',note:''},2,'teacher-revoked-01'));
   console.log('PASS: scoped teacher directory and attendance, paired immutable correction history, stale/lost-ack handling, source protection, actual calendar validation and revocation.');
+  // Schedule and old-record overlays preserve originals; question reviews and grades are checked on the server.
+  await assertSucceeds(workspaceSave(admin,'new-admin@example.com','katatib_access','planner@example.com',grant('manager',{kuttabNames:['One']}),0,'grant-planner-one'));
+  const planner=as('planner@example.com');
+  await assertSucceeds(getDocs(query(collection(planner,'kuttabs'),where('name','==','One'),limit(100))));
+  await assertFails(getDocs(query(collection(planner,'kuttabs'),limit(100))));
+  const schedule={kuttabId:'one',key:'1',morning:'08:00',afternoon:'',evening:'18:00',note:'Weekly'};
+  await assertSucceeds(workspaceSave(planner,'new-planner@example.com','katatib_schedules','one~1',schedule,0,'schedule-weekly-first'));
+  await assertSucceeds(workspaceSave(planner,'new-planner@example.com','katatib_schedules','one~2026-10-19',{...schedule,key:'2026-10-19',morning:'',evening:'',note:'Closed'},0,'schedule-dated-closed'));
+  await assertFails(workspaceSave(teacher,'new-teacher@example.com','katatib_schedules','one~1',schedule,1,'schedule-teacher-deny'));
+  await assertFails(workspaceSave(planner,'new-planner@example.com','katatib_schedules','two~1',{...schedule,kuttabId:'two'},0,'schedule-outside-deny'));
+  await assertSucceeds(getDocs(query(collection(teacher,'katatib_schedules'),where('kuttabId','==','one'),limit(100))));
+  await assertFails(getDocs(query(collection(teacher,'katatib_schedules'),where('kuttabId','==','two'),limit(100))));
+  const correction={sourceCollection:'evaluations',sourceId:'a',studentId:'a',date:'2026-10-19',hizb:2,quantity:1,identifier:'r1',surah:'',fromAyah:null,toAyah:null,mistakes:1,score:90,note:'Corrected',reason:'Teacher correction'};
+  await assertSucceeds(workspaceSave(teacher,'new-teacher@example.com','katatib_legacy_corrections','evaluations~a',correction,0,'legacy-correction-first'));
+  await assertSucceeds(workspaceSave(teacher,'new-teacher@example.com','katatib_legacy_corrections','evaluations~a',{...correction,note:'Second correction'},1,'legacy-correction-next'));
+  await assert.rejects(workspaceSave(teacher,'new-teacher@example.com','katatib_legacy_corrections','evaluations~a',{...correction,note:'Stale'},1,'legacy-correction-stale'),e=>e.code==='conflict');
+  await assertFails(workspaceSave(admin,'new-admin@example.com','katatib_legacy_corrections','evaluations~other-student',{...correction,sourceId:'other-student'},0,'legacy-cross-link-deny'));
+  await assertSucceeds(getDocs(query(collection(as('student@example.com'),'katatib_legacy_corrections'),where('studentId','==','a'),limit(100))));
+  await env.withSecurityRulesDisabled(async c=>setDoc(doc(c.firestore(),'next_evaluations','old-plan'),{studentId:'a',dueDate:'2020-01-01',notes:'Original plan'}));
+  const legacyTask={sourceCollection:'next_evaluations',sourceId:'old-plan',studentId:'a',status:'done',note:'Completed without inventing a grade'};
+  await assertSucceeds(workspaceSave(teacher,'new-teacher@example.com','katatib_legacy_task_states','next_evaluations~old-plan',legacyTask,0,'legacy-task-completed'));
+  await assertFails(workspaceSave(as('student@example.com'),'new-student@example.com','katatib_legacy_task_states','next_evaluations~old-plan',{...legacyTask,status:'cancelled'},1,'legacy-task-portal-deny'));
+  assert.equal((await getDoc(doc(teacher,'next_evaluations/old-plan'))).data().notes,'Original plan');
+  const question={prompt:'Reviewed general question',options:['Yes','No'],answerIndex:0,edition:'general',reference:'Teacher-reviewed reference',reviewed:true,active:true,sourceId:'copied-question'};
+  await assertSucceeds(workspaceSave(admin,'new-admin@example.com','katatib_questions','reviewed-question',question,0,'question-reviewed-first'));
+  await assertFails(workspaceSave(teacher,'new-teacher@example.com','katatib_questions','teacher-question',question,0,'question-teacher-deny'));
+  await assertSucceeds(getDocs(query(collection(as('student@example.com'),'katatib_questions'),where('active','==',true),where('reviewed','==',true),limit(100))));
+  await assertFails(getDocs(query(collection(teacher,'katatib_questions'),limit(100))));
+  await assertFails(getDoc(doc(teacher,'smart_questions/copied-question')));
+  const attempt={studentId:'a',questionId:'reviewed-question',questionRevision:1,choice:0,correct:true,date:'2026-10-19'};
+  await assertSucceeds(workspaceSave(as('student@example.com'),'new-student@example.com','katatib_challenge_attempts','attempt-one',attempt,0,'practice-answer-first'));
+  await assertFails(workspaceSave(as('student@example.com'),'new-student@example.com','katatib_challenge_attempts','attempt-forged',{...attempt,choice:1},0,'practice-forged-score'));
+  await assertFails(workspaceSave(as('student@example.com'),'new-student@example.com','katatib_challenge_attempts','attempt-other',{...attempt,studentId:'b'},0,'practice-other-student'));
+  await assertFails(updateDoc(doc(admin,'katatib_challenge_attempts/attempt-one'),{correct:false}));
+  await assertSucceeds(workspaceSave(admin,'new-admin@example.com','katatib_questions','reviewed-question',{...question,active:false},1,'question-deactivated'));
+  await assertFails(workspaceSave(as('student@example.com'),'new-student@example.com','katatib_challenge_attempts','attempt-disabled',attempt,0,'practice-disabled-question'));
+  await env.withSecurityRulesDisabled(async c=>{
+   assert.equal((await getDoc(doc(c.firestore(),'kuttabs/one'))).data().schedule.lessons['1'].lessons[0],'Original session');
+   assert.equal((await getDoc(doc(c.firestore(),'evaluations/a'))).data().notes,undefined);
+   assert.equal((await getDoc(doc(c.firestore(),'smart_questions/copied-question'))).data().prompt,'Copied general question');
+  });
+  console.log('PASS: scoped schedules, protected original corrections, admin question review and server-validated practice grades.');
   const {commitLearning}=await import('../public/katatib/live/learning.mjs');
   const learningInput={studentId:'a',kind:'memorization',date:'2026-10-18',session:'morning',hizb:2,fromEighth:1,toEighth:3,mistakes:null,score:null,note:'original',supersedesId:null};
   const learningSave=(db,uid,input,id)=>commitLearning(db,{doc,runTransaction,serverTimestamp},uid,input,id);

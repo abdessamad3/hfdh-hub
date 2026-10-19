@@ -1,3 +1,4 @@
+import { english } from './english.mjs';
 import { readinessLabels } from './readiness.mjs';
 import { rosterPage } from './roster.mjs';
 import { legacyLabels } from './legacy.mjs';
@@ -44,11 +45,12 @@ const copy = {
     present:'Présent', absent:'Absent', excused:'Excusé', late:'En retard', leftEarly:'Parti tôt', session:'Numéro de séance dans la copie d’origine', admin:'Administrateur du test', teacher:'Enseignant',
   },
 };
+copy.en=english;
 let allStudents = [];
 let language = 'ar', gateway, user = null, students = [], role = '', capped = false, state = 'loading', error = '', search = '', school = '', epoch = 0, historyEpoch = 0, pendingLogin = false;
 const t = key => copy[language][key] || workspaceLabels[language][key] || legacyLabels[language][key] || readinessLabels[language][key] || recorderLabels[language][key] || copy[language].error;
 const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const value = (n,precision=2) => n == null ? t('unknown') : new Intl.NumberFormat(language === 'ar' ? 'ar-MA' : 'fr-FR', {maximumFractionDigits:precision}).format(n);
+const value = (n,precision=2) => n == null ? t('unknown') : new Intl.NumberFormat(language === 'ar' ? 'ar-MA' : language==='en'?'en-GB':'fr-FR', {maximumFractionDigits:precision}).format(n);
 function errorKey(e) {
   const code = e?.code || e?.message || '';
   if (/wrong-project|config-unavailable/.test(code)) return 'config';
@@ -180,14 +182,14 @@ async function saveLearning(event) {
   if(generation===epoch&&learningSaved)loadLearning();
 }
 
-const icons={today:'◈',students:'◉',attendance:'✓',learning:'▤',tasks:'◷',reports:'▥',manage:'⚙',access:'♙',audit:'≡',recording:'◉',history:'▦',readiness:'◇',teacherAttendance:'✓'};
-const extraScreens=['teacherAttendance','tasks','reports','manage','access','audit','history','readiness'];
-const screens=()=>['today','students',...(['parent','student'].includes(role)?[]:['attendance','learning','recording']),'history','tasks','reports',...(['admin','manager'].includes(role)?['teacherAttendance','manage']:[]),...(role==='admin'?['access','audit','readiness']:[])];
+const icons={today:'◈',students:'◉',attendance:'✓',learning:'▤',tasks:'◷',reports:'▥',manage:'⚙',access:'♙',audit:'≡',recording:'◉',history:'▦',readiness:'◇',teacherAttendance:'✓',schedules:'◷',corrections:'✎',questions:'?',challenge:'◇',ranking:'▥'};
+const extraScreens=['schedules','corrections','questions','challenge','ranking','teacherAttendance','tasks','reports','manage','access','audit','history','readiness'];
+const screens=()=>['today','students',...(['parent','student'].includes(role)?[]:['attendance','learning','recording','schedules','corrections','ranking']),'history','tasks','reports','challenge',...(['admin','manager'].includes(role)?['teacherAttendance','manage']:[]),...(role==='admin'?['access','audit','readiness','questions']:[])];
 const titleKey=s=>({today:'today',students:'studentsTab',attendance:'cloudAttendance',learning:'learningTab',history:'legacyTitle'}[s]||s);
 const screenTitle=()=>t(titleKey(screen));
 const displayName=()=>user?.displayName?.trim()||user?.email||t('workspaceTitle');
 const initials=name=>Array.from(name.trim()).slice(0,2).join('').toLocaleUpperCase();
-function languageSwitch(){return `<div class="language-switch" role="group" aria-label="Language / اللغة"><button data-lang="fr" class="${language==='fr'?'active':''}" aria-pressed="${language==='fr'}">FR</button><button data-lang="ar" class="${language==='ar'?'active':''}" aria-pressed="${language==='ar'}">عربي</button></div>`;}
+function languageSwitch(){return `<div class="language-switch" role="group" aria-label="Language / اللغة"><button data-lang="fr" class="${language==='fr'?'active':''}" aria-pressed="${language==='fr'}">FR</button><button data-lang="en" class="${language==='en'?'active':''}" aria-pressed="${language==='en'}">EN</button><button data-lang="ar" class="${language==='ar'?'active':''}" aria-pressed="${language==='ar'}">عربي</button></div>`;}
 function accountChip(){return `<div class="teacher-chip"><span class="avatar" aria-hidden="true">${escape(initials(displayName()))}</span><div><strong>${escape(displayName())}</strong><small>${role?t(role):t('loading')}</small></div></div>`;}
 function sidebar(){return `<aside class="sidebar unified-sidebar"><div class="brand"><span class="brand-symbol" aria-hidden="true">${bookIcon()}</span><div><div class="brand-name">${t('brand')}</div><div class="brand-caption">${t('brandCaption')}</div></div></div><p class="nav-label">${t('workspaceTitle')}</p><nav aria-label="${t('workspaceTitle')}">${screens().map(s=>`<button type="button" data-screen="${s}" class="nav-link ${screen===s?'active':''}" aria-pressed="${screen===s}" ${screen===s?'aria-current="page"':''}><span class="unified-nav-icon" aria-hidden="true">${icons[s]}</span><span>${t(titleKey(s))}</span></button>`).join('')}</nav><div class="sidebar-bottom"><div class="sidebar-note"><strong>${t('testBadge')}</strong>${t('notice')}</div>${accountChip()}</div></aside>`;}
 function bookIcon(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4c4-1 7 0 9 2 2-2 5-3 9-2v15c-4-1-7 0-9 2-2-2-5-3-9-2ZM12 6v15"/></svg>';}
@@ -209,7 +211,7 @@ function render(){
   return;
  }
  const body=state==='ready'?(screen==='today'?todayView():screen==='recording'?'<div id="recording-root"></div>':extraScreens.includes(screen)?'<div id="work-root"></div>':`${screen==='attendance'?attendanceControls():''}${capped?`<p class="notice-error">${t('capped')}</p>`:''}${screen!=='learning'?rosterFilters():''}<div id="live-students" class="${screen==='learning'?'learning-layout':'student-cards'}">${renderResults()}</div>`):`<section class="panel live-panel"><h2>${state==='loading'?t('loading'):t('welcome')}</h2>${state==='error'?`<button data-action="retry" class="secondary-button">${t('retry')}</button>`:''}</section>`;
- root.innerHTML=`<div class="app-shell">${sidebar()}<div class="workspace"><header class="topbar"><div class="breadcrumb"><span>${t('brand')}</span><span>/</span><b>${t('workspaceTitle')}</b></div><div class="unified-mobile-brand">${brand}</div><div class="top-actions"><span class="demo-pill"><i class="dot"></i>${t('testBadge')}</span>${languageSwitch()}<button class="text-button unified-logout" data-action="logout">${t('logout')}</button></div></header><main class="content unified-content"><div class="page-heading"><div><p class="eyebrow">${t('workspaceTitle')}</p><h1>${screen==='today'?`${t('greeting')} ${escape(displayName())}`:screenTitle()}</h1><p class="heading-caption">${extraScreens.includes(screen)||screen==='recording'?'':t(screen==='today'?'todayIntro':screen==='students'?'rosterSubtitle':screen==='attendance'?'attendanceSubtitle':'learningSubtitle')}</p></div><span class="heading-date">${new Intl.DateTimeFormat(language==='ar'?'ar-MA':'fr-FR',{dateStyle:'long',timeZone:'Africa/Casablanca'}).format(new Date())}</span></div>${errorNotice()}${body}<footer class="footer-note"><span>${t('notice')}</span><span>${escape(user.email||'')}</span></footer></main></div></div>`;
+ root.innerHTML=`<div class="app-shell">${sidebar()}<div class="workspace"><header class="topbar"><div class="breadcrumb"><span>${t('brand')}</span><span>/</span><b>${t('workspaceTitle')}</b></div><div class="unified-mobile-brand">${brand}</div><div class="top-actions"><span class="demo-pill"><i class="dot"></i>${t('testBadge')}</span>${languageSwitch()}<button class="text-button unified-logout" data-action="logout">${t('logout')}</button></div></header><main class="content unified-content"><div class="page-heading"><div><p class="eyebrow">${t('workspaceTitle')}</p><h1>${screen==='today'?`${t('greeting')} ${escape(displayName())}`:screenTitle()}</h1><p class="heading-caption">${extraScreens.includes(screen)||screen==='recording'?'':t(screen==='today'?'todayIntro':screen==='students'?'rosterSubtitle':screen==='attendance'?'attendanceSubtitle':'learningSubtitle')}</p></div><span class="heading-date">${new Intl.DateTimeFormat(language==='ar'?'ar-MA':language==='en'?'en-GB':'fr-FR',{dateStyle:'long',timeZone:'Africa/Casablanca'}).format(new Date())}</span></div>${errorNotice()}${body}<footer class="footer-note"><span>${t('notice')}</span><span>${escape(user.email||'')}</span></footer></main></div></div>`;
  if(state==='ready'&&screen==='recording')localRecorder.mount(document.getElementById('recording-root'),{user,students:allStudents,language});
  if(state==='ready'&&extraScreens.includes(screen))workspace.mount(document.getElementById('work-root'),{page:screen,gateway,user,role,students:allStudents,language,refresh:loadStudents});
 }

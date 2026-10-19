@@ -34,6 +34,7 @@ jobs:
           node tests/katatib-live-model.test.mjs
           node tests/katatib-cloud-attendance.test.mjs
           node tests/katatib-teacher-attendance.test.mjs
+          node tests/katatib-advanced.test.mjs
           node tests/katatib-learning.test.mjs
           node tests/katatib-progress.test.mjs
           node tests/katatib-workspace.test.mjs

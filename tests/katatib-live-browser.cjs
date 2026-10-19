@@ -13,19 +13,24 @@ const server=http.createServer((req,res)=>{
 });
 const mock=`
 import { historyProjection, mergeHistory } from './legacy.mjs';
+import { applyLegacyCorrections, applyLegacyTaskStates } from './advanced-model.mjs';
 let observer;
-window.__teacherRecords={};window.__teacherEvents=[];window.__teacherFail=false;window.__teacherLostAck=false;window.__legacy={};window.__attendanceCalls=[];window.__role='teacher';window.__profiles={};window.__workspace={katatib_tasks:{},katatib_access:{},katatib_audit:{}};window.__workspaceFail=false;window.__workspaceLostAck=false;window.__pending=false;window.__deny=false;window.__history=[];window.__learning={};window.__learningFail=false;window.__learningLostAck=false;window.__records={};window.__events=[];window.__saveFail=false;window.__conflict=false;
+window.__teacherRecords={};window.__teacherEvents=[];window.__teacherFail=false;window.__teacherLostAck=false;window.__legacy={};window.__attendanceCalls=[];window.__role='teacher';window.__profiles={};window.__workspace={katatib_tasks:{},katatib_access:{},katatib_audit:{},katatib_schedules:{},katatib_legacy_corrections:{},katatib_legacy_task_states:{},katatib_questions:{},katatib_challenge_attempts:{}};window.__workspaceFail=false;window.__workspaceLostAck=false;window.__pending=false;window.__deny=false;window.__history=[];window.__learning={};window.__learningFail=false;window.__learningLostAck=false;window.__records={};window.__events=[];window.__saveFail=false;window.__conflict=false;
 export async function connect(){
  return {
  observe(callback){observer=callback;callback(null);},
  async login(){observer({email:'teacher@example.com',displayName:'Teacher Test',emailVerified:true});},
  async logout(){observer(null);},
  async students(){if(window.__pending)await new Promise(r=>window.__release=r);if(window.__deny)throw new Error('no-access');const original=[{id:'a',name:'<img src=x onerror=alert(1)>',kuttab:'One',age:12,hizbs:3,attendance:80},{id:'b',name:'Maryam',kuttab:'Two',age:null,hizbs:null,attendance:null}];const students=(window.__roster||original).map(s=>({...s,teacherId:'legacy',status:'active',source:'copy',...window.__profiles[s.id]}));for(const [id,p] of Object.entries(window.__profiles))if(!students.some(s=>s.id===id))students.push({id,...p,hizbs:null,attendance:null});return {students,role:window.__role,capped:false};},
+ async kuttabs(){return [{id:'one',name:'One',teacherId:'legacy',schedule:{lessons:{'1':{lessons:['Original session']}}}}];},
+ async scheduleRows(id){return Object.values(window.__workspace.katatib_schedules).filter(r=>r.kuttabId===id);},
+ async questions(review=false){return review?[{id:'copied-question',prompt:'Copied general question',options:['Yes','No'],correctAnswer:'Yes'}]:Object.values(window.__workspace.katatib_questions).filter(q=>q.active&&q.reviewed);},
+ async questionBank(){return Object.values(window.__workspace.katatib_questions);},
  async teachers(){if(!['admin','manager'].includes(window.__role))throw new Error('no-access');return [{id:'teacher-one',name:'Teacher One <script>',kuttab:'One'},{id:'teacher-two',name:'Teacher Two',kuttab:'Two'}].filter(t=>window.__role==='admin'||t.kuttab==='One');},
  async teacherAttendance(id,c){if(window.__teacherFail)throw new Error('unavailable');return structuredClone(window.__teacherRecords[id+'~'+c.date+'~'+c.session]||{status:'unmarked',note:'',revision:0});},
  async teacherHistory(id){return structuredClone([{id:'copied-old',teacherId:'teacher-one',source:'V1',date:'2020-01-01',sessionIndex:4,status:'excused',excuse:'Original preserved'},...window.__teacherEvents].filter(e=>e.teacherId===id));},
  async saveTeacherAttendance(id,c,p,rev,event){if(window.__teacherFail)throw new Error('unavailable');const key=id+'~'+c.date+'~'+c.session,prior=window.__teacherRecords[key];if(prior?.eventId===event)return structuredClone(prior);if((prior?.revision||0)!==rev)throw Object.assign(new Error('conflict'),{code:'conflict'});const result={...p,...c,teacherId:id,revision:rev+1,eventId:event,source:'V2',id:event};window.__teacherRecords[key]=structuredClone(result);window.__teacherEvents.push(structuredClone(result));if(window.__teacherLostAck){window.__teacherLostAck=false;throw new Error('unavailable');}return result;},
- async studentHistory(id){if(window.__historyFail)throw new Error('history-unavailable');return mergeHistory([(window.__legacy[id]||[]).map(r=>historyProjection(r.collection,r.id,r.data)),Object.entries(window.__records).filter(([key])=>key.startsWith(id+'~')).map(([key,x])=>{const [studentId,date,session]=key.split('~');return historyProjection('katatib_attendance',key,{...x,studentId,date,session});})],id);},
+ async studentHistory(id){if(window.__historyFail)throw new Error('history-unavailable');const rows=[...(window.__legacy[id]||[]).map(r=>historyProjection(r.collection,r.id,r.data)),...Object.entries(window.__records).filter(([key])=>key.startsWith(id+'~')).map(([key,x])=>{const [studentId,date,session]=key.split('~');return historyProjection('katatib_attendance',key,{...x,studentId,date,session});})];return mergeHistory([applyLegacyTaskStates(applyLegacyCorrections(rows,Object.values(window.__workspace.katatib_legacy_corrections).filter(c=>c.studentId===id)),Object.values(window.__workspace.katatib_legacy_task_states).filter(c=>c.studentId===id))],id);},
  async workspaceList(name,id){if(window.__workspaceFail)throw new Error('unavailable');if(name==='katatib_attendance')return Object.entries(window.__records).filter(([key])=>key.startsWith(id+'~')).map(([key,x])=>{const [studentId,date,session]=key.split('~');return {...x,id:key,studentId,date,session};});return Object.values(window.__workspace[name]||{}).filter(r=>!id||r.studentId===id);},
  async workspaceSave(name,id,input,revision,event){
   if(window.__workspaceFail)throw new Error('unavailable');const target=name==='katatib_students'?window.__profiles:(window.__workspace[name]||={});
@@ -71,6 +76,7 @@ let browser;
  assert.equal(await page.locator('a[href*=live]').count(),0);
  assert.equal(await page.locator('.student-card').count(),0);
  await page.screenshot({path:'artifacts/katatib/unified-login-phone-ar.png',fullPage:true});
+ await page.locator('[data-lang=en]').click();assert.equal(await page.locator('html').getAttribute('lang'),'en');assert.equal(await page.locator('html').getAttribute('dir'),'ltr');assert.ok((await page.locator('body').innerText()).includes('Welcome to Katatib'));
  await page.locator('[data-lang=fr]').click();
  await page.locator('[data-action=login]').click();
  await page.locator('.student-card').first().waitFor();
@@ -335,6 +341,31 @@ let browser;
  await page.locator('#teacher-person').selectOption('teacher-two');await page.locator('[data-teacher-form]').waitFor();
  assert.equal(await page.locator('#teacher-status').inputValue(),'unmarked');
  assert.equal((await page.locator('#work-root').innerText()).includes('Original preserved'),false);
+ // Weekly schedules, a dated closure, preserved source corrections and reviewed practice questions.
+ await page.locator('[data-screen=schedules]').click();await page.locator('[data-effective-schedule]').waitFor();
+ await page.locator('#schedule-preview').fill('2026-10-19');
+ assert.ok((await page.locator('[data-effective-schedule]').innerText()).includes('Original session'));
+ await page.locator('[data-advanced-action=new]').click();await page.locator('[data-advanced-form] [name=key]').fill('1');
+ await page.locator('[data-advanced-form] [name=morning]').fill('08:00');await page.locator('[data-advanced-form] button[type=submit]').click();
+ await page.waitForFunction(()=>!!window.__workspace.katatib_schedules['one~1']);await page.waitForFunction(()=>!document.querySelector('[data-advanced-form]'));
+ assert.ok((await page.locator('[data-effective-schedule]').innerText()).includes('08:00'));
+ await page.locator('[data-advanced-action=new]').click();await page.locator('[data-advanced-form] [name=key]').fill('2026-10-19');
+ await page.locator('[data-advanced-form] [name=note]').fill('Dated closure');await page.locator('[data-advanced-form] button[type=submit]').click();
+ await page.waitForFunction(()=>!!window.__workspace.katatib_schedules['one~2026-10-19']);await page.waitForFunction(()=>!document.querySelector('[data-advanced-form]'));
+ assert.equal((await page.locator('[data-effective-schedule]').innerText()).includes('08:00'),false);
+ await page.evaluate(()=>window.__legacy.a=[{collection:'evaluations',id:'v1-edit',data:{studentId:'a',date:'2026-10-18',hizbNumber:2,quantity:1,accuracyScore:70,notes:'Original evaluation'}}]);
+ await page.locator('[data-screen=corrections]').click();await page.locator('[data-advanced-edit]').first().waitFor();
+ await page.locator('[data-advanced-edit]').first().click();await page.locator('[data-advanced-form] [name=score]').fill('90');await page.locator('[data-advanced-form] [name=note]').fill('Corrected evaluation');await page.locator('[data-advanced-form] [name=reason]').fill('Teacher correction');
+ await page.locator('[data-advanced-form] button[type=submit]').click();await page.waitForFunction(()=>!!window.__workspace.katatib_legacy_corrections['evaluations~v1-edit']);await page.waitForFunction(()=>!document.querySelector('[data-advanced-form]'));
+ assert.equal(await page.locator('.advanced-module tbody tr').count(),1);assert.ok((await page.locator('.advanced-module').innerText()).includes('Corrected evaluation'));assert.equal(await page.evaluate(()=>window.__legacy.a[0].data.notes),'Original evaluation');
+ await page.locator('[data-screen=questions]').click();await page.locator('#question-bank').waitFor();await page.locator('#question-bank').selectOption('copied');await page.locator('[data-advanced-edit]').first().click();
+ await page.locator('[data-advanced-form] [name=reference]').fill('Teacher-reviewed general reference');await page.locator('[data-advanced-form] [name=reviewed]').check();await page.locator('[data-advanced-form] [name=active]').check();await page.locator('[data-advanced-form] button[type=submit]').click();
+ await page.waitForFunction(()=>Object.keys(window.__workspace.katatib_questions).length===1);await page.waitForFunction(()=>!document.querySelector('[data-advanced-form]'));
+ await page.locator('[data-screen=challenge]').click();await page.locator('[data-advanced-choice="0"]').waitFor();await page.locator('[data-advanced-choice="0"]').click();await page.locator('[data-quiz-feedback]').waitFor();
+ assert.equal(await page.evaluate(()=>Object.values(window.__workspace.katatib_challenge_attempts)[0].correct),true);
+ await page.locator('[data-screen=ranking]').click();await page.locator('.advanced-module table').waitFor();assert.ok((await page.locator('.advanced-module').innerText()).includes('Maryam'));
+ await page.screenshot({path:'artifacts/katatib/ranking-phone-ar.png',fullPage:true});
+ await page.evaluate(()=>{window.__workspace.katatib_legacy_corrections={};window.__legacy.a=[];});
  await page.locator('[data-screen=access]').click();
  await page.locator('[data-work-action=new-access]').click();
  await page.locator('[data-work-form] [name=email]').fill('parent@example.com');
@@ -383,7 +414,7 @@ let browser;
  await page.evaluate(()=>window.__role='parent');
  await page.locator('[data-action=login]').click();
  await page.locator('[data-screen=tasks]').waitFor();
- for(const screen of ['attendance','learning','recording','teacherAttendance','manage','access','audit','readiness'])assert.equal(await page.locator(`[data-screen=${screen}]`).count(),0);
+ for(const screen of ['attendance','learning','recording','teacherAttendance','schedules','corrections','questions','ranking','manage','access','audit','readiness'])assert.equal(await page.locator(`[data-screen=${screen}]`).count(),0);
  await page.locator('[data-screen=tasks]').click();
  await page.locator('.workspace-table').waitFor();
  assert.equal(await page.locator('[data-work-action=new-task]').count(),0);
@@ -412,7 +443,7 @@ let browser;
  await page.locator('[data-report-v1]').waitFor();
  await page.locator('#report-student').selectOption('a');
  const historicCells=await page.locator('[data-report-v1] tbody tr').first().locator('td').allTextContents();
- assert.deepEqual(historicCells.slice(1),['0','0','0','2','130','0','0','0','0']);
+ assert.deepEqual(historicCells.slice(1),['0','0','0','2','130','0','0','0','80','—','0']);
  assert.ok((await page.locator('[data-report-v2]').innerText()).includes('V2'));
  const historyDownloadPromise=page.waitForEvent('download');await page.locator('[data-work-action=excel]').click();
  const historyDownload=await historyDownloadPromise;
@@ -420,7 +451,7 @@ let browser;
  assert.ok(spreadsheet.includes('130'));assert.ok(spreadsheet.includes('V1:'));assert.ok(spreadsheet.includes('V2:'));
  await page.locator('#report-student').selectOption('b');
  const childCells=await page.locator('[data-report-v1] tbody tr').first().locator('td').allTextContents();
- assert.ok(childCells.slice(1).every(x=>x==='0'),'reports cannot leak another child’s totals');
+ assert.ok(childCells.slice(1).every(x=>x==='0'||x==='—'),'reports cannot leak another child’s totals');
  await page.evaluate(()=>window.__historyFail=true);
  await page.locator('#report-month').fill('2020-02');await page.getByRole('alert').waitFor();
  assert.equal(await page.locator('#katatib-print').count(),0,'failed history reads must not leave an exportable partial or stale report');

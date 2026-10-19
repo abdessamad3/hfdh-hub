@@ -20,7 +20,7 @@ test('monthly history keeps ambiguous attendance outside totals and retains acti
   make('katatib_attendance','new',{session:'morning',status:'present'})
  ];
  const before=structuredClone(history),summary=historicalMonthlySummary(history,'a','2026-10');
- assert.deepEqual(summary,{v1Present:1,v1Absent:0,v1Excused:0,v1Review:4,v1Evaluations:1,v1Revisions:1,v1Memorizations:1,v1Planned:1,invalidHistoryDates:1});
+ assert.deepEqual(summary,{v1Present:1,v1Absent:0,v1Excused:0,v1Review:4,v1Evaluations:1,v1Revisions:1,v1Memorizations:1,v1Planned:1,invalidHistoryDates:1,v1EvaluationMean:100,v1RevisionMean:null});
  assert.deepEqual(history,before);assert.equal(summary.confirmed,undefined);
  assert.throws(()=>historicalMonthlySummary(history,'b','2026-10'),/wrong-student/);
  assert.throws(()=>historicalMonthlySummary([...history,history[0]],'a','2026-10'),/duplicate/);

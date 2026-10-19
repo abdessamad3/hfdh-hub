@@ -1,3 +1,4 @@
+import contextlib
 import hashlib
 import importlib.util
 import json
@@ -7,6 +8,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import time
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 import zipfile
@@ -228,6 +230,30 @@ class ExportTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'outside'):
             reader.request('projects/other/databases/(default)/documents')
 
+
+
+class RecoveryInventoryTests(unittest.TestCase):
+    def test_inventory_is_get_only_private_and_does_not_claim_a_restore(self):
+        inventory=module('inventory',ROOT/'scripts/katatib-recovery-inventory.py')
+        def urlopen(request,timeout):
+            self.assertEqual(request.get_method(),'GET')
+            self.assertEqual(request.get_header('X-goog-user-project'),'hifd-kouttab')
+            if 'accounts:batchGet' in request.full_url:
+                data={'users':[{'providerUserInfo':[{'providerId':'password'}],'passwordHash':'sensitive-test-hash'},{'providerUserInfo':[{'providerId':'password'}]}]}
+            elif '/config' in request.full_url:data={'privateConfig':'sensitive-test-setting'}
+            else:data={}
+            return io.StringIO(json.dumps(data))
+        with tempfile.TemporaryDirectory() as d, patch('sys.argv',['inventory','--project','hifd-kouttab','--output-dir',d]), patch.object(inventory.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='sensitive-test-token')),patch.object(inventory.urllib.request,'urlopen',side_effect=urlopen),contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(inventory.main(),0)
+            path,=Path(d).glob('*/recovery-inventory.json');report=json.loads(path.read_text())
+            self.assertFalse(report['production_migration_ready']);self.assertFalse(report['sections']['auth-accounts']['all_password_hashes_present'])
+            self.assertEqual(path.stat().st_mode&0o777,0o600)
+            for value in ['sensitive-test-token','sensitive-test-hash','sensitive-test-setting']:self.assertNotIn(value,output.getvalue())
+    def test_inventory_permission_failures_remain_explicitly_unverified(self):
+        inventory=module('inventory_denied',ROOT/'scripts/katatib-recovery-inventory.py')
+        with tempfile.TemporaryDirectory() as d, patch('sys.argv',['inventory','--project','katatib-64049','--output-dir',d]),patch.object(inventory.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='test-token')),patch.object(inventory.urllib.request,'urlopen',side_effect=inventory.urllib.error.HTTPError('url',403,'Forbidden',{},None)),contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(inventory.main(),2)
+            path,=Path(d).glob('*/recovery-inventory.json');report=json.loads(path.read_text());self.assertTrue(all(s['status']=='not_verified' for s in report['sections'].values()))
 
 
 if __name__=='__main__':unittest.main()

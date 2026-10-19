@@ -87,3 +87,7 @@ Reports now show copied V1 attendance and activity counts alongside V2 sessions,
 ### Teacher attendance
 
 Admin/scoped manager teacher attendance is available with explicit statuses, date/session separation, notes, reload, immutable correction history and stale-edit protection. The page also reads copied teacher attendance without editing it or guessing its session mapping. New writes stay in the two V2 teacher-attendance collections on `katatib-64049`; ordinary teachers and family accounts have no teacher-attendance access. Copied teacher profiles establish the roster and scope.
+
+### Remaining-feature implementation
+
+The test app now has weekly and dated schedule overlays/closures, protected old-record corrections, admin review of copied/new questions, ten-question practice rounds with server-checked answers, staff-scoped confirmed-coverage rankings, English and planned evaluation tasks. Originals remain unchanged. A private recovery inventory and release-acceptance/rollback procedure are provided. These do not establish live-account recovery, actual-phone acceptance, V1-specific grading parity or production cutover readiness.
