@@ -208,6 +208,26 @@ const {doc,setDoc,getDoc,collection,getDocs,getDocsFromServer,query,where,limit,
     await assertFails(save(portal,'new-'+address,'a',context,{status:'present',note:''},3,'portal-attendance-'+role));
     await assertFails(getDocs(query(collection(portal,'katatib_access'),limit(100))));
   }
+  // Immutable verse marks validate the pinned Warsh numbering and exact printed page on the server.
+  const {commitVerseMark}=await import('../public/katatib/live/mushaf-model.mjs');
+  const mushafManifest=JSON.parse(fs.readFileSync('public/katatib/mushaf/manifest.json','utf8'));
+  const verseInput={studentId:'a',edition:'warsh-kfqc-1442',sourceVersion:'b4155f07e4aea087d2c458069acff9f7c7e749f6',page:1,surah:1,ayah:1,mark:'forgot',note:'Teacher note'};
+  const verseSave=(db,uid,input,event)=>commitVerseMark(db,sdk,uid,input,event,mushafManifest);
+  await assertSucceeds(verseSave(teacher,'new-teacher@example.com',verseInput,'verse-first-event-0001'));
+  await assertSucceeds(verseSave(teacher,'new-teacher@example.com',verseInput,'verse-first-event-0001'));
+  await assertSucceeds(verseSave(teacher,'new-teacher@example.com',{...verseInput,mark:'correct'},'verse-second-event-0002'));
+  await assert.rejects(verseSave(teacher,'new-teacher@example.com',{...verseInput,mark:'correct'},'verse-first-event-0001'),/verse-mark-conflict/);
+  for(const role of ['parent','student']){
+    const portal=as(role+'@example.com');
+    const read=await assertSucceeds(getDocs(query(collection(portal,'katatib_verse_marks'),where('studentId','==','a'),where('page','==',1),limit(100))));assert.equal(read.size,2);
+    await assertFails(verseSave(portal,'new-'+role+'@example.com',verseInput,'verse-portal-event-'+role));
+    await assertFails(getDocs(query(collection(portal,'katatib_verse_marks'),limit(100))));
+  }
+  await assertFails(verseSave(teacher,'new-teacher@example.com',{...verseInput,studentId:'b'},'verse-other-child-event'));
+  const rawVerse={schemaVersion:1,...verseInput,createdBy:'new-teacher@example.com',createdAt:serverTimestamp()};
+  for(const [key,change] of Object.entries({wrongPage:{page:2},hafs:{edition:'hafs'},wrongVersion:{sourceVersion:'latest'},invalidVerse:{surah:2,ayah:286,page:49},forgedAuthor:{createdBy:'admin'},badMark:{mark:'perfect'}}))await assertFails(setDoc(doc(teacher,'katatib_verse_marks','verse-invalid-event-'+key),{...rawVerse,...change}));
+  await assertFails(updateDoc(doc(admin,'katatib_verse_marks','verse-first-event-0001'),{mark:'correct'}));
+  await assertFails(deleteDoc(doc(admin,'katatib_verse_marks','verse-first-event-0001')));
   // Family notices stay in actual student scope; read receipts bind the current revision and reader.
   const parentPortal=as('parent@example.com'),studentPortal=as('student@example.com');
   const noticeInput={studentId:'a',title:'Class tomorrow',body:'Bring the assigned book.',kind:'info',active:true};

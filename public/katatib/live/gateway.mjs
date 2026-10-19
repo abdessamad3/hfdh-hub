@@ -1,3 +1,4 @@
+import { commitVerseMark } from './mushaf-model.mjs';
 import { applyLegacyCorrections, applyLegacyTaskStates } from './advanced-model.mjs';
 import { teacherView, commitTeacherAttendance, TEACHER_CURRENT, TEACHER_HISTORY } from './teacher-attendance.mjs';
 import { LEGACY_COLLECTIONS, HISTORY_COLLECTIONS, historyProjection, mergeHistory } from './legacy.mjs';
@@ -166,6 +167,16 @@ export async function connect() {
       }
       return results;
 
+    },
+    async verseMarks(studentId,page) {
+      return readPages(async after=>{const snapshot=await getDocsFromServer(query(collection(db,'katatib_verse_marks'),where('studentId','==',studentId),where('page','==',page),orderBy(documentId()),...(after?[startAfter(after)]:[]),limit(100)));return snapshot.docs.map(d=>({...d.data(),id:d.id}));});
+    },
+    async saveVerseMark(input,eventId,manifest) {
+      if(!auth.currentUser)throw new Error('no-access');
+      await commitVerseMark(db,{doc,runTransaction,serverTimestamp},auth.currentUser.uid,input,eventId,manifest);
+      const saved=await getDocFromServer(doc(db,'katatib_verse_marks',eventId));
+      if(!saved.exists())throw new Error('verse-mark-not-confirmed');
+      return {...saved.data(),id:eventId};
     },
     async saveLearning(input, id) {
       if(!auth.currentUser)throw new Error('no-access');
