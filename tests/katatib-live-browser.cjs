@@ -45,7 +45,7 @@ export async function connect(){
   if(window.__workspaceLostAck){window.__workspaceLostAck=false;throw new Error('unavailable');}return data;
  },
  async importStudents(rows){for(const r of rows)window.__profiles[r.id]={...r,kuttab:r.kuttabName,profileRevision:1};},
- async learningHistory(id){return Object.values(window.__learning).filter(x=>x.studentId===id);},
+ async learningHistory(id){if(window.__delayLearning){window.__delayLearning=false;await new Promise(r=>window.__releaseLearning=r);}return Object.values(window.__learning).filter(x=>x.studentId===id);},
  async saveLearning(input,id){
   if(window.__learningFail)throw new Error('unavailable');
   if(window.__learning[id]&&JSON.stringify(window.__learning[id].input)!==JSON.stringify(input))throw Object.assign(new Error('learning-conflict'),{code:'learning-conflict'});
@@ -151,12 +151,17 @@ let browser,failurePage,observedErrors;
  await page.waitForFunction(()=>document.querySelector('[data-cloud-student=a][data-cloud-status=absent]')?.getAttribute('aria-pressed')==='true');
  await page.locator('[data-screen=students]').click();
  await page.locator('[data-screen=learning]').click();
+ await page.evaluate(()=>window.__delayLearning=true);
  await page.locator('#learning-student').selectOption('a');
+ await page.waitForFunction(()=>typeof window.__releaseLearning==='function');
  await page.locator('#learning-form [name=hizb]').fill('4');
  await page.locator('#learning-form [name=fromEighth]').selectOption('2');
  await page.locator('#learning-form [name=toEighth]').selectOption('4');
  await page.locator('#learning-form [name=note]').fill('حفظ <img src=x onerror=alert(1)>');
  await page.locator('#learning-form [name=confirmMastered]').count().then(async n=>{if(n)await page.locator('#learning-form [name=confirmMastered]').check();});
+ await page.evaluate(()=>window.__releaseLearning());await page.locator('#learning-history-panel [data-confirmed-hizbs]').waitFor();
+ assert.equal(await page.locator('#learning-form [name=hizb]').inputValue(),'4','a delayed history response must preserve an active learning form');
+ assert.equal(await page.locator('#learning-form [name=confirmMastered]').isChecked(),true);
  await page.locator('#learning-form button[type=submit]').click();
  await page.waitForFunction(()=>Object.keys(window.__learning).length===1);
  await page.locator('.learning-history li').waitFor();
