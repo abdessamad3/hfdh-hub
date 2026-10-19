@@ -303,6 +303,16 @@ let browser;
  await page.locator('[data-work-form] button[type=submit]').click();
  await page.waitForFunction(()=>!document.querySelector('[data-work-form]'));
  assert.equal(await page.evaluate(id=>window.__workspace.katatib_tasks[id].status,taskId),'done');
+ // The same task list exposes original plans; finishing one adds only an audited V2 state.
+ await page.evaluate(()=>{window.__legacy.a=[{collection:'next_revisions',id:'unified-plan',data:{studentId:'a',dueDate:'2020-01-03',quantityIdentifier:'Original portion',notes:'Original planned note'}}];});
+ await page.locator('[data-work-action=reload]').click();await page.locator('[data-work-legacy="next_revisions/unified-plan"]').waitFor();
+ await page.locator('[data-work-legacy="next_revisions/unified-plan"]').click();
+ assert.equal(await page.locator('[data-work-form] [name=hizb]').count(),0,'an original portion must not be replaced with a guessed hizb');
+ await page.locator('[data-work-form] [name=status]').selectOption('done');await page.locator('[data-work-form] [name=note]').fill('Plan completed');await page.locator('[data-work-form] button[type=submit]').click();await page.waitForFunction(()=>!document.querySelector('[data-work-form]'));
+ assert.equal(await page.evaluate(()=>window.__workspace.katatib_legacy_task_states['next_revisions~unified-plan'].status),'done');
+ assert.equal(await page.evaluate(()=>window.__legacy.a[0].data.notes),'Original planned note');
+ await page.evaluate(()=>{window.__legacy.a=[];window.__workspace.katatib_legacy_task_states={};});
+
  await page.locator('[data-screen=reports]').click();
  await page.locator('#katatib-print').waitFor();
  assert.ok((await page.locator('#katatib-print').innerText()).includes('Maryam'));
@@ -450,6 +460,9 @@ let browser;
  const historicCells=await page.locator('[data-report-v1] tbody tr').first().locator('td').allTextContents();
  assert.deepEqual(historicCells.slice(1),['0','0','0','2','130','0','0','0','80','—','0']);
  assert.ok((await page.locator('[data-report-v2]').innerText()).includes('V2'));
+ assert.equal(await page.locator('[data-report-detail]').count(),2);
+ assert.equal(await page.locator('[data-report-detail=reportActivities] tbody tr').count(),1);
+ assert.equal(await page.locator('[data-report-detail=reportPlans] tbody tr').count(),1);
  const historyDownloadPromise=page.waitForEvent('download');await page.locator('[data-work-action=excel]').click();
  const historyDownload=await historyDownloadPromise;
  const spreadsheet=fs.readFileSync(await historyDownload.path(),'utf8');
