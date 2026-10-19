@@ -33,6 +33,12 @@ const test=createAudioTest();window.__open=(role='teacher')=>{test.reset();test.
  const duration=await audio.evaluate(el=>el.duration);assert.ok(Math.abs(duration-15)<0.05);
  const samples=await audio.evaluate(async el=>{const b=await (await fetch(el.src)).arrayBuffer(),v=new DataView(b);let peak=0;for(let i=44;i<b.byteLength;i+=2)peak=Math.max(peak,Math.abs(v.getInt16(i,true)));return {bytes:b.byteLength,rate:v.getUint32(24,true),peak};});assert.equal(samples.bytes,480044);assert.equal(samples.rate,16000);assert.ok(samples.peak>1000,'clip contains the recorded tone, not an empty container');
  const reportPromise=page.waitForEvent('download');await page.locator('[data-audio-test=report]').click();let file=await reportPromise;let report=JSON.parse(fs.readFileSync(await file.path(),'utf8'));assert.equal(report.uploaded,false);assert.equal(report.clips[0].partial,false);assert.equal(report.clips[0].played,true);assert.equal(Object.hasOwn(report,'studentId'),false);
+ const originalClipUrl=await audio.getAttribute('src');
+ // A device may leave AudioContext.resume pending: the whole operation must time out and allow retry.
+ await page.evaluate(()=>{window.__Audio=window.AudioContext;window.__timeout=window.setTimeout;window.AudioContext=class extends window.__Audio{resume(){return new Promise(()=>{});}};window.setTimeout=(fn,ms,...args)=>window.__timeout(fn,ms===30000?50:ms,...args);});
+ await clip.locator('[data-audio-compress]').click();await page.locator('[data-audio-test-state=complete][role=alert]').waitFor();
+ assert.match(await page.locator('[data-audio-test-state]').textContent(),/Compression did not finish/);assert.equal(await clip.locator('audio').getAttribute('src'),originalClipUrl);
+ await page.evaluate(()=>{window.AudioContext=window.__Audio;window.setTimeout=window.__timeout;});
  const originalTrackCount=await page.evaluate(()=>window.__tracks.length);
  await clip.locator('[data-audio-compress]').click();await page.locator('[data-audio-test-state=compressing]').waitFor();await page.locator('[data-audio-test-state=complete]').waitFor({timeout:30000});
  await clip.locator('audio').evaluate(async el=>{await el.play();});const compressedDuration=await clip.locator('audio').evaluate(async el=>{const context=new AudioContext();try{const data=await (await fetch(el.src)).arrayBuffer();return (await context.decodeAudioData(data)).duration;}finally{await context.close();}});

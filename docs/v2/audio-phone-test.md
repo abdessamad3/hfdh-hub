@@ -8,7 +8,7 @@ The **Recording test / اختبار التسجيل / Test audio** screen is avai
 2. Record for six seconds, choose a Warsh surah/verse and tap a mistake mark.
 3. Keep speaking for at least ten more seconds, then stop.
 4. Play the clip. Check that the mistake is included, with the surrounding speech.
-5. Choose **Measure compressed size**. It re-encodes this clip in real time without reopening the microphone. Play the compressed result too.
+5. Choose **Measure compressed size**. It re-encodes this clip in real time without reopening the microphone. Keep the page visible. It should finish within 30 seconds; otherwise it restores the original clip and allows a retry. Play the compressed result too.
 6. Download the test report. It contains codec, measured sizes, timing and playback facts; no audio, student name, student ID or authentication credentials. If a device fails, the report records a bounded error category and its browser identity.
 
 Also try denying microphone permission, stopping shortly after a mark, and leaving the recording page. Errors must not affect the saved Mushaf marks or attendance.
@@ -30,3 +30,5 @@ Model tests validate exact time windows, short-boundary flags, WAV headers/sampl
 ## What the result will decide
 
 Actual-phone listening, codec support, timing and measured compressed sizes determine whether to proceed with authenticated chunk storage and upload recovery. Shared verse playback still needs consent enforcement, access-controlled manifests/chunks, a real quota budget, idempotent upload, expiry/cleanup and linked-family playback. The existing local full-recording screen remains available while those features are unfinished.
+
+Compression has a 30-second deadline covering context activation, decoding and encoding, including a browser activation promise that never settles. Cancellation closes its context and releases tracks even during preparation. A silent output connection keeps the rendering graph clocked without audible replay. A browser regression stalls activation and checks recovery before retrying the real encoder.
