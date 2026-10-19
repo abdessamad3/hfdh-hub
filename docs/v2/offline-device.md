@@ -25,7 +25,7 @@ This is part of the same test site, `katatib-64049`; it does not deploy the orig
 
 ## Resource package
 
-`sw.js` is restricted to the test Hosting domains and localhost. Explicit preparation downloads the exact shell listed in `offline-shell.json`, verifies every local asset's SHA-256, validates the fixed test Firebase config, and follows the pinned SDK module dependencies. A staging cache is activated only after the full package succeeds; a failed/mixed deployment does not replace the prior prepared package. Private Firebase API responses never enter Cache Storage. Printed Warsh pages are stored separately only after size/Git fingerprint verification.
+`sw.js` is restricted to the test Hosting domains and localhost. Explicit preparation downloads the exact shell listed in `offline-shell.json`, verifies every local asset's SHA-256, validates the fixed test Firebase config, and follows the pinned SDK module dependencies. A staging cache is activated only after the full package succeeds; a failed/mixed deployment does not replace the prior prepared package. Package refreshes are serialized across workers; after a successful switch, old shell packages are removed instead of accumulating on the phone. Private Firebase API responses never enter Cache Storage. Printed Warsh pages are stored separately only after size/Git fingerprint verification.
 
 After changing the app assets, run:
 

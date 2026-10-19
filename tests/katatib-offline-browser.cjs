@@ -1,7 +1,7 @@
 // Real IndexedDB + service worker + cold offline navigation. Server replaces Firebase only at its HTTP boundary.
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http'),crypto=require('node:crypto');
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
-const root=path.resolve('public/katatib');let browser,server,failurePage,deny=false;const records=new Map(),learning=new Map(),tasks=new Map(),marks=new Map(),events=new Set();
+const root=path.resolve('public/katatib');let browser,server,failurePage,deny=false,corruptShell=false;const records=new Map(),learning=new Map(),tasks=new Map(),marks=new Map(),events=new Set();
 const raw=`
 const user={uid:'offline-teacher',email:'offline@example.com',emailVerified:true,displayName:'Offline teacher'};
 async function request(name,args=[]){const r=await fetch('/test-api',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,args})});const data=await r.json();if(!r.ok)throw Object.assign(Error(data.code),{code:data.code});return data;}
@@ -27,7 +27,7 @@ function reply(res,data,status=200){res.writeHead(status,{'Content-Type':'applic
    reply(res,[]);return;
   }
   if(p==='/__/firebase/init.json'){reply(res,{projectId:'katatib-64049'});return;}
-  if(p==='/offline-shell.json'){const m=JSON.parse(fs.readFileSync(path.join(root,p),'utf8'));for(const a of m.assets)a.sha256=crypto.createHash('sha256').update(content(a.path)).digest('hex');reply(res,m);return;}
+  if(p==='/offline-shell.json'){const m=JSON.parse(fs.readFileSync(path.join(root,p),'utf8'));for(const a of m.assets)a.sha256=crypto.createHash('sha256').update(content(a.path)).digest('hex');if(corruptShell)m.assets[0].sha256='0'.repeat(64);reply(res,m);return;}
   const data=content(p);res.writeHead(200,{'Content-Type':p.endsWith('.mjs')||p.endsWith('.js')?'text/javascript':p.endsWith('.css')?'text/css':p.endsWith('.json')||p.endsWith('.webmanifest')?'application/json':p.endsWith('.svg')?'image/svg+xml':'text/html','Cache-Control':'no-store'});res.end(data);
  }catch{res.writeHead(404);res.end('Not found');}});
  const userId='offline-teacher';await new Promise(r=>server.listen(0,'127.0.0.1',r));const url='http://127.0.0.1:'+server.address().port+'/';
@@ -40,6 +40,13 @@ function reply(res,data,status=200){res.writeHead(status,{'Content-Type':'applic
  await page.waitForFunction(()=>window.__testGateway?.offline.status().preparedAt,{},{timeout:60000});
  assert.equal(await page.evaluate(()=>window.__testGateway.offline.status().preparedDate),'2026-10-19');
  const cached=await page.evaluate(async()=>{const m=await caches.open('katatib-offline-meta'),p=await m.match('/active-package'),c=await caches.open(await p.text());return (await c.keys()).map(r=>r.url);});assert.ok(['firebase-app.js','firebase-auth.js','firebase-firestore.js'].every(name=>cached.some(u=>u.endsWith('/'+name))),'the pinned Firebase SDK modules are downloaded');assert.ok(cached.every(u=>!u.includes('test-api')&&!u.includes('Synthetic')),'no private responses enter public resource caches');
+ // A failed update keeps the old complete package; a successful refresh replaces it without leaking caches.
+ const activePackage=()=>page.evaluate(async()=>{const c=await caches.open('katatib-offline-meta');return (await c.match('/active-package')).text();});
+ const originalPackage=await activePackage();
+ const repackage=()=>page.evaluate(async()=>{const registration=await navigator.serviceWorker.ready;return new Promise((resolve,reject)=>{const c=new MessageChannel(),timer=setTimeout(()=>reject(Error('package timeout')),60000);c.port1.onmessage=e=>{clearTimeout(timer);c.port1.close();resolve(e.data);};registration.active.postMessage({type:'PREPARE'},[c.port2]);});});
+ corruptShell=true;assert.equal((await repackage()).ok,false);assert.equal(await activePackage(),originalPackage);
+ corruptShell=false;assert.equal((await repackage()).ok,true);assert.notEqual(await activePackage(),originalPackage);
+ assert.equal(await page.evaluate(async()=>(await caches.keys()).filter(n=>n.startsWith('katatib-offline-')&&n!=='katatib-offline-meta').length),1,'refreshing preparation must not accumulate old app packages');
  // Close the tab, disable all networking, then cold-open the installed app URL.
  await page.close();await context.setOffline(true);page=await context.newPage();failurePage=page;page.on('pageerror',e=>errors.push(e.message));await page.goto(url);await page.locator('[data-screen=attendance]').waitFor();
  const sdk=await page.evaluate(async()=>{const base='https://www.gstatic.com/firebasejs/12.12.0/';const [app,auth,db]=await Promise.all(['firebase-app.js','firebase-auth.js','firebase-firestore.js'].map(name=>import(base+name)));return [typeof app.initializeApp,typeof auth.initializeAuth,typeof db.initializeFirestore];});assert.deepEqual(sdk,['function','function','function'],'the real pinned SDK and its dependencies import with all networking disabled');
