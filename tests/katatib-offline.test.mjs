@@ -63,3 +63,17 @@ test('quota blocks preserve work and can be explicitly retried after recovery',a
  f.online();await f.api.offline.sync();assert.equal(f.api.offline.status().queue[0].error,'quota');assert.equal(f.api.offlinePending(),1);
  f.raw.saveAttendance=save;await f.api.offline.retry();assert.equal(f.api.offlinePending(),0);assert.equal(f.events.size,1);
 });
+
+test('online-only actions still use their authorized server path after offline preparation',async()=>{
+ const f=fixture();await f.init();await f.api.workspaceSave('katatib_notices','notice',{},0,'online-only-test-event');assert.equal(f.writes,1);assert.equal(f.api.offlinePending(),0);
+ f.offline();await assert.rejects(f.api.workspaceSave('katatib_notices','notice',{},0,'offline-notice-event'),/offline-online-only-action/);assert.equal(f.writes,1);
+});
+test('sign-out rechecks the durable queue so another tab cannot lose a newly saved change',async()=>{
+ const f=fixture();await f.init();f.offline();const other=createOfflineGateway(f.raw,f.options);await f.observe(other);await other.saveAttendance('a',context,{status:'present',note:'Other tab'},0);
+ assert.equal(f.api.offlinePending(),0,'the first tab has an intentionally stale count');await assert.rejects(f.api.logout(),/offline-sync-first/);assert.equal((await f.store.read(user.uid)).queue.length,1);
+});
+
+test('unsupported offline locking does not prevent ordinary online sign-out',async()=>{
+ const f=fixture(),api=createOfflineGateway(f.raw,{...f.options,locks:null});await f.observe(api);
+ await assert.rejects(api.offline.prepare({date:context.date,students:['a']}),/offline-locks-unavailable/);await api.logout();assert.equal(api.offlinePending(),0);
+});

@@ -301,8 +301,7 @@ root.addEventListener('click', async e => {
     if(hasSaves())return;
     if(gateway.offlinePending?.()){alert(offlineLabels[language].noLogout);return;}
     if(hasDrafts()&&!confirm(t('cloudLeave')))return;
-    clearData(); user = null; state = 'signed-out'; error = ''; render();
-    try { await gateway.logout(); } catch { error = 'error'; render(); }
+    try { await gateway.logout();clearData();user=null;state='signed-out';error='';render(); } catch(e) { if(e.message==='offline-sync-first')alert(offlineLabels[language].noLogout);else error='error';render(); }
   } else if (b.dataset.action === 'retry') { if (user) loadStudents(); else if (gateway) {state='signed-out';error='';render();} else start(); }
 });
 root.addEventListener('submit',async e=>{
