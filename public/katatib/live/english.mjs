@@ -190,7 +190,7 @@ export const english={
   "kuttabNames": "Authorized kuttabs (one per line)",
   "teacherIds": "Authorized teacher IDs (one per line)",
   "studentIds": "Linked student IDs (one per line)",
-  "accessHint": "Only an administrator assigns access. Parents and students use verified Google accounts and can read only explicitly linked students. Your own access cannot be changed here.",
+  "accessHint": "Only an administrator assigns access. Parents use verified Google accounts; students may receive a code/PIN card. Families can read educational records only for explicitly linked students. Your own access cannot be changed here.",
   "newAccess": "Grant access",
   "enabled": "Enabled",
   "disabled": "Disabled",
