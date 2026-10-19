@@ -230,6 +230,7 @@ const {doc,setDoc,getDoc,collection,getDocs,getDocsFromServer,query,where,limit,
     const reference=pageReferences(mushafManifest,pageNumber)[0];
     await assertSucceeds(verseSave(teacher,'new-teacher@example.com',{...verseInput,...reference,page:pageNumber},'verse-page-boundary-'+pageNumber));
   }
+  console.log('PASS: immutable scoped Warsh marks, exact references, and page lookup boundaries through 604.');
   await assertFails(updateDoc(doc(admin,'katatib_verse_marks','verse-first-event-0001'),{mark:'correct'}));
   await assertFails(deleteDoc(doc(admin,'katatib_verse_marks','verse-first-event-0001')));
   // Family notices stay in actual student scope; read receipts bind the current revision and reader.
