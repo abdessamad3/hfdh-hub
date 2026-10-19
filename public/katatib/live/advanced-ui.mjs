@@ -1,3 +1,4 @@
+import {offlineLabels} from './offline-ui.mjs';
 import { businessDate } from './dates.mjs';
 import { cleanSchedule,cleanLegacyCorrection,cleanQuestion,cleanAttempt,cleanLegacyTaskState,effectiveSchedule,loadRanking } from './advanced-model.mjs';
 export const advancedLabels={
@@ -9,7 +10,7 @@ const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const nullable=x=>x===''?null:Number(x);
 export function createAdvanced(){
  let ctx,host,screen='',generation=0,loaded=false,loading=false,busy=false,error='',notice='',resources=[],selected='',rows=[],originals=[],draft=null,pending=null,page=0,bank='approved',previewDate=businessDate(),lifetime=0,quizIndex=0,answer=null,attempts=[];
- const t=k=>advancedLabels[ctx.language][k]||({en:{status:'Status',planned:'Planned',done:'Done',cancelled:'Cancelled'},ar:{status:'الحالة',planned:'مخطط',done:'مكتمل',cancelled:'ملغى'},fr:{status:'État',planned:'Prévu',done:'Terminé',cancelled:'Annulé'}}[ctx.language][k])||k;
+ const t=k=>(k==='saved'&&ctx?.gateway?.offlinePending?.()>0?offlineLabels[ctx.language].localSaved:null)||advancedLabels[ctx.language][k]||({en:{status:'Status',planned:'Planned',done:'Done',cancelled:'Cancelled'},ar:{status:'الحالة',planned:'مخطط',done:'مكتمل',cancelled:'ملغى'},fr:{status:'État',planned:'Prévu',done:'Terminé',cancelled:'Annulé'}}[ctx.language][k])||k;
  const dirty=()=>!!draft||!!pending;
  const manage=()=>['admin','manager'].includes(ctx.role);
  const staff=()=>['admin','manager','teacher'].includes(ctx.role);

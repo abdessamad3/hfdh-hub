@@ -1,3 +1,4 @@
+import {offlineLabels} from './offline-ui.mjs';
 import { english } from './english.mjs';
 import { businessDate, CLOUD_SESSIONS, CLOUD_STATUSES, emptyAttendance } from './attendance.mjs';
 export const teacherLabels={
@@ -8,7 +9,7 @@ teacherLabels.en=english;
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function createTeacherAttendance(){
  let host,ctx,teachers=[],selected='',date=businessDate(),session='morning',baseline=emptyAttendance(),draft=emptyAttendance(),history=[],page=0,token=0,loading=false,saving=false,loaded=false,error='',notice='',pending=null;
- const t=k=>teacherLabels[ctx.language][k]||k;
+ const t=k=>(k==='saved'&&ctx?.gateway?.offlinePending?.()>0?offlineLabels[ctx.language].localSaved:null)||teacherLabels[ctx.language][k]||k;
  const dirty=()=>!!pending||draft.status!==baseline.status||draft.note!==baseline.note;
  const canLeave=()=>!saving&&(!dirty()||confirm(t('teacherDiscard')));
  function reset(){token++;host=null;ctx=null;teachers=[];selected='';date=businessDate();session='morning';baseline=emptyAttendance();draft=emptyAttendance();history=[];page=0;loading=false;saving=false;loaded=false;error='';notice='';pending=null;}

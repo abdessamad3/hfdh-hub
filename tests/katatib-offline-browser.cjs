@@ -1,0 +1,59 @@
+// Real IndexedDB + service worker + cold offline navigation. Server replaces Firebase only at its HTTP boundary.
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http'),crypto=require('node:crypto');
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+const root=path.resolve('public/katatib');let browser,server,deny=false;const records=new Map(),learning=new Map(),tasks=new Map(),marks=new Map(),events=new Set();
+const raw=`
+const user={uid:'offline-teacher',email:'offline@example.com',emailVerified:true,displayName:'Offline teacher'};
+async function request(name,args=[]){const r=await fetch('/test-api',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,args})});const data=await r.json();if(!r.ok)throw Object.assign(Error(data.code),{code:data.code});return data;}
+export async function connect(){let observer;return {
+ observe(cb){observer=cb;cb(localStorage.getItem('test-user')?user:null);},async login(){localStorage.setItem('test-user','yes');observer(user);},async logout(){localStorage.removeItem('test-user');observer(null);},async trustDevice(){localStorage.setItem('katatib-offline-trusted','yes');},async untrustDevice(){localStorage.removeItem('katatib-offline-trusted');},
+ ...Object.fromEntries(['students','attendance','studentHistory','history','attendanceHistory','learningHistory','workspaceList','kuttabs','scheduleRows','verseMarks','saveAttendance','saveLearning','workspaceSave','saveVerseMark'].map(name=>[name,(...args)=>request(name,args)]))};}
+`;
+function content(p){if(p==='/live/gateway.mjs')return Buffer.from(raw);if(p==='/live/app.mjs')return Buffer.from(fs.readFileSync(path.join(root,p),'utf8')+'\nObject.defineProperty(window,"__testGateway",{get:()=>gateway});\n');return fs.readFileSync(path.join(root,p==='/'?'index.html':p));}
+function reply(res,data,status=200){res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(data));}
+(async()=>{
+ server=http.createServer(async(req,res)=>{try{
+  const p=new URL(req.url,'http://test').pathname;
+  if(p==='/test-api'){let body='';for await(const chunk of req)body+=chunk;const {name,args:a}=JSON.parse(body);if(deny){reply(res,{code:'permission-denied'},403);return;}
+   if(name==='students'){reply(res,{role:'teacher',capped:false,students:[{id:'a',name:'Synthetic learner',kuttab:'One',teacherId:'legacy',status:'active',hizbs:0}]});return;}
+   if(name==='attendance'){reply(res,Object.fromEntries(a[0].map(id=>[id,records.get(id+'~'+a[1].date+'~'+a[1].session)||{status:'unmarked',note:'',revision:0}])));return;}
+   if(name==='saveAttendance'){const key=a[0]+'~'+a[1].date+'~'+a[1].session,prior=records.get(key);if(events.has(a[4])){reply(res,prior);return;}if((prior?.revision||0)!==a[3]){reply(res,{code:'conflict'},409);return;}const value={...a[2],revision:a[3]+1};records.set(key,value);events.add(a[4]);reply(res,value);return;}
+   if(name==='learningHistory'){reply(res,[...learning.values()].filter(r=>r.studentId===a[0]));return;}
+   if(name==='saveLearning'){const row={schemaVersion:2,...a[0],id:a[1],createdBy:userId,createdAt:{seconds:1800000000,nanoseconds:0}};learning.set(a[1],row);reply(res,row);return;}
+   if(name==='workspaceList'){reply(res,a[0]==='katatib_tasks'?[...tasks.values()].filter(r=>!a[1]||r.studentId===a[1]):[]);return;}
+   if(name==='workspaceSave'){const row={...a[2],id:a[1],revision:a[3]+1,eventId:a[4]};tasks.set(a[1],row);reply(res,row);return;}
+   if(name==='verseMarks'){reply(res,[...marks.values()].filter(r=>r.studentId===a[0]&&r.page===a[1]));return;}
+   if(name==='saveVerseMark'){const row={schemaVersion:1,...a[0],id:a[1],createdBy:userId,createdAt:{seconds:1800000000,nanoseconds:0}};marks.set(a[1],row);reply(res,row);return;}
+   reply(res,[]);return;
+  }
+  if(p==='/__/firebase/init.json'){reply(res,{projectId:'katatib-64049'});return;}
+  if(p==='/offline-shell.json'){const m=JSON.parse(fs.readFileSync(path.join(root,p),'utf8'));for(const a of m.assets)a.sha256=crypto.createHash('sha256').update(content(a.path)).digest('hex');reply(res,m);return;}
+  const data=content(p);res.writeHead(200,{'Content-Type':p.endsWith('.mjs')||p.endsWith('.js')?'text/javascript':p.endsWith('.css')?'text/css':p.endsWith('.json')||p.endsWith('.webmanifest')?'application/json':p.endsWith('.svg')?'image/svg+xml':'text/html','Cache-Control':'no-store'});res.end(data);
+ }catch{res.writeHead(404);res.end('Not found');}});
+ const userId='offline-teacher';await new Promise(r=>server.listen(0,'127.0.0.1',r));const url='http://127.0.0.1:'+server.address().port+'/';
+ browser=await chromium.launch({headless:true});const context=await browser.newContext(),errors=[];
+ await context.route('https://fonts.googleapis.com/**',r=>r.fulfill({contentType:'text/css',body:''}));
+ await context.route('https://www.gstatic.com/firebasejs/12.12.0/**',r=>r.fulfill({headers:{'Access-Control-Allow-Origin':'*'},contentType:'text/javascript',body:r.request().url().endsWith('firebase-shared.js')?'export {};':"import './firebase-shared.js'; export {};"}));
+ await context.route('https://raw.githubusercontent.com/quran-ws/quran-svg/**/001.svg',r=>r.fulfill({contentType:'image/svg+xml',body:fs.readFileSync('tests/fixtures/warsh-001.svg')}));
+ let page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(url);await page.locator('[data-action=login]').click();await page.locator('[data-screen=attendance]').waitFor();await page.locator('[data-lang=en]').click();
+ await page.locator('#offline-device-root summary').click();await page.locator('[data-offline-prepare] [name=trust]').check();await page.locator('[data-offline-prepare] [name=date]').fill('2026-10-19');await page.locator('[data-offline-prepare] [name=last]').fill('1');await page.locator('[data-offline-prepare] button[type=submit]').click();
+ await page.waitForFunction(()=>window.__testGateway?.offline.status().preparedAt,{},{timeout:60000});
+ assert.equal(await page.evaluate(()=>window.__testGateway.offline.status().preparedDate),'2026-10-19');
+ const cached=await page.evaluate(async()=>{const m=await caches.open('katatib-offline-meta'),p=await m.match('/active-package'),c=await caches.open(await p.text());return (await c.keys()).map(r=>r.url);});assert.ok(cached.some(u=>u.endsWith('firebase-shared.js')),'recursive SDK dependencies are downloaded');assert.ok(cached.every(u=>!u.includes('test-api')&&!u.includes('Synthetic')),'no private responses enter public resource caches');
+ // Close the tab, disable all networking, then cold-open the installed app URL.
+ await page.close();await context.setOffline(true);page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(url);await page.locator('[data-screen=attendance]').waitFor();await page.locator('[data-lang=en]').click();
+ await page.locator('[data-screen=attendance]').click();await page.locator('#cloud-date').fill('2026-10-19');await page.locator('[data-cloud-student=a][data-cloud-status=present]').click();await page.locator('[data-cloud-note=a]').fill('حضور دون اتصال');await page.locator('[data-cloud-save=a]').click();await page.waitForFunction(()=>window.__testGateway.offlinePending()===1);assert.match(await page.locator('[data-cloud-message=a]').textContent(),/device/);
+ await page.close();page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(url);await page.locator('[data-screen=learning]').waitFor();assert.equal(await page.evaluate(()=>window.__testGateway.offlinePending()),1);await page.locator('[data-lang=en]').click();
+ await page.locator('[data-screen=learning]').click();await page.locator('#learning-student').selectOption('a');await page.locator('#learning-form [name=kind]').selectOption('revision');await page.locator('#learning-form [name=date]').fill('2026-10-19');await page.locator('#learning-form [name=hizb]').fill('1');await page.locator('#learning-form [name=mistakes]').fill('1');await page.locator('#learning-form [name=score]').fill('85');await page.locator('#learning-form [name=note]').fill('Offline revision');await page.locator('#learning-form button[type=submit]').click();await page.waitForFunction(()=>window.__testGateway.offlinePending()===2);
+ await page.locator('[data-screen=tasks]').click();await page.locator('[data-work-action=new-task]').click();await page.locator('[data-work-form] [name=due]').fill('2026-10-19');await page.locator('[data-work-form] [name=note]').fill('Offline task');await page.locator('[data-work-form] button[type=submit]').click();await page.waitForFunction(()=>window.__testGateway.offlinePending()===3);
+ await page.locator('[data-screen=mushaf]').click();await page.locator('#mushaf-art .ayahPolygon').first().waitFor();await page.locator('[data-mushaf-mark=forgot]').click();await page.locator('#mushaf-mark-form [name=note]').fill('Offline verse');await page.locator('#mushaf-mark-form button[type=submit]').click();await page.waitForFunction(()=>window.__testGateway.offlinePending()===4);
+ await page.locator('[data-screen=reports]').click();await page.locator('#katatib-print').waitFor();await page.locator('#report-month').fill('2026-10');await page.locator('[data-report-detail=reportActivities]').waitFor();assert.match(await page.locator('[data-report-detail=reportActivities]').textContent(),/85/);assert.match(await page.locator('[data-report-detail=reportPlans]').textContent(),/1/);
+ const pdf=await page.pdf({format:'A4'});assert.ok(pdf.length>1000,'the offline report can be rendered for printing');
+ const download=page.waitForEvent('download');await page.locator('[data-work-action=excel]').click();const file=await download;assert.match(fs.readFileSync(await file.path(),'utf8'),/85/);
+ // The server has received none of the offline writes. Reconnection drains the persistent queue.
+ assert.equal(records.size+learning.size+tasks.size+marks.size,0);await context.setOffline(false);await page.evaluate(()=>window.__testGateway.offline.sync());await page.waitForFunction(()=>window.__testGateway.offlinePending()===0);assert.equal(records.size,1);assert.equal(events.size,1);assert.equal(learning.size,1);assert.equal(tasks.size,1);assert.equal(marks.size,1);
+ await page.evaluate(()=>window.__testGateway.offline.sync());assert.equal(events.size,1);
+ // Server denial is never masked with downloaded access.
+ deny=true;await page.locator('[data-offline-action=refresh]').count();await assert.rejects(page.evaluate(()=>window.__testGateway.students({uid:'offline-teacher'})));assert.equal(await page.evaluate(()=>window.__testGateway.offline.status().enabled),false);
+ assert.deepEqual(errors,[]);console.log('PASS: real service worker cold offline opening, pinned shell and recursive SDK cache, real IndexedDB reload recovery, cached printed Warsh page, local attendance/learning/task/verse writes and reports, reconnection exactly once, and permission denial. Firebase Auth persistence and server rules are tested separately.');
+})().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{await browser?.close();server?.close();});

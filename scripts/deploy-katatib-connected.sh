@@ -8,6 +8,8 @@ import fs from 'node:fs';
 const c = JSON.parse(fs.readFileSync('firebase.katatib-connected.json', 'utf8'));
 if (c.hosting.site !== 'katatib-64049' || c.hosting.public !== 'public/katatib' || c.firestore.rules !== 'firestore.katatib-test.rules' || Object.keys(c).some(k => !['hosting', 'firestore', 'emulators'].includes(k))) throw new Error('Unexpected deployment configuration.');
 NODE
+python3 scripts/katatib-offline-manifest.py --check
+node tests/katatib-offline.test.mjs
 node tests/katatib-domain.test.mjs
 node tests/katatib-audio-clips.test.mjs
 node tests/katatib-mushaf.test.mjs

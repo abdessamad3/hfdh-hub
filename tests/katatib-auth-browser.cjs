@@ -10,11 +10,11 @@ let browser,server;
  const helper=path.resolve('public/katatib/live/auth-session.mjs');
  const entry=`
  import {initializeApp,deleteApp} from 'firebase/app';
- import {initializeAuth,browserSessionPersistence,browserPopupRedirectResolver,connectAuthEmulator,onAuthStateChanged,createUserWithEmailAndPassword,signInWithEmailAndPassword,inMemoryPersistence,signOut} from 'firebase/auth';
+ import {initializeAuth,browserSessionPersistence,browserLocalPersistence,setPersistence,browserPopupRedirectResolver,connectAuthEmulator,onAuthStateChanged,createUserWithEmailAndPassword,signInWithEmailAndPassword,inMemoryPersistence,signOut} from 'firebase/auth';
  import {createSessionAuth} from ${JSON.stringify(helper)};
  import {provisionStudentAuth,newStudentLogin} from ${JSON.stringify(studentHelper)};
  const app=initializeApp({apiKey:'demo-test-key',authDomain:'demo-katatib-auth.firebaseapp.com',projectId:'demo-katatib-auth'});
- const auth=createSessionAuth(app,{initializeAuth,browserSessionPersistence,browserPopupRedirectResolver});
+ const auth=createSessionAuth(app,{initializeAuth,browserSessionPersistence,browserLocalPersistence,setPersistence,browserPopupRedirectResolver});
  connectAuthEmulator(auth,'http://127.0.0.1:9099',{disableWarnings:true});
  onAuthStateChanged(auth,user=>{document.body.dataset.user=user?user.uid:'signed-out';});
  window.testLogin=()=>createUserWithEmailAndPassword(auth,'persistence-'+crypto.randomUUID()+'@example.com','test-only-example-password');
@@ -27,6 +27,7 @@ let browser,server;
    return {staffUnchanged:auth.currentUser.uid===before,sameAccount:retried===uid,differentAccount:uid!==before};
  };
  window.testLogout=()=>signOut(auth);
+ window.testTrust=async()=>{await setPersistence(auth,browserLocalPersistence);localStorage.setItem('katatib-offline-trusted','yes');};
  `;
  const result=await build({stdin:{contents:entry,resolveDir:process.env.KATATIB_AUTH_TOOLS,sourcefile:'session-test.mjs'},bundle:true,format:'esm',write:false,platform:'browser'});
  server=http.createServer((req,res)=>{
@@ -56,6 +57,13 @@ let browser,server;
  await page.evaluate(()=>window.testLogout());
  await page.waitForFunction(()=>document.body.dataset.user==='signed-out');
  await page.reload();await page.waitForFunction(()=>document.body.dataset.user==='signed-out');
+ // Opt-in trusted-device persistence restores a real SDK identity in a newly opened offline tab.
+ await page.evaluate(()=>window.testLogin());await page.waitForFunction(()=>document.body.dataset.user!=='signed-out');
+ const trustedUid=await page.getAttribute('body','data-user');await page.evaluate(()=>window.testTrust());
+ await context.route(url+'**',route=>route.fulfill({contentType:route.request().url().endsWith('/bundle.mjs')?'text/javascript':'text/html',body:route.request().url().endsWith('/bundle.mjs')?result.outputFiles[0].text:'<!doctype html><html><body><script type="module" src="/bundle.mjs"></script></body></html>'}));
+ await context.setOffline(true);const offlineTab=await context.newPage();await offlineTab.goto(url);await offlineTab.waitForFunction(uid=>document.body.dataset.user===uid,trustedUid);
+ assert.equal(await offlineTab.getAttribute('body','data-user'),trustedUid);
+ await offlineTab.evaluate(()=>window.testLogout());await offlineTab.waitForFunction(()=>document.body.dataset.user==='signed-out');await context.setOffline(false);
  assert.deepEqual(errors,[]);
  console.log('PASS: real Firebase Auth SDK restores the same user after repeated reloads, stores auth only in tab session storage, leaves an independent tab signed out, and stays signed out after explicit logout/reload.');
 })().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{await browser?.close();server?.close();});

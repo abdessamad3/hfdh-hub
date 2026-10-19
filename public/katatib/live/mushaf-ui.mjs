@@ -1,3 +1,4 @@
+import {offlineLabels} from './offline-ui.mjs';
 import {MUSHAF_EDITION,MUSHAF_COMMIT,VERSE_MARKS,verseOrdinal,verseReference,versePage,pageReferences,verseHistory,cleanVerseMark} from './mushaf-model.mjs';
 import {createMushafPages,mountMushafPage} from './mushaf-pages.mjs';
 export const mushafLabels={
@@ -9,7 +10,7 @@ const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 export function createMushaf(){
  const assets=createMushafPages();
  let ctx,host,manifest=null,page=1,selected=null,student='',rows=[],art='',svg=null,zoom=100,generation=0,loading=false,busy=false,error='',message='',draft=null,pending=null,started=false;
- const t=k=>mushafLabels[ctx.language][k]||k;
+ const t=k=>(k==='saved'&&ctx?.gateway?.offlinePending?.()>0?offlineLabels[ctx.language].localSaved:null)||mushafLabels[ctx.language][k]||k;
  const staff=()=>['admin','manager','teacher'].includes(ctx.role);
  const dirty=()=>!!draft||!!pending;
  const canChange=()=>!busy&&(!dirty()||confirm(t('discard')));

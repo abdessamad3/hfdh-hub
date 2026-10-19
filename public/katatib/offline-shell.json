@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 1,
+  "assets": [
+    {
+      "path": "/",
+      "sha256": "d04a6300a483df741a27bf43339fc2bfdfcb2c291d5ccdaa72c4f7ddd4b72313"
+    },
+    {
+      "path": "/styles.css",
+      "sha256": "e61cc1a680416c0f737457c58b1ee1ce260ac1912be4c34573b8449c3c527b89"
+    },
+    {
+      "path": "/favicon.svg",
+      "sha256": "f9489929a27aea9263bd5c9e4a0bf24efadd7a83c79995511844378fae5ba0db"
+    },
+    {
+      "path": "/manifest.webmanifest",
+      "sha256": "fc3a6161cf02bb700ba36dce3c9a9ba616416b3d18ded4a413632e1ee08d17ab"
+    },
+    {
+      "path": "/mushaf/manifest.json",
+      "sha256": "a8839bc4c0a9bbdcd9e1aa6107b9fb47842fea4a5653d1607e0cbbacacc661c1"
+    },
+    {
+      "path": "/live/advanced-model.mjs",
+      "sha256": "e3ebb6d1b52c0ceabbeb19369e7b7b6c4e5a1db2b19bab0c8b3bc45b94d453c0"
+    },
+    {
+      "path": "/live/advanced-ui.mjs",
+      "sha256": "8cee703e43406f121ad8217afb617728857e74047e19ed9ed4186acbeb9a03e6"
+    },
+    {
+      "path": "/live/app.mjs",
+      "sha256": "f3fac343d63bcc21ff25374e8d91bb2216556d742d06ac7df54f4ea839dfcf86"
+    },
+    {
+      "path": "/live/attendance.mjs",
+      "sha256": "80c3a62cf8cfd8acb5578fbbf2ca675f6d9fbfcb82d07b8fd6e4b0867491d3da"
+    },
+    {
+      "path": "/live/audio-clips.mjs",
+      "sha256": "db6d978035611937fc055ab1df51618392fa0ab4518adbc3ca520f9d6c5147f8"
+    },
+    {
+      "path": "/live/audio-test.mjs",
+      "sha256": "5a14b3ae3547704e4362b1254933c4495426445de55cf39a6b95a0bfaacfe066"
+    },
+    {
+      "path": "/live/auth-session.mjs",
+      "sha256": "d7f6a25f52406073aeafeac0f2a9f609221291613c85066f8dd7ca4605a4ff8b"
+    },
+    {
+      "path": "/live/dates.mjs",
+      "sha256": "8f6739057d0d9b6736b5117a4830de4c7c7d49252128e4205068f75c3fc7ca50"
+    },
+    {
+      "path": "/live/english.mjs",
+      "sha256": "ff58516dec5650b2addd81a01cf73416174f309bc105851dfe947c0f703f5223"
+    },
+    {
+      "path": "/live/family-model.mjs",
+      "sha256": "a323ced7c6ecb1bf647ddb5b613ef490d34dcedf87b9155ea84b7b04df2a6e2f"
+    },
+    {
+      "path": "/live/family-ui.mjs",
+      "sha256": "69004a621642e951e50649ca0ef4445c0ce60cfebf24b0da5a0b55e8622b2907"
+    },
+    {
+      "path": "/live/gateway.mjs",
+      "sha256": "4813c84be55d95b7730f572983ce722ebe26e296340cddfe7612c480f9e6fac3"
+    },
+    {
+      "path": "/live/learning.mjs",
+      "sha256": "821e4859f40f489bcbd60ffd24ef168b3edf15c46e69accb0e5959d8fd4fde0a"
+    },
+    {
+      "path": "/live/legacy.mjs",
+      "sha256": "b9f1b786a541995605dc119f3065b71ca90b8d09739db859adb58d4613b6ce76"
+    },
+    {
+      "path": "/live/model.mjs",
+      "sha256": "5c28a4820d12c45a187c796fe7dd8b9cffb992186cc13e537606945a43190a50"
+    },
+    {
+      "path": "/live/mushaf-model.mjs",
+      "sha256": "5fcf046a69d7be64efc159adb10c1a1bdd87f1f9b233f195f173aab81c043437"
+    },
+    {
+      "path": "/live/mushaf-pages.mjs",
+      "sha256": "502bf87eee458b84fa248c548012d7b0a9f4b53366e46270cebf066e5a1ae9f4"
+    },
+    {
+      "path": "/live/mushaf-ui.mjs",
+      "sha256": "3b636abb452fd5b405085889502f06333e8386e5b7c5ee452205dc10e21054e9"
+    },
+    {
+      "path": "/live/offline-gateway.mjs",
+      "sha256": "72758f04a862ee04d3966c4247a4234cfcbc4cd3931b175acb467eecc050427f"
+    },
+    {
+      "path": "/live/offline-store.mjs",
+      "sha256": "d760c78dd7c7772db6f0ec5e0dbf6348e8492140f093c3277df7e78c5e7b4c18"
+    },
+    {
+      "path": "/live/offline-ui.mjs",
+      "sha256": "46edbe8e663699a05ff22e9c90c36653a7c506e5e4324080a6c2f91081e35657"
+    },
+    {
+      "path": "/live/planning.mjs",
+      "sha256": "23c93799eba25bc593d013f19e058c17a8d6f8a3a4d97bf81d40dd60fa9595aa"
+    },
+    {
+      "path": "/live/progress.mjs",
+      "sha256": "739a2d3c4ea9d4a2933be20f0b9ea069faab2777298129ad1149ff1ef9a198ad"
+    },
+    {
+      "path": "/live/readiness.mjs",
+      "sha256": "63f9247c26070558576a896696054bdae2b60d5c1d9834a46e53b0e2018dffd0"
+    },
+    {
+      "path": "/live/recorder.mjs",
+      "sha256": "fdbd3f4834e8b1984dd1148caa70106a8ae098e0aa456e9552d8fb5454000edb"
+    },
+    {
+      "path": "/live/reports.mjs",
+      "sha256": "b3da1d7269ec03206d5bc9004944820c590b30a717d7bd5fad86170cd1bc86eb"
+    },
+    {
+      "path": "/live/roster.mjs",
+      "sha256": "f77c33dab961590f061722a811b02d892b4f28e2e6d8738e89c9e5a53ffb12fd"
+    },
+    {
+      "path": "/live/student-login-ui.mjs",
+      "sha256": "d5783e0461d8e25e9aedd42fd2fef59b8e944d7db97595ccaeb30e6a67801591"
+    },
+    {
+      "path": "/live/student-login.mjs",
+      "sha256": "0a2ded4f8da4496c7081618ccc868d67bc813d162be0a60ff2263b7a97ba95e4"
+    },
+    {
+      "path": "/live/teacher-attendance-ui.mjs",
+      "sha256": "e73db103ddba94f4187a9a366f82a7c35279d5bd05de96266e63d1e4d5573d68"
+    },
+    {
+      "path": "/live/teacher-attendance.mjs",
+      "sha256": "82ceca89404e4f8ea327121965b6660c3483d3f897367225c4a11dc1624aced2"
+    },
+    {
+      "path": "/live/workspace-model.mjs",
+      "sha256": "e86814bb1209b7079b154b2df6ac312289a54ba4a7a2b4a30727a1b853bbd300"
+    },
+    {
+      "path": "/live/workspace.mjs",
+      "sha256": "d8457cb03224d4e2bacc2a572482567778426112b25b6c90b79fdc79ebf372d8"
+    },
+    {
+      "path": "/live/live.css",
+      "sha256": "923b011a21032f3bfdbb8f0c388b237a546bee334346e1ee17072ac15de1c96a"
+    },
+    {
+      "path": "/live/mushaf.css",
+      "sha256": "bc255bf09c00c0996ad4e19c99c6ba106b22c2c45be0e9eb75bc30e014758308"
+    }
+  ]
+}

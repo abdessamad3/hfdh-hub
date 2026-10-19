@@ -11,13 +11,16 @@ async function download(url,max){
  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
  try{const response=await fetch(url,{credentials:'omit',referrerPolicy:'no-referrer',signal:controller.signal});if(!response.ok)throw new Error('mushaf-unavailable');const size=Number(response.headers.get('Content-Length'));if(size>max)throw new Error('mushaf-too-large');const bytes=await response.arrayBuffer();if(bytes.byteLength>max)throw new Error('mushaf-too-large');return bytes;}finally{clearTimeout(timer);}
 }
-export function createMushafPages(){
+export function createMushafPages({persist=false}={}){
  let manifest=null;const pages=new Map();
  return {
   async manifest(){if(!manifest)manifest=validateMushafManifest(JSON.parse(new TextDecoder().decode(await download('/mushaf/manifest.json',200000))));return manifest;},
   async page(number){const m=await this.manifest(),expected=m.pages[number-1];if(!Number.isInteger(number)||!expected)throw new Error('invalid-mushaf-page');if(pages.has(number)){const text=pages.get(number);pages.delete(number);pages.set(number,text);return text;}
    const url=`https://raw.githubusercontent.com/quran-ws/quran-svg/${MUSHAF_COMMIT}/mushafs/warsh/kfqc/svg/${String(number).padStart(3,'0')}.svg`;
-   const text=await verifyPageBytes(await download(url,3000000),expected);pages.set(number,text);while(pages.size>3)pages.delete(pages.keys().next().value);return text;
+   let cache=null,cached=null;if(globalThis.caches){cache=await caches.open('katatib-warsh-pages-v1');cached=await cache.match(url);}
+   const bytes=cached?await cached.arrayBuffer():await download(url,3000000);const text=await verifyPageBytes(bytes,expected);
+   if(persist&&cache&&!cached){await cache.put(url,new Response(bytes,{headers:{'Content-Type':'image/svg+xml'}}));}
+   pages.set(number,text);while(pages.size>3)pages.delete(pages.keys().next().value);return text;
   },clear(){pages.clear();}
  };
 }

@@ -6,7 +6,7 @@ import { readPages, commitWorkspace, STAFF_ROLES } from './workspace-model.mjs';
 import { permittedIdentity, checkStudentGrant, studentAddress, studentSecret, provisionStudentAuth, commitStudentCredential } from './student-login.mjs';
 import { createSessionAuth } from './auth-session.mjs';
 import { initializeApp, deleteApp } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js';
-import { initializeAuth, inMemoryPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, browserSessionPersistence, browserPopupRedirectResolver, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js';
+import { initializeAuth, inMemoryPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, browserSessionPersistence, browserLocalPersistence, setPersistence, browserPopupRedirectResolver, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js';
 import { initializeFirestore, memoryLocalCache, collection, doc, getDocFromServer, getDocsFromServer, query, where, limit, orderBy, documentId, startAfter, runTransaction, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js';
 import { commitLearning, readLearningPages } from './learning.mjs';
 import { attendanceId, emptyAttendance, commitAttendance } from './attendance.mjs';
@@ -16,7 +16,7 @@ export async function connect() {
   if (!response.ok) throw new Error('config-unavailable');
   const config=validateConfig(await response.json());
   const app = initializeApp(config, 'katatib-test-reader');
-  const auth = createSessionAuth(app, { initializeAuth, browserSessionPersistence, browserPopupRedirectResolver });
+  const auth = createSessionAuth(app, { initializeAuth, browserSessionPersistence, browserLocalPersistence, setPersistence, browserPopupRedirectResolver });
   const db = initializeFirestore(app, { localCache: memoryLocalCache() });
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });
@@ -37,6 +37,8 @@ export async function connect() {
       if(auth.currentUser?.uid!==adminUid)throw new Error('no-access');
       return commitStudentCredential(db,{doc,runTransaction,serverTimestamp},adminUid,studentId,login,authUid,revision,eventId);
     },
+    async trustDevice(){await setPersistence(auth,browserLocalPersistence);localStorage.setItem('katatib-offline-trusted','yes');},
+    async untrustDevice(){await setPersistence(auth,browserSessionPersistence);localStorage.removeItem('katatib-offline-trusted');},
     logout: () => signOut(auth),
     async students(user) {
       const identity=await permittedIdentity(user);
@@ -196,9 +198,9 @@ export async function connect() {
         return [id, { status: data.status, note: data.note, revision: data.revision }];
       })));
     },
-    async saveAttendance(studentId, context, desired, expectedRevision) {
+    async saveAttendance(studentId, context, desired, expectedRevision, eventId=crypto.randomUUID()) {
       if (!auth.currentUser) throw new Error('no-access');
-      return commitAttendance(db, { doc, runTransaction, serverTimestamp, getDocFromServer }, auth.currentUser.uid, studentId, context, desired, expectedRevision, crypto.randomUUID());
+      return commitAttendance(db, { doc, runTransaction, serverTimestamp, getDocFromServer }, auth.currentUser.uid, studentId, context, desired, expectedRevision, eventId);
     },
     async attendanceHistory(studentId) {
       const rows=await readPages(async after=>{
