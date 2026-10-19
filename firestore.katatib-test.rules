@@ -254,7 +254,7 @@ service cloud.firestore {
     match /katatib_audit/{id} {
       allow get, list: if member() && (access().role == 'admin' || resource.data.collection in ['katatib_legacy_corrections','katatib_legacy_task_states'] && historyAllowed(resource.data.snapshot)) && (request.method == 'get' || request.query.limit <= 100);
       allow create: if member() && request.resource.data.keys().hasOnly(['collection','recordId','snapshot']) &&
-        request.resource.data.collection in ['katatib_students','katatib_tasks','katatib_access','katatib_schedules','katatib_legacy_corrections','katatib_questions','katatib_challenge_attempts','katatib_legacy_task_states','katatib_student_credentials'] &&
+        request.resource.data.collection in ['katatib_students','katatib_tasks','katatib_access','katatib_schedules','katatib_legacy_corrections','katatib_questions','katatib_challenge_attempts','katatib_legacy_task_states','katatib_student_credentials','katatib_notices','katatib_notice_acks','katatib_consents'] &&
         request.resource.data.recordId is string && request.resource.data.snapshot.eventId == id &&
         request.resource.data.snapshot.updatedBy == request.auth.uid && request.resource.data.snapshot.updatedAt == request.time &&
         getAfter(/databases/$(database)/documents/$(request.resource.data.collection)/$(request.resource.data.recordId)).data == request.resource.data.snapshot;
@@ -344,6 +344,44 @@ service cloud.firestore {
       allow list: if request.query.limit <= 100 && historyAllowed(resource.data);
       allow create: if validAttempt(request.resource.data) && request.resource.data.revision == 1 && audited('katatib_challenge_attempts',id,request.resource.data);
       allow update, delete: if false;
+    }
+
+    function validNotice(d) {
+      return d.keys().hasOnly(['schemaVersion','studentId','title','body','kind','active','revision','updatedBy','updatedAt','eventId']) && validMeta(d) && staff() && historyAllowed(d) &&
+        d.title is string && d.title.size() > 0 && d.title.size() <= 120 && d.body is string && d.body.size() > 0 && d.body.size() <= 2000 &&
+        d.kind in ['info','attendance','learning'] && d.active is bool;
+    }
+    match /katatib_notices/{id} {
+      allow get: if member() && (!exists(/databases/$(database)/documents/katatib_notices/$(id)) || historyAllowed(resource.data));
+      allow list: if request.query.limit <= 100 && historyAllowed(resource.data);
+      allow create: if validNotice(request.resource.data) && request.resource.data.revision == 1 && audited('katatib_notices',id,request.resource.data);
+      allow update: if validNotice(request.resource.data) && workspaceRevision() && request.resource.data.studentId == resource.data.studentId && audited('katatib_notices',id,request.resource.data);
+      allow delete: if false;
+    }
+    function validNoticeAck(d,id) {
+      let notice=get(/databases/$(database)/documents/katatib_notices/$(d.noticeId)).data;
+      return d.keys().hasOnly(['schemaVersion','studentId','noticeId','readerUid','noticeRevision','revision','updatedBy','updatedAt','eventId']) && validMeta(d) &&
+        historyAllowed(d) && d.readerUid == request.auth.uid && notice.studentId == d.studentId && notice.active == true && d.noticeRevision == notice.revision &&
+        id == d.noticeId + '~' + string(d.noticeRevision) + '~' + d.readerUid && d.revision == 1 && audited('katatib_notice_acks',id,d);
+    }
+    match /katatib_notice_acks/{id} {
+      allow get: if member() && (!exists(/databases/$(database)/documents/katatib_notice_acks/$(id)) || resource.data.readerUid == request.auth.uid && historyAllowed(resource.data));
+      allow list: if member() && request.query.limit <= 100 && resource.data.readerUid == request.auth.uid && historyAllowed(resource.data);
+      allow create: if validNoticeAck(request.resource.data,id);
+      allow update, delete: if false;
+    }
+    function validConsent(d,id) {
+      return d.keys().hasOnly(['schemaVersion','studentId','guardianUid','purpose','approved','policyVersion','revision','updatedBy','updatedAt','eventId']) && validMeta(d) && member() &&
+        access().role == 'parent' && linkedStudent(d.studentId) && d.guardianUid == request.auth.uid &&
+        d.purpose in ['audio','ranking'] && d.approved is bool && d.policyVersion == 'katatib-test-2026-10-19' &&
+        id == d.guardianUid + '~' + d.studentId + '~' + d.purpose && audited('katatib_consents',id,d);
+    }
+    match /katatib_consents/{id} {
+      allow get: if member() && (!exists(/databases/$(database)/documents/katatib_consents/$(id)) || historyAllowed(resource.data));
+      allow list: if request.query.limit <= 100 && historyAllowed(resource.data);
+      allow create: if validConsent(request.resource.data,id) && request.resource.data.revision == 1;
+      allow update: if validConsent(request.resource.data,id) && workspaceRevision() && request.resource.data.studentId == resource.data.studentId && request.resource.data.guardianUid == resource.data.guardianUid && request.resource.data.purpose == resource.data.purpose;
+      allow delete: if false;
     }
 
     match /{document=**} { allow read, write: if false; }

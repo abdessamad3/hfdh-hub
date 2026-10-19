@@ -183,9 +183,9 @@ async function saveLearning(event) {
   if(generation===epoch&&learningSaved)loadLearning();
 }
 
-const icons={today:'◈',students:'◉',attendance:'✓',learning:'▤',tasks:'◷',reports:'▥',manage:'⚙',access:'♙',audit:'≡',credentials:'♙',recording:'◉',history:'▦',readiness:'◇',teacherAttendance:'✓',schedules:'◷',corrections:'✎',questions:'?',challenge:'◇',ranking:'▥'};
-const extraScreens=['credentials','schedules','corrections','questions','challenge','ranking','teacherAttendance','tasks','reports','manage','access','audit','history','readiness'];
-const screens=()=>['today','students',...(['parent','student'].includes(role)?[]:['attendance','learning','recording','schedules','corrections','ranking']),'history','tasks','reports','challenge',...(['admin','manager'].includes(role)?['teacherAttendance','manage']:[]),...(role==='admin'?['credentials','access','audit','readiness','questions']:[])];
+const icons={today:'◈',students:'◉',attendance:'✓',learning:'▤',tasks:'◷',reports:'▥',manage:'⚙',access:'♙',audit:'≡',notices:'♧',consent:'✓',credentials:'♙',recording:'◉',history:'▦',readiness:'◇',teacherAttendance:'✓',schedules:'◷',corrections:'✎',questions:'?',challenge:'◇',ranking:'▥'};
+const extraScreens=['notices','consent','credentials','schedules','corrections','questions','challenge','ranking','teacherAttendance','tasks','reports','manage','access','audit','history','readiness'];
+const screens=()=>['today','students',...(['parent','student'].includes(role)?[]:['attendance','learning','recording','schedules','corrections','ranking']),'history','tasks','reports','challenge','notices',...(role==='parent'?['consent']:[]),...(['admin','manager'].includes(role)?['teacherAttendance','manage']:[]),...(role==='admin'?['credentials','access','audit','readiness','questions']:[])];
 const titleKey=s=>({today:'today',students:'studentsTab',attendance:'cloudAttendance',learning:'learningTab',history:'legacyTitle'}[s]||s);
 const screenTitle=()=>t(titleKey(screen));
 const displayName=()=>user?.displayName?.trim()||user?.email||t('workspaceTitle');

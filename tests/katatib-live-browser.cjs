@@ -19,9 +19,13 @@ window.__teacherRecords={};window.__teacherEvents=[];window.__teacherFail=false;
 export async function connect(){
  return {
  observe(callback){observer=callback;callback(null);},
- async login(){observer({email:'teacher@example.com',displayName:'Teacher Test',emailVerified:true});},
+ async login(){observer({uid:'reader-uid',email:'teacher@example.com',displayName:'Teacher Test',emailVerified:true});},
+ async studentLogin(code,pin){if(pin!=='12345678')throw new Error('auth/invalid-credential');window.__role='student';observer({uid:'student-uid',email:'student@students.katatib.invalid',emailVerified:false});},
+ async studentCredential(id){return window.__credentialPointers?.[id]||null;},
+ async provisionStudent(id,login,rev,event){window.__credentialCalls??=[];window.__credentialCalls.push({id,code:login.code,event});window.__credentialPointers??={};let current=window.__credentialPointers[id];if(current?.eventId!==event){if((current?.revision||0)!==rev)throw new Error('conflict');current={revision:rev+1,eventId:event};window.__credentialPointers[id]=current;}if(window.__credentialLostAck){window.__credentialLostAck=false;throw new Error('unavailable');}return current;},
  async logout(){observer(null);},
  async students(){if(window.__pending)await new Promise(r=>window.__release=r);if(window.__deny)throw new Error('no-access');const original=[{id:'a',name:'<img src=x onerror=alert(1)>',kuttab:'One',age:12,hizbs:3,attendance:80},{id:'b',name:'Maryam',kuttab:'Two',age:null,hizbs:null,attendance:null}];const students=(window.__roster||original).map(s=>({...s,teacherId:'legacy',status:'active',source:'copy',...window.__profiles[s.id]}));for(const [id,p] of Object.entries(window.__profiles))if(!students.some(s=>s.id===id))students.push({id,...p,hizbs:null,attendance:null});return {students,role:window.__role,capped:false};},
+ async noticeAcks(id){return Object.values(window.__workspace.katatib_notice_acks||{}).filter(r=>r.studentId===id&&r.readerUid==='reader-uid');},
  async legacyVersions(){return [];},
  async kuttabs(){return [{id:'one',name:'One',teacherId:'legacy',schedule:{lessons:{'1':{lessons:['Original session']}}}}];},
  async scheduleRows(id){return Object.values(window.__workspace.katatib_schedules).filter(r=>r.kuttabId===id);},
@@ -499,6 +503,49 @@ let browser;
  await page.evaluate(()=>window.__release());
  await page.waitForTimeout(100);
  assert.equal(await page.locator('.student-card').count(),0,'late response cannot restore signed-out data');
+ // Family notices and choices use the linked student; no email, upload or public ranking is activated.
+ await page.evaluate(()=>{window.__pending=false;window.__role='teacher';});await page.locator('[data-action=login]').click();
+ await page.locator('[data-screen=notices]').click();await page.locator('[data-family-new]:not([disabled])').waitFor();
+ await page.locator('[data-family-new]').click();
+ await page.locator('[data-notice-form] [name=title]').fill('Bring the book <script>');
+ await page.locator('[data-notice-form] [name=body]').fill('Private family message');
+ await page.locator('[data-notice-form] button[type=submit]').click();
+ await page.locator('[data-notice-edit]').waitFor();assert.equal(await page.locator('#work-root script').count(),0);
+ await page.locator('[data-action=logout]').click();await page.evaluate(()=>window.__role='parent');await page.locator('[data-action=login]').click();
+ await page.locator('[data-screen=notices]').click();await page.locator('[data-notice-read]').waitFor();assert.equal(await page.locator('[data-family-new]').count(),0);
+ await page.locator('[data-notice-read]').click();await page.locator('[data-notice-read][disabled]').waitFor();
+ await page.locator('[data-screen=consent]').click();await page.locator('[data-consent=audio]:not([disabled])').first().waitFor();
+ await page.locator('[data-consent=audio][data-approved=false]').click();
+ await page.waitForFunction(()=>Object.values(window.__workspace.katatib_consents||{}).some(c=>c.purpose==='audio'&&c.approved===false));
+ await page.locator('[data-consent=audio]:not([disabled])').first().waitFor();
+ await page.locator('[data-consent=audio][data-approved=true]').click();
+ await page.waitForFunction(()=>Object.values(window.__workspace.katatib_consents||{}).some(c=>c.purpose==='audio'&&c.approved===true&&c.revision===2));
+ await page.locator('[data-consent=audio]:not([disabled])').first().waitFor();
+ await page.locator('#family-student').selectOption('b');await page.locator('[data-consent=audio]:not([disabled])').first().waitFor();
+ assert.equal(await page.locator('#work-root').innerText().then(s=>s.includes('Private family message')),false);
+ await page.locator('[data-action=logout]').click();
+ // Student sign-in and administrator cards use the same site, with bounded retries and no persistent PIN.
+ await page.evaluate(()=>{window.__pending=false;window.__role='admin';});
+ await page.locator('[data-login-tab=student]').click();
+ await page.locator('#student-login-form [name=code]').fill('aaaaaaaaaaaaaaaaaaaa');
+ await page.locator('#student-login-form [name=pin]').fill('00000000');
+ await page.locator('#student-login-form button[type=submit]').click();await page.getByRole('alert').waitFor();
+ assert.equal(await page.locator('.student-card').count(),0);
+ await page.locator('#student-login-form [name=code]').fill('aaaaaaaaaaaaaaaaaaaa');
+ await page.locator('#student-login-form [name=pin]').fill('12345678');
+ await page.locator('#student-login-form button[type=submit]').click();await page.locator('[data-screen=students]').waitFor();
+ assert.equal(await page.locator('[data-screen=credentials]').count(),0);
+ await page.locator('[data-action=logout]').click();
+ await page.locator('[data-login-tab=staff]').click();await page.evaluate(()=>window.__role='admin');
+ await page.locator('[data-action=login]').click();await page.locator('[data-screen=credentials]').click();
+ await page.locator('[data-card-issue]:not([disabled])').waitFor();await page.evaluate(()=>window.__credentialLostAck=true);
+ await page.locator('[data-card-issue]').click();await page.locator('#work-root [role=alert]').waitFor();
+ await page.locator('[data-card-issue]').click();await page.locator('[data-card-print]').waitFor();
+ const credentialCalls=await page.evaluate(()=>window.__credentialCalls);assert.equal(credentialCalls.length,2);assert.deepEqual(credentialCalls[0],credentialCalls[1]);
+ assert.equal(await page.locator('#katatib-print img').count(),0,'student name is escaped on login card');
+ assert.equal(await page.locator('#katatib-print strong').count(),2);
+ await page.screenshot({path:'artifacts/katatib/student-login-card.png',fullPage:true});
+ await page.locator('[data-card-clear]').click();await page.locator('[data-action=logout]').click();
  assert.deepEqual(errors,[]);
  console.log('PASS: mocked-provider reader login, denied access, logout and stale-request clearing, no persistent student storage, escaped copied data, history, Arabic/French and responsive unified homepage/design with actual account/roster,  cloud attendance save/reload, date/session isolation, unsaved errors and conflicts; learning types, one current row per edit with collapsed prior versions, lost-ack retries and profile consistency; explicit confirmation, practice exclusion and edited progress. Real Google OAuth requires owner setup and a live smoke test.');
 })().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{await browser?.close();server.close();});

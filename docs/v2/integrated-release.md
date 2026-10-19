@@ -1,4 +1,6 @@
-# Katatib integrated release — 18 October 2026
+# Katatib integrated release — updated 19 October 2026
+
+The complete PDF scope is now tracked in [the acceptance matrix](pdf-acceptance-matrix.md). Printed Mushaf pages must preserve the chosen Warsh edition’s layout; a reflowed verse list is not an equivalent deliverable.
 
 This is the connected teacher/management release in PR #11, on `katatib-v2/teacher-preview`. It is not a claim that every feature in the original 21-screen V2 design is finished. The owner has authorized routine implementation without per-step approval; production replacement, billing changes and unresolved data ownership remain critical gates.
 
@@ -20,7 +22,7 @@ See [the V1/V2 migration-readiness review](migration-readiness.md). A new scoped
 | Local teacher recording | Teacher-only browser microphone recording, playback and device download. Audio is in memory only, never uploaded to Firebase. Stopping/leaving releases microphone tracks; leaving undownloaded audio requires a discard confirmation. 45-minute/32-MiB automatic-stop limits, with actual format/bitrate chosen by the browser. Physical-phone acceptance remains pending. |
 | Planned work | Assigned student, memorization/revision portion, due date, notes and planned/done/cancelled status. Overdue work is identified. Finishing work does not fabricate an evaluation or confirm mastery. |
 | Reports | Month-by-student V2 session status counts, old baseline versus confirmed V2 coverage, Excel-compatible XML export with explicit string cells, and print/Save as PDF. Select one authorized student to print a student card with identity, group, archive status and that month’s counts. Missing sessions are never counted as absences. This is not a full historical V1/V2 combined attendance calculation. |
-| Roles | Admin, assigned manager, assigned teacher, parent and student. An admin assigns verified Google addresses and explicit child/student IDs. Parents/students are read-only. PIN login is not implemented. |
+| Roles | Admin, assigned manager, assigned teacher, parent and student. An admin assigns verified Google addresses and explicit child/student IDs. Parents/students cannot modify educational records. They may acknowledge notices; linked parents may record their own audio/ranking choices. Administrator-issued code/eight-digit PIN student cards are now implemented; see [student login](student-login.md). Live provider configuration and an actual-card acceptance test remain pending. |
 | Permissions | Scope checks enforced by Firestore, not only navigation. Own-admin-grant editing is blocked to prevent accidental self-lockout. Original copies remain unwritable. |
 | Audit | Management, task and permission changes require an immutable audit snapshot in the same transaction. The administrator can inspect it. This does not claim to audit every authentication event or client read. |
 | Roster size | Paginated reads replace the earlier silent 100-student cutoff. Bounded 5,000-record reads fail explicitly rather than display a silently truncated complete report. Learning chain cap is 1,000. |
@@ -38,14 +40,14 @@ See [the V1/V2 migration-readiness review](migration-readiness.md). A new scoped
 
 | Requirement | Remaining work / critical dependency |
 | --- | --- |
-| Code/PIN authentication and reset | Trusted authentication/recovery design, rate limiting and deployable privileged service. No PINs or signing keys belong in browser code. Family Google access already works as a restricted interim method. |
+| Code/PIN authentication and reset | Implemented using a separate ephemeral Firebase Auth instance, random synthetic student accounts, UID-bound grants and atomic card replacement/revocation. No privileged signing credentials are placed in the browser. Owner must enable the test password provider and verify an actual card; see [details](student-login.md). |
 | Authentic Warsh Mushaf and verse history | Verified licensed text/edition and exact verse/portion mapping. The historical lab's Hafs experiment is not presented as Warsh. |
 | Teacher classroom recording | Actual-phone codec/clipping tests, access-controlled storage and retention. Cloud Storage for Firebase requires Blaze, conflicting with the recorded no-card requirement. No audio is uploaded by this release; the local teacher recorder is the free alternative, without shared playback or automatic mistake clipping. |
 | Durable offline mode | Encrypted/identity-bound queue, explicit device retention policy, reload recovery, server reconciliation and device tests. Current in-tab drafts and save retry are not this feature. |
 | Kuttab settings / ownership migration | Weekly schedules and dated closures are implemented as audited overlays. Sessions remain the explicit three named choices. Automatic ownership migration and arbitrary original session labels are not inferred. |
 | Public/shared ranking | Staff-scoped ranking is implemented from unique confirmed V2 coverage. No public student directory is published; a public leaderboard would require a separate privacy decision. |
-| Notices and notifications | Recipient-scoped records, delivery expectations and consent; no notifications are sent automatically. |
-| Optional additional capabilities | English, reviewed practice challenges, old-record corrections and historical report counts/mean scores are implemented. Specialized certificates and additional kuttab comparison dashboards are outside this release. Original V1 remains available. |
+| Notices and notifications | Student-scoped in-app notices, current-revision read acknowledgements and parent-owned audio/ranking choices are implemented with immutable audit snapshots. No email/phone delivery occurs. Automatic event generation, recording/ranking consent enforcement in those pending features, and live-family acceptance remain. |
+| Additional PDF capabilities | English, reviewed practice challenges, old-record corrections and historical report counts/mean scores are implemented. Specialized certificates and kuttab comparison dashboards remain in the full PDF scope and are not finished. Original V1 remains available. |
 | Production cutover | Fresh backup including new V1 data since the old snapshot, reconciliation of source records/relationships and auth, migration rehearsal, rollback evidence and explicit production authorization. |
 
 ## Verified infrastructure constraints
@@ -93,3 +95,7 @@ Admin/scoped manager teacher attendance is available with explicit statuses, dat
 The test app now has weekly and dated schedule overlays/closures, protected old-record corrections, admin review of copied/new questions, ten-question practice rounds with server-checked answers, staff-scoped confirmed-coverage rankings, English and planned evaluation tasks. Originals remain unchanged. A private recovery inventory and release-acceptance/rollback procedure are provided. These do not establish live-account recovery, actual-phone acceptance, V1-specific grading parity or production cutover readiness.
 
 Staff can inspect scoped immutable audit versions when editing old learning records or old planned-work states. These reads use the actual linked student scope, never an unfiltered audit collection. Parents/students retain read access to their linked records and may create only their own linked practice answers, not profile/attendance/learning/correction writes.
+
+### Family notices and choices
+
+Authorized staff can publish/edit/withdraw a notice for one student. Linked family can read and acknowledge the exact revision; editing it makes the newer revision unread. Read receipts bind the current account. A linked parent can agree, refuse or withdraw their own test-project audio/ranking choice, with prior decisions retained in the immutable audit. Neither teachers nor administrators can manufacture a parent decision. This page does not activate shared recordings or cross-kuttab rankings, and does not claim legal review. These consumers remain part of the pending full PDF scope.

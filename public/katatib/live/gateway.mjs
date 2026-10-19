@@ -135,12 +135,16 @@ export async function connect() {
       return mergeHistory([applyLegacyTaskStates(applyLegacyCorrections(batches.flat(),corrections),states)],studentId);
     },
     async workspaceList(name,studentId) {
-      if(!['katatib_tasks','katatib_access','katatib_audit','katatib_attendance','katatib_legacy_corrections','katatib_challenge_attempts','katatib_legacy_task_states'].includes(name))throw new Error('invalid-collection');
+      if(!['katatib_tasks','katatib_access','katatib_audit','katatib_attendance','katatib_legacy_corrections','katatib_challenge_attempts','katatib_legacy_task_states','katatib_notices','katatib_consents'].includes(name))throw new Error('invalid-collection');
       return readPages(async after=>{
         const filters=studentId?[where('studentId','==',studentId)]:[];
         const snapshot=await getDocsFromServer(query(collection(db,name),...filters,orderBy(documentId()),...(after?[startAfter(after)]:[]),limit(100)));
         return snapshot.docs.map(d=>({...d.data(),id:d.id}));
       });
+    },
+    async noticeAcks(studentId) {
+      if(!auth.currentUser)throw new Error('no-access');
+      return readPages(async after=>{const snapshot=await getDocsFromServer(query(collection(db,'katatib_notice_acks'),where('studentId','==',studentId),where('readerUid','==',auth.currentUser.uid),orderBy(documentId()),...(after?[startAfter(after)]:[]),limit(100)));return snapshot.docs.map(d=>({...d.data(),id:d.id}));});
     },
     async workspaceSave(name,id,input,revision,eventId) {
       if(!auth.currentUser)throw new Error('no-access');

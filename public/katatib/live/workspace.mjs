@@ -1,3 +1,4 @@
+import { createFamily, familyLabels } from './family-ui.mjs';
 import { createStudentCredentials, studentLoginLabels } from './student-login-ui.mjs';
 import { english } from './english.mjs';
 import { createAdvanced, advancedLabels } from './advanced-ui.mjs';
@@ -13,7 +14,7 @@ const labels={
 };
 for(const language of ['ar','fr'])Object.assign(labels[language],teacherLabels[language],Object.fromEntries(['schedules','corrections','challenge','questions','ranking'].map(k=>[k,advancedLabels[language][k]])));
 labels.en={...english};
-for(const lang of ['ar','fr','en'])Object.assign(labels[lang],studentLoginLabels[lang]);
+for(const lang of ['ar','fr','en'])Object.assign(labels[lang],{credentials:studentLoginLabels[lang].credentials,notices:familyLabels[lang].notices,consent:familyLabels[lang].consent});
 export const workspaceLabels=labels;
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const array=x=>String(x||'').split('\n').map(s=>s.trim()).filter(Boolean);
@@ -22,6 +23,7 @@ export function createWorkspace(){
  const teacherAttendance=createTeacherAttendance();
  const advanced=createAdvanced();
  const credentials=createStudentCredentials();
+ const family=createFamily();
  let ctx,host,page='',generation=0,loaded=false,loading=false,busy=false,error='',notice='',rows=[],report=[],draft=null,pending=null,preview=[],reportStudent='',historyStudentId='',historyMonth='',historyKind='',historyPage=0,comparisonReport=null,comparisonError=false;
  const t=k=>labels[ctx.language][k]||legacyLabels[ctx.language][k]||readinessLabels[ctx.language][k]||k;
  const staff=()=>STAFF_ROLES.includes(ctx.role);
@@ -29,7 +31,7 @@ export function createWorkspace(){
  const student=id=>ctx.students.find(s=>s.id===id);
  const reportRows=()=>report.filter(r=>!reportStudent||r.id===reportStudent);
  const profileData=s=>({name:s.name,kuttabName:s.kuttab,teacherId:s.teacherId||'',group:s.group||'',age:s.age,status:s.status||'active',source:s.source||'copy'});
- const reset=()=>{credentials.reset();advanced.reset();teacherAttendance.reset();generation++;ctx=null;host=null;page='';loaded=false;loading=false;busy=false;error='';notice='';rows=[];report=[];draft=null;pending=null;preview=[];reportStudent='';historyStudentId='';historyMonth='';historyKind='';historyPage=0;comparisonReport=null;comparisonError=false;};
+ const reset=()=>{family.reset();credentials.reset();advanced.reset();teacherAttendance.reset();generation++;ctx=null;host=null;page='';loaded=false;loading=false;busy=false;error='';notice='';rows=[];report=[];draft=null;pending=null;preview=[];reportStudent='';historyStudentId='';historyMonth='';historyKind='';historyPage=0;comparisonReport=null;comparisonError=false;};
  function formField(key,{type='text',min,max,value,readonly=false,options}={}){
   const v=value??draft?.data?.[key]??'';return `<label>${t(key)}${options?`<select name="${key}" ${readonly?'disabled':''}>${options.map(o=>{const [val,label]=Array.isArray(o)?o:[o,t(o)];return `<option value="${esc(val)}" ${v===val?'selected':''}>${esc(label)}</option>`;}).join('')}</select>`:type==='textarea'?`<textarea name="${key}" maxlength="${['studentIds','teacherIds','kuttabNames'].includes(key)?1500:500}">${esc(v)}</textarea>`:`<input name="${key}" type="${type}" value="${esc(v)}" ${min!=null?`min="${min}"`:''} ${max!=null?`max="${max}"`:''} maxlength="${key==='name'||key==='kuttabName'?120:key==='group'?80:254}" ${readonly?'readonly':''} ${['age','teacherId','group'].includes(key)?'':'required'}>`}</label>`;
  }
@@ -112,10 +114,11 @@ if(e.target.id==='report-student'){reportStudent=student(e.target.value)?e.targe
   else if(['kuttabNames','teacherIds','studentIds'].includes(k))draft.data[k]=array(el.value);
   else if(k==='active')draft.data.active=el.value==='true';else if(['age','hizb','fromEighth','toEighth'].includes(k))draft.data[k]=el.value===''?null:Number(el.value);else draft.data[k]=el.value;
  }
- return {reset,dirty:()=>!!draft||!!pending||teacherAttendance.dirty()||advanced.dirty()||credentials.dirty(),busy:()=>busy||teacherAttendance.busy()||advanced.busy()||credentials.busy(),canLeave:()=>!busy&&teacherAttendance.canLeave()&&advanced.canLeave()&&credentials.canLeave()&&(!draft&&!pending||confirm(t('discard'))),mount(target,context){
+ return {reset,dirty:()=>!!draft||!!pending||teacherAttendance.dirty()||advanced.dirty()||credentials.dirty()||family.dirty(),busy:()=>busy||teacherAttendance.busy()||advanced.busy()||credentials.busy()||family.busy(),canLeave:()=>!busy&&teacherAttendance.canLeave()&&advanced.canLeave()&&credentials.canLeave()&&family.canLeave()&&(!draft&&!pending||confirm(t('discard'))),mount(target,context){
   const changedPage=page!==context.page;ctx={month:ctx?.month||businessDate().slice(0,7),...context};host=target;
-  if(changedPage){credentials.reset();advanced.reset();teacherAttendance.reset();generation++;page=context.page;historyStudentId=ctx.students[0]?.id||'';historyPage=0;loaded=false;loading=false;rows=[];draft=null;pending=null;error='';notice='';preview=[];}
+  if(changedPage){family.reset();credentials.reset();advanced.reset();teacherAttendance.reset();generation++;page=context.page;historyStudentId=ctx.students[0]?.id||'';historyPage=0;loaded=false;loading=false;rows=[];draft=null;pending=null;error='';notice='';preview=[];}
   if(['schedules','corrections','questions','challenge','ranking'].includes(page)){advanced.mount(host,ctx);return;}
+  if(['notices','consent'].includes(page)){family.mount(host,ctx);return;}
   if(page==='credentials'){credentials.mount(host,ctx);return;}
   if(page==='teacherAttendance'){teacherAttendance.mount(host,ctx);return;}
   if(page==='manage'&&!manage()||['access','audit','readiness'].includes(page)&&ctx.role!=='admin'){host.textContent=t('failed');return;}

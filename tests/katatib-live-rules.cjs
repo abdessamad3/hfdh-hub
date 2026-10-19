@@ -208,6 +208,33 @@ const {doc,setDoc,getDoc,collection,getDocs,getDocsFromServer,query,where,limit,
     await assertFails(save(portal,'new-'+address,'a',context,{status:'present',note:''},3,'portal-attendance-'+role));
     await assertFails(getDocs(query(collection(portal,'katatib_access'),limit(100))));
   }
+  // Family notices stay in actual student scope; read receipts bind the current revision and reader.
+  const parentPortal=as('parent@example.com'),studentPortal=as('student@example.com');
+  const noticeInput={studentId:'a',title:'Class tomorrow',body:'Bring the assigned book.',kind:'info',active:true};
+  await assertSucceeds(workspaceSave(teacher,'new-teacher@example.com','katatib_notices','notice-one',noticeInput,0,'notice-create'));
+  await assertFails(workspaceSave(teacher,'new-teacher@example.com','katatib_notices','notice-other',{...noticeInput,studentId:'b'},0,'notice-outside-scope'));
+  await assertFails(workspaceSave(parentPortal,'new-parent@example.com','katatib_notices','notice-family-write',noticeInput,0,'notice-no-family-write'));
+  await assertSucceeds(getDocs(query(collection(parentPortal,'katatib_notices'),where('studentId','==','a'),limit(100))));
+  await assertFails(getDocs(query(collection(parentPortal,'katatib_notices'),limit(100))));
+  const ack={studentId:'a',noticeId:'notice-one',noticeRevision:1,readerUid:'new-parent@example.com'};
+  const ackId='notice-one~1~new-parent@example.com';
+  await assertSucceeds(workspaceSave(parentPortal,'new-parent@example.com','katatib_notice_acks',ackId,ack,0,'notice-read-parent'));
+  await assertSucceeds(getDocs(query(collection(parentPortal,'katatib_notice_acks'),where('studentId','==','a'),where('readerUid','==','new-parent@example.com'),limit(100))));
+  await assertFails(getDoc(doc(studentPortal,'katatib_notice_acks',ackId)));
+  await assertFails(workspaceSave(studentPortal,'new-student@example.com','katatib_notice_acks','notice-one~1~new-parent@example.com',ack,1,'notice-forged-reader'));
+  await assertSucceeds(workspaceSave(teacher,'new-teacher@example.com','katatib_notices','notice-one',{...noticeInput,title:'Updated class'},1,'notice-edit'));
+  await assertFails(workspaceSave(studentPortal,'new-student@example.com','katatib_notice_acks','notice-one~1~new-student@example.com',{...ack,readerUid:'new-student@example.com'},0,'notice-stale-ack'));
+  await assertFails(deleteDoc(doc(admin,'katatib_notices','notice-one')));
+  const consent={studentId:'a',guardianUid:'new-parent@example.com',purpose:'audio',approved:false,policyVersion:'katatib-test-2026-10-19'};
+  const consentId='new-parent@example.com~a~audio';
+  await assertSucceeds(workspaceSave(parentPortal,'new-parent@example.com','katatib_consents',consentId,consent,0,'consent-refuse'));
+  await assertSucceeds(workspaceSave(parentPortal,'new-parent@example.com','katatib_consents',consentId,{...consent,approved:true},1,'consent-agree'));
+  await assertSucceeds(workspaceSave(parentPortal,'new-parent@example.com','katatib_consents',consentId,consent,2,'consent-withdraw'));
+  await assertFails(workspaceSave(studentPortal,'new-student@example.com','katatib_consents','new-student@example.com~a~audio',{...consent,guardianUid:'new-student@example.com'},0,'consent-student-forged'));
+  await assertFails(workspaceSave(admin,'new-admin@example.com','katatib_consents',consentId,{...consent,approved:true},3,'consent-admin-forged'));
+  await assertFails(workspaceSave(parentPortal,'new-parent@example.com','katatib_consents','new-parent@example.com~b~audio',{...consent,studentId:'b'},0,'consent-other-child'));
+  await assertSucceeds(getDocs(query(collection(teacher,'katatib_consents'),where('studentId','==','a'),limit(100))));
+  assert.equal((await getDoc(doc(admin,'katatib_audit/consent-agree'))).data().snapshot.approved,true);
   await assertSucceeds(workspaceSave(admin,'new-admin@example.com','katatib_access','parent@example.com',grant('parent',{active:false,studentIds:['a']}),1,'revoke-parent'));
   await assertFails(getDoc(doc(as('parent@example.com'),'students/a')));
   console.log('PASS: profile overlays preserve copied records, reversible archive, manager scope, tasks, immutable atomic audit, portal child isolation, no portal writes, self-lockout prevention and revocation.');

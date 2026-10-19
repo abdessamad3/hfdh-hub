@@ -1,3 +1,4 @@
+import { cleanNotice, cleanAcknowledgement, cleanConsent } from './family-model.mjs';
 import { cleanSchedule, cleanLegacyCorrection, cleanQuestion, cleanAttempt, cleanLegacyTaskState } from './advanced-model.mjs';
 import { attendanceId } from './attendance.mjs';
 export const STAFF_ROLES = ['admin','manager','teacher'];
@@ -24,11 +25,12 @@ export function cleanAccess(x){
  if(x.role!=='admin'&&!(PORTAL_ROLES.includes(x.role)?arrays.studentIds.length:arrays.kuttabNames.length+arrays.teacherIds.length))fail();
  return {active:x.active,role:x.role,...arrays};
 }
-export const CLEANERS={katatib_legacy_task_states:cleanLegacyTaskState,katatib_schedules:cleanSchedule,katatib_legacy_corrections:cleanLegacyCorrection,katatib_questions:cleanQuestion,katatib_challenge_attempts:cleanAttempt,katatib_students:cleanProfile,katatib_tasks:cleanTask,katatib_access:cleanAccess};
+export const CLEANERS={katatib_notices:cleanNotice,katatib_notice_acks:cleanAcknowledgement,katatib_consents:cleanConsent,katatib_legacy_task_states:cleanLegacyTaskState,katatib_schedules:cleanSchedule,katatib_legacy_corrections:cleanLegacyCorrection,katatib_questions:cleanQuestion,katatib_challenge_attempts:cleanAttempt,katatib_students:cleanProfile,katatib_tasks:cleanTask,katatib_access:cleanAccess};
 // A write and its immutable audit snapshot succeed together. Stable intent IDs make lost-ack retries safe.
 export async function commitWorkspace(db,sdk,uid,collection,id,input,expectedRevision,eventId){
  if(!uid||!CLEANERS[collection]||!text(id,254,true)||id.includes('/')||!validId(eventId)||!Number.isInteger(expectedRevision)||expectedRevision<0)fail();
  const clean=CLEANERS[collection](input),ref=sdk.doc(db,collection,id);
+ if(collection==='katatib_notice_acks'&&id!==clean.noticeId+'~'+clean.noticeRevision+'~'+clean.readerUid||collection==='katatib_consents'&&id!==clean.guardianUid+'~'+clean.studentId+'~'+clean.purpose)fail();
  if(collection==='katatib_schedules'&&id!==clean.kuttabId+'~'+clean.key||['katatib_legacy_corrections','katatib_legacy_task_states'].includes(collection)&&id!==clean.sourceCollection+'~'+clean.sourceId)fail();
  return sdk.runTransaction(db,async tx=>{
   const snap=await tx.get(ref),prior=snap.exists()?snap.data():null;
