@@ -87,7 +87,7 @@ const {doc,setDoc,getDoc,collection,getDocs,getDocsFromServer,query,where,limit,
   await assertFails(getDoc(doc(child2,'students/b')));
   const {commitWorkspace:saveGrant}=await import('../public/katatib/live/workspace-model.mjs');
   await assertFails(saveGrant(admin,credentialSdk,'new-admin@example.com','katatib_access',address2,{active:true,role:'admin',kuttabNames:[],teacherIds:[],studentIds:[]},1,'credential-no-promote'));
-  await assertFails(commitStudentCredential(admin,credentialSdk,'new-admin@example.com','a',{code:'c'.repeat(20)},'third-child',1,'credential-stale'));
+  await assert.rejects(commitStudentCredential(admin,credentialSdk,'new-admin@example.com','a',{code:'c'.repeat(20)},'third-child',1,'credential-stale'),{code:'conflict'});
   // Even privileged fixture corruption cannot give a password token staff rights.
   await env.withSecurityRulesDisabled(async ctx=>{await setDoc(doc(ctx.firestore(),'katatib_access',studentAddress('d'.repeat(20))),{active:true,role:'admin'});});
   await assertFails(getDoc(doc(password(studentAddress('d'.repeat(20)),'forged-staff'),'students/b')));
