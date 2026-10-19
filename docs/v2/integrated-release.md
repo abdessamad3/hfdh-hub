@@ -103,3 +103,7 @@ Authorized staff can publish/edit/withdraw a notice for one student. Linked fami
 ### Printed Warsh Mushaf
 
 The same website now includes the 604-page printed Madinah Warsh reader, page/surah/hizb navigation, zoom and manual verse selection. Staff save immutable marks/notes per authorized student; linked family can read history. Pages are fetched on demand from a pinned public source and checked before display. See [Mushaf reader](mushaf-reader.md) for source notices, security checks, connectivity and audio limitations. This does not claim the entire PDF product or production migration is complete.
+
+### Phone audio feasibility test
+
+Staff now have a one-minute device-only clipping test with Warsh verse cues, playable five-seconds-before/ten-after WAV clips, boundary labels, review/remove/undo, optional measured compression and a private test report. A real browser encode/decode test passes. See [phone test](audio-phone-test.md). This is not shared cloud audio or durable offline recording; actual-phone listening and the remaining quota/consent/storage work are still required.
