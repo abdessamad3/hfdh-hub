@@ -77,3 +77,9 @@ test('unsupported offline locking does not prevent ordinary online sign-out',asy
  const f=fixture(),api=createOfflineGateway(f.raw,{...f.options,locks:null});await f.observe(api);
  await assert.rejects(api.offline.prepare({date:context.date,students:['a']}),/offline-locks-unavailable/);await api.logout();assert.equal(api.offlinePending(),0);
 });
+
+test('preparation requires fresh server reads instead of relabelling an old cached copy as downloaded',async()=>{
+ const f=fixture();await f.init();await f.api.offline.completePreparation();assert.ok(f.api.offline.status().preparedAt);
+ f.raw.studentHistory=async()=>{throw Object.assign(Error('network unavailable'),{code:'unavailable'});};
+ await assert.rejects(f.api.offline.prepare({date:context.date,students:['a']}),/network unavailable/);assert.equal(f.api.offline.status().preparedAt,null);
+});
