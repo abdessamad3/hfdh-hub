@@ -6,7 +6,7 @@ export const READINESS_FEATURES=Object.freeze([
  {id:'history',v1:'limited',v2:'available'},
  {id:'tasks',v1:'available',v2:'partial'},
  {id:'reports',v1:'available',v2:'partial'},
- {id:'teacherAttendance',v1:'available',v2:'missing'},
+ {id:'teacherAttendance',v1:'available',v2:'available'},
  {id:'schedules',v1:'available',v2:'missing'},
  {id:'challenge',v1:'available',v2:'missing'},
  {id:'ranking',v1:'available',v2:'missing'},

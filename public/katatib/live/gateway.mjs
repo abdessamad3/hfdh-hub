@@ -1,3 +1,4 @@
+import { teacherView, commitTeacherAttendance, TEACHER_CURRENT, TEACHER_HISTORY } from './teacher-attendance.mjs';
 import { LEGACY_COLLECTIONS, HISTORY_COLLECTIONS, historyProjection, mergeHistory } from './legacy.mjs';
 import { readPages, commitWorkspace, STAFF_ROLES } from './workspace-model.mjs';
 import { createSessionAuth } from './auth-session.mjs';
@@ -44,6 +45,36 @@ export async function connect() {
         return out;
       }));
       return { students: mergeStudents(batches), role: access.data().role, capped: false };
+    },
+    async teachers() {
+      if(!auth.currentUser?.email)throw new Error('no-access');
+      const snapshot=await getDocFromServer(doc(db,'katatib_access',auth.currentUser.email.toLowerCase()));
+      if(!snapshot.exists()||!['admin','manager'].includes(snapshot.data().role))throw new Error('no-access');
+      const batches=await Promise.all(accessScopes(snapshot.data()).map(async scope=>{
+        const field=scope.field==='teacherId'?documentId():scope.field;
+        return readPages(async after=>{
+          const rows=await getDocsFromServer(query(collection(db,'users'),where('role','==','teacher'),...(field?[where(field,'==',scope.value)]:[]),orderBy(documentId()),...(after?[startAfter(after)]:[]),limit(100)));
+          return rows.docs.map(d=>teacherView(d.id,d.data()));
+        });
+      }));
+      return [...new Map(batches.flat().map(t=>[t.id,t])).values()].sort((a,b)=>a.name.localeCompare(b.name));
+    },
+    async teacherAttendance(id,context) {
+      const record=await getDocFromServer(doc(db,TEACHER_CURRENT,attendanceId(id,context.date,context.session)));
+      return record.exists()?record.data():emptyAttendance();
+    },
+    async teacherHistory(id) {
+      const batches=await Promise.all(['teacher_attendance',TEACHER_HISTORY].map(async name=>{
+        const rows=await readPages(async after=>{
+          const snapshot=await getDocsFromServer(query(collection(db,name),where('teacherId','==',id),orderBy(documentId()),...(after?[startAfter(after)]:[]),limit(100)));
+          return snapshot.docs.map(d=>({...d.data(),id:d.id,source:name==='teacher_attendance'?'V1':'V2'}));
+        });return rows;
+      }));
+      return batches.flat().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||(b.revision||0)-(a.revision||0)||a.id.localeCompare(b.id));
+    },
+    async saveTeacherAttendance(id,context,payload,revision,eventId) {
+      if(!auth.currentUser)throw new Error('no-access');
+      return commitTeacherAttendance(db,{doc,runTransaction,serverTimestamp,getDocFromServer},auth.currentUser.uid,id,context,payload,revision,eventId);
     },
     async studentHistory(studentId) {
       const batches=await Promise.all(HISTORY_COLLECTIONS.map(async name=>{

@@ -14,13 +14,17 @@ const server=http.createServer((req,res)=>{
 const mock=`
 import { historyProjection, mergeHistory } from './legacy.mjs';
 let observer;
-window.__legacy={};window.__attendanceCalls=[];window.__role='teacher';window.__profiles={};window.__workspace={katatib_tasks:{},katatib_access:{},katatib_audit:{}};window.__workspaceFail=false;window.__workspaceLostAck=false;window.__pending=false;window.__deny=false;window.__history=[];window.__learning={};window.__learningFail=false;window.__learningLostAck=false;window.__records={};window.__events=[];window.__saveFail=false;window.__conflict=false;
+window.__teacherRecords={};window.__teacherEvents=[];window.__teacherFail=false;window.__teacherLostAck=false;window.__legacy={};window.__attendanceCalls=[];window.__role='teacher';window.__profiles={};window.__workspace={katatib_tasks:{},katatib_access:{},katatib_audit:{}};window.__workspaceFail=false;window.__workspaceLostAck=false;window.__pending=false;window.__deny=false;window.__history=[];window.__learning={};window.__learningFail=false;window.__learningLostAck=false;window.__records={};window.__events=[];window.__saveFail=false;window.__conflict=false;
 export async function connect(){
  return {
  observe(callback){observer=callback;callback(null);},
  async login(){observer({email:'teacher@example.com',displayName:'Teacher Test',emailVerified:true});},
  async logout(){observer(null);},
  async students(){if(window.__pending)await new Promise(r=>window.__release=r);if(window.__deny)throw new Error('no-access');const original=[{id:'a',name:'<img src=x onerror=alert(1)>',kuttab:'One',age:12,hizbs:3,attendance:80},{id:'b',name:'Maryam',kuttab:'Two',age:null,hizbs:null,attendance:null}];const students=(window.__roster||original).map(s=>({...s,teacherId:'legacy',status:'active',source:'copy',...window.__profiles[s.id]}));for(const [id,p] of Object.entries(window.__profiles))if(!students.some(s=>s.id===id))students.push({id,...p,hizbs:null,attendance:null});return {students,role:window.__role,capped:false};},
+ async teachers(){if(!['admin','manager'].includes(window.__role))throw new Error('no-access');return [{id:'teacher-one',name:'Teacher One <script>',kuttab:'One'},{id:'teacher-two',name:'Teacher Two',kuttab:'Two'}].filter(t=>window.__role==='admin'||t.kuttab==='One');},
+ async teacherAttendance(id,c){if(window.__teacherFail)throw new Error('unavailable');return structuredClone(window.__teacherRecords[id+'~'+c.date+'~'+c.session]||{status:'unmarked',note:'',revision:0});},
+ async teacherHistory(id){return structuredClone([{id:'copied-old',teacherId:'teacher-one',source:'V1',date:'2020-01-01',sessionIndex:4,status:'excused',excuse:'Original preserved'},...window.__teacherEvents].filter(e=>e.teacherId===id));},
+ async saveTeacherAttendance(id,c,p,rev,event){if(window.__teacherFail)throw new Error('unavailable');const key=id+'~'+c.date+'~'+c.session,prior=window.__teacherRecords[key];if(prior?.eventId===event)return structuredClone(prior);if((prior?.revision||0)!==rev)throw Object.assign(new Error('conflict'),{code:'conflict'});const result={...p,...c,teacherId:id,revision:rev+1,eventId:event,source:'V2',id:event};window.__teacherRecords[key]=structuredClone(result);window.__teacherEvents.push(structuredClone(result));if(window.__teacherLostAck){window.__teacherLostAck=false;throw new Error('unavailable');}return result;},
  async studentHistory(id){if(window.__historyFail)throw new Error('history-unavailable');return mergeHistory([(window.__legacy[id]||[]).map(r=>historyProjection(r.collection,r.id,r.data)),Object.entries(window.__records).filter(([key])=>key.startsWith(id+'~')).map(([key,x])=>{const [studentId,date,session]=key.split('~');return historyProjection('katatib_attendance',key,{...x,studentId,date,session});})],id);},
  async workspaceList(name,id){if(window.__workspaceFail)throw new Error('unavailable');if(name==='katatib_attendance')return Object.entries(window.__records).filter(([key])=>key.startsWith(id+'~')).map(([key,x])=>{const [studentId,date,session]=key.split('~');return {...x,id:key,studentId,date,session};});return Object.values(window.__workspace[name]||{}).filter(r=>!id||r.studentId===id);},
  async workspaceSave(name,id,input,revision,event){
@@ -297,6 +301,40 @@ let browser;
  const filePromise=page.waitForEvent('download');await page.locator('[data-work-action=excel]').click();
  const downloaded=await filePromise;assert.ok(downloaded.suggestedFilename().endsWith('.xml'));
  await page.emulateMedia({media:'print'});assert.equal(await page.locator('.unified-sidebar').isVisible(),false);await page.emulateMedia({media:'screen'});
+ // Teacher attendance uses explicit status, one current row and immutable correction history.
+ await page.locator('[data-screen=teacherAttendance]').click();await page.locator('[data-teacher-form]').waitFor();
+ assert.equal(await page.locator('#teacher-status').inputValue(),'unmarked');
+ assert.ok((await page.locator('#work-root').innerText()).includes('Original preserved'));
+ assert.equal(await page.locator('#work-root script').count(),0);
+ await page.locator('#teacher-date').fill('2026-10-18');await page.locator('[data-teacher-form]').waitFor();
+ await page.locator('#teacher-status').selectOption('present');await page.locator('#teacher-note').fill('أول سجل');
+ await page.locator('[data-teacher-form] button[type=submit]').click();
+ await page.waitForFunction(()=>window.__teacherEvents.length===1);
+ await page.locator('[data-teacher-reload]').click();await page.locator('[data-teacher-form]').waitFor();
+ assert.equal(await page.locator('#teacher-status').inputValue(),'present');
+ await page.locator('#teacher-status').selectOption('excused');await page.locator('#teacher-note').fill('تصحيح');
+ await page.evaluate(()=>window.__teacherLostAck=true);
+ await page.locator('[data-teacher-form] button[type=submit]').click();await page.getByRole('alert').waitFor();
+ assert.equal(await page.locator('#teacher-note').inputValue(),'تصحيح');
+ await page.locator('[data-teacher-form] button[type=submit]').click();
+ await page.waitForFunction(()=>!document.querySelector('.teacher-attendance-module [role=alert]'));
+ assert.equal(await page.evaluate(()=>window.__teacherEvents.length),2,'lost-ack retry adds no duplicate change');
+ assert.equal(await page.evaluate(()=>window.__teacherEvents[0].status),'present');
+ assert.equal(await page.evaluate(()=>window.__teacherRecords['teacher-one~2026-10-18~morning'].status),'excused');
+ await page.locator('#teacher-session').selectOption('afternoon');await page.locator('[data-teacher-form]').waitFor();
+ assert.equal(await page.locator('#teacher-status').inputValue(),'unmarked');
+ await page.locator('#teacher-session').selectOption('morning');await page.locator('[data-teacher-form]').waitFor();
+ assert.equal(await page.locator('#teacher-status').inputValue(),'excused');
+ await page.locator('#teacher-status').selectOption('late');
+ await page.evaluate(()=>{window.__teacherRecords['teacher-one~2026-10-18~morning'].revision=3;});
+ await page.locator('[data-teacher-form] button[type=submit]').click();await page.getByRole('alert').waitFor();
+ assert.equal(await page.locator('#teacher-status').inputValue(),'late','stale conflict preserves the draft');
+ page.once('dialog',d=>d.accept());await page.locator('[data-teacher-reload]').click();await page.locator('[data-teacher-form]').waitFor();
+ assert.equal(await page.locator('#teacher-status').inputValue(),'excused');
+ await page.screenshot({path:'artifacts/katatib/teacher-attendance-phone-ar.png',fullPage:true});
+ await page.locator('#teacher-person').selectOption('teacher-two');await page.locator('[data-teacher-form]').waitFor();
+ assert.equal(await page.locator('#teacher-status').inputValue(),'unmarked');
+ assert.equal((await page.locator('#work-root').innerText()).includes('Original preserved'),false);
  await page.locator('[data-screen=access]').click();
  await page.locator('[data-work-action=new-access]').click();
  await page.locator('[data-work-form] [name=email]').fill('parent@example.com');
@@ -345,7 +383,7 @@ let browser;
  await page.evaluate(()=>window.__role='parent');
  await page.locator('[data-action=login]').click();
  await page.locator('[data-screen=tasks]').waitFor();
- for(const screen of ['attendance','learning','recording','manage','access','audit','readiness'])assert.equal(await page.locator(`[data-screen=${screen}]`).count(),0);
+ for(const screen of ['attendance','learning','recording','teacherAttendance','manage','access','audit','readiness'])assert.equal(await page.locator(`[data-screen=${screen}]`).count(),0);
  await page.locator('[data-screen=tasks]').click();
  await page.locator('.workspace-table').waitFor();
  assert.equal(await page.locator('[data-work-action=new-task]').count(),0);
@@ -354,7 +392,7 @@ let browser;
  await page.evaluate(()=>window.__role='teacher');
  // Full copied history remains visible, with source labels and explicit ambiguity flags.
  await page.evaluate(()=>{window.__legacy.a=Array.from({length:130},(_,i)=>({collection:'evaluations',id:'evaluation-'+i,data:{studentId:'a',date:'2020-01-01',hizbNumber:2,quantity:1,accuracyScore:80,mistakesCount:2,notes:'Old note '+i}}));window.__legacy.a.push(...['old-a','old-b'].map(id=>({collection:'attendance',id,data:{studentId:'a',date:'2020-01-01',sessionIndex:0,status:'present'}})),{collection:'next_revisions',id:'old-task',data:{studentId:'a',dueDate:'2019-01-01',notes:'Keep overdue original task'}});});
- await page.locator('[data-action=login]').click();await page.locator('[data-screen=history]').click();
+ await page.locator('[data-action=login]').click();assert.equal(await page.locator('[data-screen=teacherAttendance]').count(),0);await page.locator('[data-screen=history]').click();
  await page.locator('[data-history-count]').waitFor();const v2HistoryCount=await page.evaluate(()=>Object.keys(window.__records).filter(key=>key.startsWith('a~')).length);assert.ok((await page.locator('[data-history-count]').innerText()).startsWith(String(133+v2HistoryCount)+' '));
  assert.equal(await page.locator('.workspace-table tbody tr').count(),40);
  await page.locator('#history-kind').selectOption('attendance');

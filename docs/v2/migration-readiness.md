@@ -29,7 +29,7 @@ Source baseline: `main` commit `d3106bb6115e025db554803eb862430342e7deed`. Route
 | Editing old V1 learning | Present | Original data protected; no V1 correction-overlay editor yet | Still a parity gap if staff need to correct old entries after cutover |
 | Planned revision/evaluation | Both present | V2 memorization/revision tasks; V1 planned rows now readable | Dedicated planned evaluation and original completion semantics still need replacement |
 | Monthly reports | Includes V1-specific calculations/views | One monthly report with separate V1 activity/attendance and V2 sessions; print/Excel include both | Ambiguous V1 rows excluded from totals and counted for review; V1-specific grade formulas still need parity validation |
-| Teacher attendance | Present (`teacher_attendance`) | Not implemented | Block migration rather than silently remove the workflow |
+| Teacher attendance | Present (`teacher_attendance`) | Admin/scoped manager entry by teacher/date/session; current row plus immutable correction snapshots; original rows readable | No automatic presence; copied teacher profiles establish scope; original session indices are not guessed |
 | Kuttab/teacher management and schedules | Present, including specific-date overrides | Profile groups/access assignments; no equivalent schedule editor | Block migration until retained with reconciled identities/ownership |
 | Student calendar/progress | Present | History month filter, profile and separate old/V2 progress | Full calendar/schedule parity remains partial |
 | Ranking | Present; uses V1-derived values | Not published | Needs verified coverage and a privacy-safe projection |
@@ -64,7 +64,7 @@ V2 now reads a complete authorized roster instead of hiding records after 100. T
 
 ## Data and security evidence
 
-- 68 JavaScript model tests cover current behavior, legacy projections, roster paging and report validation. Sixteen Python tests cover snapshot/reconciliation behavior, typed values, checksum failures, missing parents, source/test boundaries, read-only requests, checkpoint reuse, duplicate-job locking, background completion and atomic report preservation.
+- 72 JavaScript model tests cover current behavior, legacy projections, roster paging and report validation. Sixteen Python tests cover snapshot/reconciliation behavior, typed values, checksum failures, missing parents, source/test boundaries, read-only requests, checkpoint reuse, duplicate-job locking, background completion and atomic report preservation.
 - The real Firestore emulator verifies scoped V1 history reads, reads beyond 500 rows, denial of another student's records, denial of writes to copied history, parent/teacher restrictions, transaction audits, stale updates and revocation.
 - Chromium verifies the connected workflows, 133 historical rows/filtering/child switch, large-roster navigation/search, filter-triggered attendance loading, draft preservation across pages and readiness-report rejection. Existing login, recording and failure/retry checks also run.
 - Matching backup payloads are **not** proof of identity recovery or production readiness. The audit always reports `production_migration_ready: false`.
@@ -108,9 +108,17 @@ Run the `tail -f ...` command printed by the launcher to follow its private log.
 
 ## Remaining production gates, in priority order
 
-1. **Parity:** finish retained V1 workflows identified above; verify existing historical reports and correction behavior. Do not replace the main site merely because new features look better.
+1. **Parity:** teacher attendance is now implemented with admin/scoped manager authorization and correction history. Finish the other retained V1 workflows identified above; verify existing historical reports and correction behavior. Do not replace the main site merely because new features look better.
 2. **Fresh data:** a completed owner-run comparison is recorded above. Classify the changed user fields and attendance ambiguities without guessing or deleting evidence; make a new consistent snapshot before any eventual cutover. Preserve all additional V2 records separately.
 3. **Identity/config/files:** rehearse account/provider recovery and verified mappings, inspect actual Storage/config/index inventory, and retain the existing no-card constraint.
 4. **Classroom trial:** a teacher uses the test site on an actual phone for one complete session. Test slow Internet, a failed save/retry, reload persistence, different accounts and cross-kuttab denial. Record which results were observed; simulated CPU throttling is not this trial.
 5. **Rollback:** freeze/coordinate V1 writes for the final consistent snapshot, pin the V1 Hosting release and rules/index versions, and rehearse retaining/reconciling V2 writes when returning to V1. Reverting Hosting alone is insufficient.
 6. **Critical final approval:** only after these gates pass, review the concrete cutover/rollback result with the owner before replacing production. No migration approval is being requested now because the result is **not ready**.
+
+## Teacher attendance update
+
+Admins and scoped managers can select a copied teacher profile, date and morning/afternoon/evening session, save an explicit status/note, reload and correct it. Unrecorded does not mean present or absent. Dates are validated in the client and actual server rules. Stable keys prevent duplicate current rows; every change is atomic with an immutable snapshot, and retries after an acknowledgement loss do not add another version. Stale edits keep the draft and require reload.
+
+New data uses `katatib_teacher_attendance` and `katatib_teacher_attendance_history` only in the test project. Copied `users` profiles are read-only: admins may read teacher-role profiles; managers may read only teachers in their granted kuttabs or explicitly granted teacher IDs. Teachers, parents and students do not see this management screen or its records. The page projects only teacher names and kuttabs, not email/account fields. Copied `teacher_attendance` rows remain read-only and retain their original session indices. An empty roster means no copied teacher-role profiles fall within the user's current scope; no fictional profiles are created.
+
+The UI holds drafts in memory only, pages history at 40 changes, and follows the existing complete-read limit rather than silently truncating old records. No attendance percentages or scheduled-session totals are inferred; schedule replacement is a separate remaining feature.

@@ -180,9 +180,9 @@ async function saveLearning(event) {
   if(generation===epoch&&learningSaved)loadLearning();
 }
 
-const icons={today:'◈',students:'◉',attendance:'✓',learning:'▤',tasks:'◷',reports:'▥',manage:'⚙',access:'♙',audit:'≡',recording:'◉',history:'▦',readiness:'◇'};
-const extraScreens=['tasks','reports','manage','access','audit','history','readiness'];
-const screens=()=>['today','students',...(['parent','student'].includes(role)?[]:['attendance','learning','recording']),'history','tasks','reports',...(['admin','manager'].includes(role)?['manage']:[]),...(role==='admin'?['access','audit','readiness']:[])];
+const icons={today:'◈',students:'◉',attendance:'✓',learning:'▤',tasks:'◷',reports:'▥',manage:'⚙',access:'♙',audit:'≡',recording:'◉',history:'▦',readiness:'◇',teacherAttendance:'✓'};
+const extraScreens=['teacherAttendance','tasks','reports','manage','access','audit','history','readiness'];
+const screens=()=>['today','students',...(['parent','student'].includes(role)?[]:['attendance','learning','recording']),'history','tasks','reports',...(['admin','manager'].includes(role)?['teacherAttendance','manage']:[]),...(role==='admin'?['access','audit','readiness']:[])];
 const titleKey=s=>({today:'today',students:'studentsTab',attendance:'cloudAttendance',learning:'learningTab',history:'legacyTitle'}[s]||s);
 const screenTitle=()=>t(titleKey(screen));
 const displayName=()=>user?.displayName?.trim()||user?.email||t('workspaceTitle');

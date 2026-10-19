@@ -30,6 +30,62 @@ service cloud.firestore {
       return data.get('studentId', null) is string &&
         studentIdAllowed(data.studentId);
     }
+    function teacherScope(data,id) {
+      return manage() && data.get('role','') == 'teacher' &&
+        (access().role == 'admin' || data.get('kuttabName','') in access().get('kuttabNames',[]) || id in access().get('teacherIds',[]));
+    }
+    function teacherAllowed(id) {
+      return id is string && exists(/databases/$(database)/documents/users/$(id)) &&
+        teacherScope(get(/databases/$(database)/documents/users/$(id)).data,id);
+    }
+    match /users/{id} {
+      allow get: if teacherScope(resource.data,id);
+      allow list: if request.query.limit <= 100 && teacherScope(resource.data,id);
+      allow write: if false;
+    }
+    match /teacher_attendance/{id} {
+      allow get: if teacherAllowed(resource.data.teacherId);
+      allow list: if request.query.limit <= 100 && teacherAllowed(resource.data.teacherId);
+      allow write: if false;
+    }
+    function teacherDate(value) {
+      let parts=value.split('-');
+      let year=int(parts[0]);
+      let month=int(parts[1]);
+      let day=int(parts[2]);
+      let leap=year % 400 == 0 || year % 4 == 0 && year % 100 != 0;
+      return year >= 1 && day <= (month == 2 ? (leap ? 29 : 28) : (month in [4,6,9,11] ? 30 : 31));
+    }
+    function validTeacherAttendance(d,id) {
+      return d.keys().hasAll(['schemaVersion','recordId','teacherId','date','session','status','note','revision','updatedBy','updatedAt','eventId']) &&
+        d.keys().hasOnly(['schemaVersion','recordId','teacherId','date','session','status','note','revision','updatedBy','updatedAt','eventId']) &&
+        d.schemaVersion == 1 && d.recordId == id && d.teacherId is string && d.teacherId.size() > 0 && d.teacherId.size() <= 500 && !d.teacherId.matches('.*[~/].*') &&
+        d.date is string && d.date.matches('[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])') && teacherDate(d.date) &&
+        d.session in ['morning','afternoon','evening'] && id == d.teacherId + '~' + d.date + '~' + d.session &&
+        d.status in ['present','absent','excused','late','leftEarly','unmarked'] && d.note is string && d.note.size() <= 500 &&
+        d.revision is int && d.revision > 0 && d.updatedBy == request.auth.uid && d.updatedAt == request.time &&
+        d.eventId is string && d.eventId.matches('[A-Za-z0-9-]{16,80}') && teacherAllowed(d.teacherId);
+    }
+    function teacherHistoryAppended(d) {
+      return !exists(/databases/$(database)/documents/katatib_teacher_attendance_history/$(d.eventId)) &&
+        getAfter(/databases/$(database)/documents/katatib_teacher_attendance_history/$(d.eventId)).data == d;
+    }
+    match /katatib_teacher_attendance/{id} {
+      allow get: if manage() && (!exists(/databases/$(database)/documents/katatib_teacher_attendance/$(id)) || teacherAllowed(resource.data.teacherId));
+      allow list: if request.query.limit <= 100 && teacherAllowed(resource.data.teacherId);
+      allow create: if validTeacherAttendance(request.resource.data,id) && request.resource.data.revision == 1 && teacherHistoryAppended(request.resource.data);
+      allow update: if validTeacherAttendance(request.resource.data,id) && request.resource.data.teacherId == resource.data.teacherId &&
+        request.resource.data.date == resource.data.date && request.resource.data.session == resource.data.session &&
+        request.resource.data.revision == resource.data.revision + 1 && teacherHistoryAppended(request.resource.data);
+      allow delete: if false;
+    }
+    match /katatib_teacher_attendance_history/{id} {
+      allow get: if teacherAllowed(resource.data.teacherId);
+      allow list: if request.query.limit <= 100 && teacherAllowed(resource.data.teacherId);
+      allow create: if request.resource.data.eventId == id && validTeacherAttendance(request.resource.data,request.resource.data.recordId) &&
+        getAfter(/databases/$(database)/documents/katatib_teacher_attendance/$(request.resource.data.recordId)).data == request.resource.data;
+      allow update, delete: if false;
+    }
     match /katatib_access/{address} {
       allow get: if member() && access().role == 'admin' || googleUser() && address == email();
       allow list: if member() && access().role == 'admin' && request.query.limit <= 100;

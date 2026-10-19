@@ -45,7 +45,7 @@ See [the V1/V2 migration-readiness review](migration-readiness.md). A new scoped
 | Kuttab settings, schedules, group memberships | Stable IDs, versioned session occurrences, ownership migration and calendar overrides. Current sessions are the explicit three choices, not a manager-configured schedule. |
 | Shared ranking | Minimal trusted projection and verified eligibility/coverage. Private student documents are not opened to build a ranking. |
 | Notices and notifications | Recipient-scoped records, delivery expectations and consent; no notifications are sent automatically. |
-| Remaining original capabilities | Teacher attendance, English support, Smart Challenge UI, certificates, kuttab comparisons and richer historical reports still need their V2 implementation. Original V1 remains available. |
+| Remaining original capabilities | English support, Smart Challenge UI, certificates, kuttab comparisons and richer historical reports still need their V2 implementation. Original V1 remains available. |
 | Production cutover | Fresh backup including new V1 data since the old snapshot, reconciliation of source records/relationships and auth, migration rehearsal, rollback evidence and explicit production authorization. |
 
 ## Verified infrastructure constraints
@@ -83,3 +83,7 @@ Open only https://katatib-64049.web.app/ after `Deploy complete`. No merge to ma
 ### Monthly historical report update
 
 Reports now show copied V1 attendance and activity counts alongside V2 sessions, with both included in print and Excel. Ambiguous/duplicate V1 attendance is counted for review outside totals. Invalid dates are shown as all-history counts; cumulative coverage is labelled separately from monthly activity. There are no source-data writes or new permissions. V1-specific grade formulas, teacher attendance, schedules and the other readiness gaps remain open.
+
+### Teacher attendance
+
+Admin/scoped manager teacher attendance is available with explicit statuses, date/session separation, notes, reload, immutable correction history and stale-edit protection. The page also reads copied teacher attendance without editing it or guessing its session mapping. New writes stay in the two V2 teacher-attendance collections on `katatib-64049`; ordinary teachers and family accounts have no teacher-attendance access. Copied teacher profiles establish the roster and scope.

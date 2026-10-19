@@ -18,6 +18,10 @@ const {doc,setDoc,getDoc,collection,getDocs,getDocsFromServer,query,where,limit,
     'attendance/b':{studentId:'b',kuttabName:'One',status:'absent'},
     'attendance/orphan':{studentId:'missing',status:'present'},
     'users/legacy-one':{role:'admin',email:'legacy@example.com'},
+    'users/teacher-one':{role:'teacher',displayName:'Teacher One',kuttabName:'One'},
+    'users/teacher-two':{role:'teacher',displayName:'Teacher Two',kuttabName:'Two'},
+    'teacher_attendance/old-teacher-one':{teacherId:'teacher-one',date:'2026-10-01',sessionIndex:0,status:'present'},
+    'teacher_attendance/old-teacher-two':{teacherId:'teacher-two',kuttabName:'One',date:'2026-10-01',status:'absent'},
     'evaluations/a':{studentId:'a'},
     'katatib_access/admin@example.com':{active:true,role:'admin'},
     'katatib_access/teacher@example.com':{active:true,role:'teacher',kuttabNames:['One'],teacherIds:[]},
@@ -177,6 +181,50 @@ const {doc,setDoc,getDoc,collection,getDocs,getDocsFromServer,query,where,limit,
   await assertSucceeds(workspaceSave(admin,'new-admin@example.com','katatib_access','parent@example.com',grant('parent',{active:false,studentIds:['a']}),1,'revoke-parent'));
   await assertFails(getDoc(doc(as('parent@example.com'),'students/a')));
   console.log('PASS: profile overlays preserve copied records, reversible archive, manager scope, tasks, immutable atomic audit, portal child isolation, no portal writes, self-lockout prevention and revocation.');
+  // Teacher attendance is separate from student attendance and copied source records.
+  const {commitTeacherAttendance,TEACHER_CURRENT,TEACHER_HISTORY}=await import('../public/katatib/live/teacher-attendance.mjs');
+  const teacherSave=(db,uid,id,ctx,payload,revision,event)=>commitTeacherAttendance(db,sdk,uid,id,ctx,payload,revision,event);
+  assert.equal((await assertSucceeds(getDocs(query(collection(admin,'users'),where('role','==','teacher'),limit(100))))).size,2);
+  assert.equal((await assertSucceeds(getDocs(query(collection(manager,'users'),where('role','==','teacher'),where('kuttabName','==','One'),limit(100))))).size,1);
+  await assertFails(getDocs(query(collection(manager,'users'),where('role','==','teacher'),limit(100))));
+  await assertFails(getDocs(query(collection(admin,'users'),where('role','==','teacher'))));
+  await assertFails(getDoc(doc(teacher,'users/teacher-one')));
+  await assertSucceeds(getDoc(doc(manager,'teacher_attendance/old-teacher-one')));
+  await assertFails(getDoc(doc(manager,'teacher_attendance/old-teacher-two')));
+  await assertSucceeds(getDocs(query(collection(manager,'teacher_attendance'),where('teacherId','==','teacher-one'),limit(100))));
+  await assertFails(getDocs(query(collection(manager,'teacher_attendance'),limit(100))));
+  const teacherRecordId=attendanceId('teacher-one',context.date,context.session);
+  await assertSucceeds(teacherSave(manager,'new-manager@example.com','teacher-one',context,{status:'present',note:'First'},0,'teacher-first-0001'));
+  await assertSucceeds(teacherSave(admin,'new-admin@example.com','teacher-one',context,{status:'excused',note:'Corrected'},1,'teacher-correct-01'));
+  assert.equal((await getDocFromServer(doc(manager,TEACHER_CURRENT,teacherRecordId))).data().revision,2);
+  assert.equal((await getDocFromServer(doc(manager,TEACHER_HISTORY,'teacher-first-0001'))).data().status,'present');
+  await assertSucceeds(teacherSave(admin,'new-admin@example.com','teacher-one',context,{status:'excused',note:'Corrected'},1,'teacher-correct-01'));
+  await assert.rejects(teacherSave(manager,'new-manager@example.com','teacher-one',context,{status:'absent',note:'Stale'},1,'teacher-stale-0001'),e=>e.code==='conflict');
+  await assertSucceeds(teacherSave(manager,'new-manager@example.com','teacher-one',{...context,session:'afternoon'},{status:'late',note:''},0,'teacher-afternoon-1'));
+  await assertSucceeds(teacherSave(manager,'new-manager@example.com','teacher-one',{...context,date:'2026-10-19'},{status:'unmarked',note:''},0,'teacher-nextdate-1'));
+  await assertFails(teacherSave(manager,'new-manager@example.com','teacher-two',context,{status:'present',note:''},0,'teacher-outside-01'));
+  for(const who of [teacher,as('student@example.com'),as('parent@example.com'),...strangers]){
+   await assertFails(getDoc(doc(who,TEACHER_CURRENT,teacherRecordId)));
+   await assertFails(teacherSave(who,'new-teacher@example.com','teacher-one',context,{status:'absent',note:''},2,'teacher-denied-001'));
+  }
+  await assertFails(updateDoc(doc(admin,TEACHER_CURRENT,teacherRecordId),{status:'present'}));
+  await assertFails(deleteDoc(doc(admin,TEACHER_CURRENT,teacherRecordId)));
+  await assertFails(updateDoc(doc(admin,TEACHER_HISTORY,'teacher-first-0001'),{note:'erased'}));
+  await assertFails(deleteDoc(doc(admin,TEACHER_HISTORY,'teacher-first-0001')));
+  await assertFails(updateDoc(doc(admin,'teacher_attendance/old-teacher-one'),{status:'absent'}));
+  await assertFails(updateDoc(doc(admin,'users/teacher-one'),{role:'admin'}));
+  const teacherCurrent=(await getDocFromServer(doc(admin,TEACHER_CURRENT,teacherRecordId))).data();
+  async function forgedTeacher(change){
+   const batch=writeBatch(admin),data={...teacherCurrent,revision:3,...change,eventId:'teacher-forged-01',updatedBy:'new-admin@example.com',updatedAt:serverTimestamp()};
+   batch.set(doc(admin,TEACHER_CURRENT,data.recordId),data);batch.set(doc(admin,TEACHER_HISTORY,data.eventId),data);return batch.commit();
+  }
+  for(const change of [{revision:9},{status:'invalid'},{note:'x'.repeat(501)},{role:'admin'},{date:'2026-02-30',recordId:'teacher-one~2026-02-30~morning',revision:1},{teacherId:'missing',recordId:'missing~2026-10-18~morning',revision:1},{teacherId:'teacher-two'}])await assertFails(forgedTeacher(change));
+  await assertSucceeds(getDocs(query(collection(manager,TEACHER_HISTORY),where('teacherId','==','teacher-one'),limit(100))));
+  await assertFails(getDocs(query(collection(manager,TEACHER_HISTORY),where('teacherId','==','teacher-one'),limit(101))));
+  await assertSucceeds(workspaceSave(admin,'new-admin@example.com','katatib_access','manager@example.com',grant('manager',{kuttabNames:['One'],active:false}),1,'teacher-revoke-manager'));
+  await assertFails(getDocFromServer(doc(manager,TEACHER_CURRENT,teacherRecordId)));
+  await assertFails(teacherSave(manager,'new-manager@example.com','teacher-one',context,{status:'absent',note:''},2,'teacher-revoked-01'));
+  console.log('PASS: scoped teacher directory and attendance, paired immutable correction history, stale/lost-ack handling, source protection, actual calendar validation and revocation.');
   const {commitLearning}=await import('../public/katatib/live/learning.mjs');
   const learningInput={studentId:'a',kind:'memorization',date:'2026-10-18',session:'morning',hizb:2,fromEighth:1,toEighth:3,mistakes:null,score:null,note:'original',supersedesId:null};
   const learningSave=(db,uid,input,id)=>commitLearning(db,{doc,runTransaction,serverTimestamp},uid,input,id);
