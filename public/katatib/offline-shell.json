@@ -35,7 +35,11 @@
     },
     {
       "path": "/live/app.mjs",
-      "sha256": "d50bd5e3e87e4d4d36b204dd855c6d647b16bd6be0b6624d4df947cafcd9e56c"
+      "sha256": "696c0b4835e2f80abf133ebd0e84bd4f871805331e8bb310c7ded856f93f0546"
+    },
+    {
+      "path": "/live/appearance.mjs",
+      "sha256": "8992272d0a2d06802cb22b8f730151edafbecd7b8ebd4c4adcc29b08d15b9606"
     },
     {
       "path": "/live/attendance.mjs",
@@ -106,6 +110,10 @@
       "sha256": "0945039a14f28d9199bc715ac55c8abc50fccbc41f65933d10013c921b820d5f"
     },
     {
+      "path": "/live/navigation.mjs",
+      "sha256": "b4b66f7a39e74907a83e67c1a2c15c8e42b7c2452e27e8b3062eed00698fcd86"
+    },
+    {
       "path": "/live/offline-gateway.mjs",
       "sha256": "7a3d79d77e53c1e2c965b6c1021e391282e8390f616a24e0c612896274bfc7e3"
     },
@@ -171,7 +179,7 @@
     },
     {
       "path": "/live/live.css",
-      "sha256": "6e2b2a1046792430d2c072d65f5acb247d3d3866b253750d416fe79f16e31bb2"
+      "sha256": "8bcbf1ade0cf57c8e53d18230f78d08a0f9f6b5d16cf0c7935d201b954232dce"
     },
     {
       "path": "/live/mushaf.css",
