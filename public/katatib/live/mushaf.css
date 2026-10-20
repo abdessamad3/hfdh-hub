@@ -10,3 +10,5 @@
 
 /* Let touch gestures scroll the document at fit size and chain at zoom edges. */
 .mushaf-page-viewport,.mushaf-svg,.mushaf-svg .ayahPolygon{touch-action:pan-x pan-y pinch-zoom}
+
+.mushaf-page-viewport[data-zoomed=false]{overflow:clip}.mushaf-page-viewport[data-zoomed=true]{overflow:auto;overscroll-behavior:auto}
