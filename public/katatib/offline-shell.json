@@ -35,7 +35,7 @@
     },
     {
       "path": "/live/app.mjs",
-      "sha256": "80af54ec7262d8f3dea8c9d913534fa317b43d63cab7c5c464db10ef8a4d9cfd"
+      "sha256": "400a6d7631be776a19b995a177e692f195d32bf5ee7cb2306a208735fc5920b2"
     },
     {
       "path": "/live/attendance.mjs",
