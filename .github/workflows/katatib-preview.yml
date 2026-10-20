@@ -34,6 +34,7 @@ jobs:
           node tests/katatib-navigation.test.mjs
           node tests/katatib-followup.test.mjs
           node tests/katatib-offline.test.mjs
+          node tests/katatib-offline-snapshot.test.mjs
           node tests/katatib-domain.test.mjs
           node tests/katatib-audio-clips.test.mjs
           node tests/katatib-mushaf.test.mjs

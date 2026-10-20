@@ -83,3 +83,24 @@ test('preparation requires fresh server reads instead of relabelling an old cach
  f.raw.studentHistory=async()=>{throw Object.assign(Error('network unavailable'),{code:'unavailable'});};
  await assert.rejects(f.api.offline.prepare({date:context.date,students:['a']}),/network unavailable/);assert.equal(f.api.offline.status().preparedAt,null);
 });
+
+test('expanded snapshot prepares a bounded 30-day history plus future sessions from current records',async()=>{
+ const f=fixture();await f.init();let individualReads=0;f.raw.attendance=async()=>{individualReads++;throw Error('unnecessary per-date reads');};
+ f.raw.workspaceList=async(name)=>name==='katatib_attendance'?[{studentId:'a',date:'2026-10-19',session:'morning',status:'late',note:'Current snapshot',revision:7}]:[];
+ f.raw.studentHistory=async()=>[{date:'2020-01-01',kind:'attendance'},{date:'2020-01-01',kind:'nextRevision'},{date:'2026-10-19',kind:'attendance'}];
+ await f.api.offline.prepare({date:context.date,students:['a'],days:30,upcoming:7,includeOlder:false});assert.equal(individualReads,0);const s=f.api.offline.status();assert.deepEqual(s.preparedWindow,{from:'2026-09-20',to:'2026-10-26',days:30,upcoming:7});assert.ok(s.lastSnapshotAt);assert.ok(s.snapshotBytes>0);f.offline();assert.equal((await f.api.attendance(['a'],context)).a.revision,7);assert.equal((await f.api.attendance(['a'],{date:'2026-10-26',session:'evening'})).a.status,'unmarked');await assert.rejects(f.api.attendance(['a'],{date:'2026-10-27',session:'morning'}),/offline-not-prepared/);
+ const saved=await f.store.read(user.uid);assert.equal(saved.cache['["studentHistory","a"]'].length,2,'overdue V1 plans survive while old ordinary history is excluded');
+});
+test('linked family can prepare/read their copy but cannot queue educational writes',async()=>{
+ const f=fixture();f.raw.students=async()=>({role:'parent',students:[{id:'a',name:'Child',kuttab:'One'}]});f.raw.kuttabs=async()=>{throw Error('family must not query management scopes');};await f.observe(f.api);await f.api.offline.prepare({date:context.date,students:['a'],days:30,upcoming:7,includeOlder:false});f.offline();assert.equal((await f.api.students(user)).role,'parent');await assert.rejects(f.api.saveAttendance('a',context,{status:'present',note:''},0),/offline-staff-only/);await assert.rejects(f.api.attendance(['b'],context),/no-access/);
+});
+test('selected class roster stays selected after online access refresh and unselected online work remains server-authorized',async()=>{
+ const f=fixture();f.raw.students=async()=>({role:'teacher',students:[{id:'a',name:'A',kuttab:'One'},{id:'b',name:'B',kuttab:'Two'}]});await f.init();await f.api.offline.sync();assert.equal((await f.api.students(user)).students.length,2);await f.api.saveAttendance('b',context,{status:'present',note:'Online only for unprepared student'},0);assert.equal(f.writes,1);f.offline();assert.deepEqual((await f.api.students(user)).students.map(s=>s.id),['a']);await assert.rejects(f.api.attendance(['b'],context),/no-access/);
+});
+test('update syncs pending work first and refuses conflicted updates without discarding the queue',async()=>{
+ const f=fixture();await f.init();f.offline();await f.api.saveAttendance('a',context,{status:'present',note:'Pending'},0);f.online();await f.api.offline.prepare({date:context.date,students:['a']});assert.equal(f.api.offlinePending(),0);assert.equal(f.events.size,1);f.offline();await f.api.saveAttendance('a',context,{status:'absent',note:'Local'},1);f.remote.set('a'+context.date+context.session,{status:'late',note:'Other device',revision:2});f.online();await assert.rejects(f.api.offline.prepare({date:context.date,students:['a']}),/offline-sync-first/);assert.equal(f.api.offlinePending(),1);assert.equal(f.api.offline.status().queue[0].status,'blocked');
+});
+test('a local save made during staged preparation prevents replacement and survives',async()=>{
+ const f=fixture();await f.init();let entered,release;const started=new Promise(r=>entered=r);f.raw.studentHistory=async()=>{entered();await new Promise(r=>release=r);return [];};const preparing=f.api.offline.prepare({date:context.date,students:['a']});await started;f.offline();await f.api.saveAttendance('a',context,{status:'present',note:'Keep me'},0);release();await assert.rejects(preparing,/offline-sync-first/);assert.equal(f.api.offlinePending(),1);assert.equal((await f.api.attendance(['a'],context)).a.note,'Keep me');
+});
+test('access denial during preparation removes cached private access',async()=>{const f=fixture();await f.init();f.deny();await assert.rejects(f.api.offline.prepare({date:context.date,students:['a']}),/denied/);assert.equal(f.api.offline.status().enabled,false);assert.deepEqual(f.api.offline.status().cache,{});});

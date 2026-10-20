@@ -35,7 +35,7 @@
     },
     {
       "path": "/live/app.mjs",
-      "sha256": "696c0b4835e2f80abf133ebd0e84bd4f871805331e8bb310c7ded856f93f0546"
+      "sha256": "709aab2cf2feea5863a7434489892c7423b3942215383082931873a3b415f5a8"
     },
     {
       "path": "/live/appearance.mjs",
@@ -123,7 +123,11 @@
     },
     {
       "path": "/live/offline-gateway.mjs",
-      "sha256": "7a3d79d77e53c1e2c965b6c1021e391282e8390f616a24e0c612896274bfc7e3"
+      "sha256": "c5568b0a4a0c94f70f7699a1597473766e84ff127a49c0ab29654c40df4e1bfd"
+    },
+    {
+      "path": "/live/offline-snapshot.mjs",
+      "sha256": "bb5b448fd21c2cd227f9b9951c228b8f43a534175b3f570cac318368715cb318"
     },
     {
       "path": "/live/offline-store.mjs",
@@ -131,7 +135,7 @@
     },
     {
       "path": "/live/offline-ui.mjs",
-      "sha256": "27b0c35175268798e138788e205a0c5557e306676028b133af2e89dc5acdf0db"
+      "sha256": "749054546895f89398be56fbcf35ef5cb923db91563e33747b8303e62d6d3991"
     },
     {
       "path": "/live/planning.mjs",
@@ -183,11 +187,11 @@
     },
     {
       "path": "/live/workspace.mjs",
-      "sha256": "189a54945eea6ba18c0a7d5f13c0fbfd62463ac410427c40613a54ed265762fb"
+      "sha256": "0f50ed380ebe215e3fb020c84eef8a252a514d6c4b892a120f9af866f58c2c03"
     },
     {
       "path": "/live/live.css",
-      "sha256": "89dc2799f5368ffb53f259f82970db974177d6dd2c0e588b4a49c36543570498"
+      "sha256": "bb540e41d266138168734bfd8e904846108dd81ea6e1741b3d40a5cb0799f637"
     },
     {
       "path": "/live/mushaf.css",
