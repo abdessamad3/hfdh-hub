@@ -15,7 +15,7 @@ test('teacher query scopes come only from explicit deduplicated assignments',()=
 });
 test('copied students expose only display fields, and missing statistics stay missing',()=>{
   const row = studentView('one',{name:'<img>',email:'private',teacherId:'old',age:'12',stats:{totalHizbs:3,attendanceRate:80}});
-  assert.deepEqual(row,{id:'one',name:'<img>',kuttab:'',age:null,hizbs:3,attendance:80});
+  assert.deepEqual(row,{id:'one',name:'<img>',kuttab:'',age:null,hizbs:3,attendance:80,absentRate:null,accuracy:null,memorizationProgress:null,totalScore:null,enrollmentDate:'',gender:''});
   assert.equal(studentView('x',{}).hizbs,null);
   assert.equal(studentView('x',{totalHizbs:NaN}).hizbs,null);
 });
@@ -28,4 +28,9 @@ test('manager assignments and explicit portal links stay scoped',()=>{
  assert.deepEqual(accessScopes({active:true,role:'manager',kuttabNames:['One']}),[{field:'kuttabName',value:'One'}]);
  assert.deepEqual(accessScopes({active:true,role:'parent',studentIds:['a','a']}),[{field:'__name__',value:'a'}]);
  assert.throws(()=>accessScopes({active:true,role:'parent',studentIds:['a/b']}));
+});
+
+test('all previous academic statistics survive projection with nested stats preferred and missing values unknown',()=>{
+ const r=studentView('a',{enrollmentDate:'2020-01-01',gender:'female',accuracy:20,stats:{accuracy:95,absentRate:0,memorizationProgress:12.5,totalScore:82}});
+ assert.equal(r.accuracy,95);assert.equal(r.absentRate,0);assert.equal(r.memorizationProgress,12.5);assert.equal(r.totalScore,82);assert.equal(r.enrollmentDate,'2020-01-01');assert.equal(r.gender,'female');
 });

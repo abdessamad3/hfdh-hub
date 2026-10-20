@@ -35,7 +35,7 @@
     },
     {
       "path": "/live/app.mjs",
-      "sha256": "59b84d267f83d9512b9df176fb2900db99907768338a09ca446630a22eac5bc6"
+      "sha256": "5fde27aaea0a26e28f744dd308dec7eed1327e003ec9c235565b128b9887c195"
     },
     {
       "path": "/live/appearance.mjs",
@@ -63,7 +63,7 @@
     },
     {
       "path": "/live/english.mjs",
-      "sha256": "ff58516dec5650b2addd81a01cf73416174f309bc105851dfe947c0f703f5223"
+      "sha256": "fcebf662aac50f58a26f4ce04a2c695808eabdbebd0868b04f9263828e49dcb7"
     },
     {
       "path": "/live/family-model.mjs",
@@ -91,11 +91,11 @@
     },
     {
       "path": "/live/legacy.mjs",
-      "sha256": "b9f1b786a541995605dc119f3065b71ca90b8d09739db859adb58d4613b6ce76"
+      "sha256": "79db812413b7cce7adfec2c0fc0397cb9aea5e550941af7a81b817227283ed9c"
     },
     {
       "path": "/live/model.mjs",
-      "sha256": "5c28a4820d12c45a187c796fe7dd8b9cffb992186cc13e537606945a43190a50"
+      "sha256": "df1d0edade3c4ecff62471ebd97b5400307789effea69432692b528563a2ce88"
     },
     {
       "path": "/live/mushaf-archive.mjs",
@@ -119,7 +119,7 @@
     },
     {
       "path": "/live/navigation.mjs",
-      "sha256": "b4b66f7a39e74907a83e67c1a2c15c8e42b7c2452e27e8b3062eed00698fcd86"
+      "sha256": "cb5d8e527d3fa66c50e24e9ab55b7991efa3177d60402601d1bf94968aa08e8c"
     },
     {
       "path": "/live/offline-gateway.mjs",
@@ -158,6 +158,10 @@
       "sha256": "fdbd3f4834e8b1984dd1148caa70106a8ae098e0aa456e9552d8fb5454000edb"
     },
     {
+      "path": "/live/records.mjs",
+      "sha256": "00b494d79a11db1acca1d35feff58b2757b411a8be1af56b7a638e4cd2ff8865"
+    },
+    {
       "path": "/live/reports.mjs",
       "sha256": "b3da1d7269ec03206d5bc9004944820c590b30a717d7bd5fad86170cd1bc86eb"
     },
@@ -187,11 +191,11 @@
     },
     {
       "path": "/live/workspace.mjs",
-      "sha256": "0f50ed380ebe215e3fb020c84eef8a252a514d6c4b892a120f9af866f58c2c03"
+      "sha256": "c64e61ac11a52caad924f372a4b079f8fae15295bd37c016d52f4b653983d078"
     },
     {
       "path": "/live/live.css",
-      "sha256": "67f2adfed0752d91ac80305bd5d2595280c27284389ff1a46099826be4a57ec9"
+      "sha256": "3618fd68e555dfca73d989dd5302c91d4a6f9fbab99ad4c5d0b8d156bbb254cd"
     },
     {
       "path": "/live/mushaf.css",

@@ -22,7 +22,7 @@ export function accessScopes(access) {
 export function studentView(id, data) {
   const text = value => typeof value === 'string' ? value : '';
   const number = value => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
-  return { id, name: text(data.name), kuttab: text(data.kuttabName), age: number(data.age), hizbs: number(data.stats?.totalHizbs ?? data.totalHizbs), attendance: number(data.stats?.attendanceRate ?? data.attendanceRate) };
+  return { id, name: text(data.name), kuttab: text(data.kuttabName), age: number(data.age), hizbs: number(data.stats?.totalHizbs ?? data.totalHizbs), attendance: number(data.stats?.attendanceRate ?? data.attendanceRate), absentRate:number(data.stats?.absentRate??data.absentRate), accuracy:number(data.stats?.accuracy??data.accuracy), memorizationProgress:number(data.stats?.memorizationProgress??data.memorizationProgress), totalScore:number(data.stats?.totalScore??data.totalScore), enrollmentDate:text(data.enrollmentDate), gender:text(data.gender) };
 }
 export function mergeStudents(batches) {
   return [...new Map(batches.flat().map(s => [s.id, s])).values()].sort((a, b) => a.name.localeCompare(b.name));

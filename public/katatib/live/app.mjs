@@ -1,3 +1,4 @@
+import {recordLabels,previousRecordsView,revealRecords,completeHistory} from './records.mjs';
 import {mainPages,pageForScreen,navigationLabels,advancedScreens} from './navigation.mjs';
 import {appearanceControls,changeAppearance} from './appearance.mjs';
 import {createPriorities} from './priorities-ui.mjs';
@@ -59,7 +60,7 @@ const copy = {
 copy.en=english;
 let allStudents = [];
 let language = 'ar', gateway, user = null, students = [], role = '', capped = false, state = 'loading', error = '', search = '', school = '', epoch = 0, historyEpoch = 0, pendingLogin = false, loginTab='staff';
-const t = key => (['cloudSaved','learningSaved'].includes(key)&&gateway?.offlinePending?.()>0?offlineLabels[language].localSaved:null)||offlineLabels[language][key]||copy[language][key] || studentLoginLabels[language][key] || workspaceLabels[language][key] || legacyLabels[language][key] || readinessLabels[language][key] || recorderLabels[language][key] || copy[language].error;
+const t = key => (['cloudSaved','learningSaved'].includes(key)&&gateway?.offlinePending?.()>0?offlineLabels[language].localSaved:null)||recordLabels[language][key]||offlineLabels[language][key]||copy[language][key] || studentLoginLabels[language][key] || workspaceLabels[language][key] || legacyLabels[language][key] || readinessLabels[language][key] || recorderLabels[language][key] || copy[language].error;
 const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const value = (n,precision=2) => n == null ? t('unknown') : new Intl.NumberFormat(language === 'ar' ? 'ar-MA' : language==='en'?'en-GB':'fr-FR', {maximumFractionDigits:precision}).format(n);
 function errorKey(e) {
@@ -71,8 +72,9 @@ function errorKey(e) {
   if (/network|unavailable|Failed to fetch/.test(code)) return 'network';
   return 'error';
 }
-let rosterIndex=0;
-const pageView=()=>rosterPage(students,{search,school,page:rosterIndex});
+let rosterIndex=0,rosterState='active';
+const rosterStudents=()=>screen!=='students'?students:allStudents.filter(s=>rosterState==='all'||(s.status==='archived')===(rosterState==='archived'));
+const pageView=()=>rosterPage(rosterStudents(),{search,school,page:rosterIndex});
 function rosterPager(){const p=pageView();return p.pages>1?`<nav class="roster-pager" aria-label="${t('studentsTab')}"><button type="button" class="secondary-button" data-roster-page="${p.page-1}" ${p.page===0?'disabled':''}>${t('previous')}</button><span>${p.from}–${p.to} / ${p.total}</span><button type="button" class="secondary-button" data-roster-page="${p.page+1}" ${p.page+1>=p.pages?'disabled':''}>${t('next')}</button></nav>`:'';}
 function renderCards() {
  return (pageView().rows.map(studentCard).join('')||`<p class="empty-state">${t('empty')}</p>`)+rosterPager();
@@ -138,7 +140,7 @@ async function reloadCloud(id) {
   if(generation===epoch)render();
 }
 
-let learningForm=blankLearning(), learningRecords=[], learningState='idle', learningError='', learningSaved=false, learningSaving=false, learningPending=null, learningEpoch=0, learningTouched=false;
+let learningForm=blankLearning(), learningRecords=[], previousLearningRecords=[], learningState='idle', learningError='', learningSaved=false, learningSaving=false, learningPending=null, learningEpoch=0, learningTouched=false;
 function blankLearning(studentId='',kind='memorization') {return {studentId,kind,date:businessDate(),session:'morning',hizb:'',fromEighth:1,toEighth:1,mistakes:'',score:'',note:'',supersedesId:null,confirmMastered:false};}
 function learningOptions(values,current) {return values.map(x=>`<option value="${escape(x)}" ${String(x)===String(current)?'selected':''}>${value(x)}</option>`).join('');}
 function learningView() {
@@ -146,7 +148,7 @@ function learningView() {
   const selected=students.find(s=>s.id===form.studentId);
   return `<section class="panel learning-panel"><h2>${t('learningTitle')}</h2><p class="live-status">${t('learningHint')}</p><p class="live-status">${t('masteryHint')}</p>${form.supersedesId?`<p class="live-notice">${t('learningCorrection')}</p>`:''}${learningSaved?`<p class="live-notice" role="status">${t('learningSaved')}</p>`:''}${learningError?`<p class="notice-error" role="alert">${t(learningError)}</p>`:''}<form id="learning-form"><fieldset ${locked?'disabled':''}><div class="learning-fields"><label>${t('learningStudent')}<select id="learning-student" name="studentId" required ${form.supersedesId?'disabled':''}><option value="">${t('chooseStudent')}</option>${students.map(s=>`<option value="${escape(s.id)}" ${s.id===form.studentId?'selected':''}>${escape(s.name)} · ${escape(s.kuttab||t('unknown'))}</option>`).join('')}</select></label><label>${t('learningType')}<select name="kind" ${form.supersedesId&&isGradedLearning(form.kind)?'disabled':''}>${(form.supersedesId?isGradedLearning(form.kind)?[form.kind]:['memorization','practice']:LEARNING_KINDS).map(k=>`<option value="${k}" ${k===form.kind?'selected':''}>${t(k)}</option>`).join('')}</select></label><label>${t('date')}<input name="date" type="date" value="${form.date}" required></label><label>${t('cloudSession')}<select name="session">${CLOUD_SESSIONS.map(s=>`<option value="${s}" ${s===form.session?'selected':''}>${t(s)}</option>`).join('')}</select></label><label>${t('learningHizb')}<input name="hizb" type="number" min="1" max="60" step="1" value="${form.hizb}" required></label><label>${t('learningFrom')}<select name="fromEighth">${learningOptions([1,2,3,4,5,6,7,8],form.fromEighth)}</select></label><label>${t('learningTo')}<select name="toEighth">${learningOptions([1,2,3,4,5,6,7,8],form.toEighth)}</select></label>${!isGradedLearning(form.kind)?'':`<label>${t('learningMistakes')}<input name="mistakes" type="number" min="0" max="999" step="1" value="${form.mistakes}" required></label><label>${t('learningScore')}<input name="score" type="number" min="0" max="100" step="1" value="${form.score}" required></label>`}</div>${form.kind==='memorization'?`<label class="mastery-check"><input type="checkbox" name="confirmMastered" required ${form.confirmMastered?'checked':''}>${t('confirmMastery')}</label>`:''}<label class="learning-note">${t('cloudNote')}<textarea name="note" maxlength="500">${escape(form.note)}</textarea></label></fieldset><div class="learning-buttons"><button type="submit" class="primary-button" ${busy?'disabled':''}>${t(busy?'cloudSaving':locked?'learningRetry':form.supersedesId?'learningUpdate':'cloudSave')}</button>${!locked&&form.supersedesId?`<button type="button" class="secondary-button" data-action="cancel-correction">${t('learningCancel')}</button>`:''}</div></form><p class="live-status">${t('learningScoreHint')}</p></section><section class="panel learning-panel" id="learning-history-panel">${learningHistoryPanel()}</section>`;
 }
-function learningHistoryPanel(){const selected=students.find(s=>s.id===learningForm.studentId);return `<h2>${t('learningHistory')}</h2>${selected?`<p class="live-account">${escape(selected.name)}</p>`:''}${learningState==='ready'?progressView(selected,learningRecords):''}${learningState==='loading'?`<p role="status">${t('loading')}</p>`:learningState==='error'?`<p class="notice-error" role="alert">${t('historyError')}</p><button class="secondary-button" data-action="learning-reload">${t('retry')}</button>`:learningHistoryList(learningRecords,true)}`;}
+function learningHistoryPanel(){const selected=students.find(s=>s.id===learningForm.studentId);return `<h2>${t('learningHistory')}</h2>${selected?`<p class="live-account">${escape(selected.name)}</p>`:''}${learningState==='ready'?progressView(selected,learningRecords)+`<section><h3>${t('previousLearning')} (${previousLearningRecords.length})</h3>${previousRecordsView(previousLearningRecords,language,t)}</section><h3>${t('newRecords')}</h3>`:''}${learningState==='loading'?`<p role="status">${t('loading')}</p>`:learningState==='error'?`<p class="notice-error" role="alert">${t('historyError')}</p><button class="secondary-button" data-action="learning-reload">${t('retry')}</button>`:learningHistoryList(learningRecords,true)}`;}
 
 function progressView(student,records) {
   const p=learningProgress(records,student?.hizbs??null);
@@ -163,12 +165,12 @@ function learningHistoryList(records,corrections=false) {
 
 async function loadLearning() {
   const id=learningForm.studentId,generation=++learningEpoch,authGeneration=epoch;
-  if(!id){learningRecords=[];learningState='idle';render();return;}
+  if(!id){learningRecords=[];previousLearningRecords=[];learningState='idle';render();return;}
   learningState='loading';learningRecords=[];render();
   try {
-    const records=await gateway.learningHistory(id);
+    const [records,previous]=await Promise.all([gateway.learningHistory(id),gateway.studentHistory(id)]);
     if(generation!==learningEpoch||authGeneration!==epoch||!user)return;
-    currentLearning(records);learningRecords=records;learningState='ready';
+    currentLearning(records);learningRecords=records;previousLearningRecords=previous.filter(r=>r.source==='V1'&&r.kind!=='attendance');learningState='ready';
   }catch{if(generation!==learningEpoch||authGeneration!==epoch)return;learningState='error';}
   if(screen==='learning'){const panel=document.getElementById('learning-history-panel');if(panel)panel.innerHTML=learningHistoryPanel();else render();}
 }
@@ -197,8 +199,8 @@ async function saveLearning(event) {
 }
 
 const icons={today:'◈',students:'◉',attendance:'✓',learning:'▤',tasks:'◷',reports:'▥',manage:'⚙',access:'♙',audit:'≡',audioTest:'◉',mushaf:'▣',notices:'♧',consent:'✓',credentials:'♙',recording:'◉',history:'▦',readiness:'◇',teacherAttendance:'✓',schedules:'◷',corrections:'✎',questions:'?',challenge:'◇',ranking:'▥'};
-const extraScreens=['audioTest','mushaf','notices','consent','credentials','schedules','corrections','questions','challenge','ranking','teacherAttendance','tasks','reports','manage','access','audit','history','readiness'];
-const screens=()=>['today','students','mushaf',...(['parent','student'].includes(role)?[]:['attendance','learning','recording','audioTest','schedules','corrections','ranking']),'history','tasks','reports','challenge','notices',...(role==='parent'?['consent']:[]),...(['admin','manager'].includes(role)?['teacherAttendance','manage']:[]),...(role==='admin'?['credentials','access','audit','readiness','questions']:[])];
+const extraScreens=['audioTest','mushaf','notices','consent','credentials','schedules','corrections','questions','challenge','ranking','teacherAttendance','tasks','reports','dataReview','manage','access','audit','history','readiness'];
+const screens=()=>['today','students','mushaf',...(['parent','student'].includes(role)?[]:['attendance','learning','recording','audioTest','schedules','corrections','ranking']),'history','tasks','reports','dataReview','challenge','notices',...(role==='parent'?['consent']:[]),...(['admin','manager'].includes(role)?['teacherAttendance','manage']:[]),...(role==='admin'?['credentials','access','audit','readiness','questions']:[])];
 const titleKey=s=>({today:'today',students:'studentsTab',attendance:'cloudAttendance',learning:'learningTab',history:'legacyTitle'}[s]||s);
 const screenTitle=()=>t(titleKey(screen));
 const displayName=()=>user?.displayName?.trim()||user?.email||t('workspaceTitle');
@@ -217,9 +219,9 @@ function todayView(){
  return `<section class="hero unified-hero"><div class="hero-copy"><p class="hero-kicker">${t('todayKicker')}</p><h2>${['parent','student'].includes(role)?interfaceCopy[language].familyHero:t('todayHero')}</h2><p>${['parent','student'].includes(role)?interfaceCopy[language].familyIntro:t('todayIntro')}</p><div class="hero-cta">${['parent','student'].includes(role)?`<button class="primary-button" data-action="open-tasks">${t('tasks')}</button><button class="secondary-button" data-action="open-students">${t('studentsTab')}</button>`:`<button class="primary-button" data-action="open-attendance">${t('cloudAttendance')}</button><button class="secondary-button" data-action="open-learning">${t('learningTab')}</button>`}</div></div><div class="hero-emblem" aria-hidden="true">${bookIcon()}</div></section><div class="stats-grid"><div class="stat-card"><div><p class="stat-label">${t('studentsTab')}</p><div class="stat-value" data-dashboard-students>${value(students.length)}</div><p class="stat-detail">${t('authorizedRoster')}</p></div><span class="stat-icon" aria-hidden="true">◉</span></div><div class="stat-card"><div><p class="stat-label">${t('school')}</p><div class="stat-value">${value(groups.size)}</div><p class="stat-detail">${t('authorizedGroups')}</p></div><span class="stat-icon" aria-hidden="true">▤</span></div><div class="stat-card"><div><p class="stat-label">${t('draftsTitle')}</p><div class="stat-value">${value(drafts)}</div><p class="stat-detail">${t('draftsCaption')}</p></div><span class="stat-icon" aria-hidden="true">✎</span></div></div><div id="priorities-root"></div><div class="section-heading"><div><h2>${t('studentsTab')}</h2><p>${t('rosterSubtitle')}</p></div><button class="text-button" data-action="open-students">${t('viewAll')}</button></div><div class="student-cards">${students.slice(0,4).map(s=>studentCard(s)).join('')||`<p class="empty-state">${t('empty')}</p>`}</div>`;
 }
 function studentCard(s){
- return `<article class="student-card live-student"><span class="avatar ${['sage','sand','lavender','blue'][Array.from(s.id).reduce((sum,c)=>sum+c.charCodeAt(0),0)%4]}" aria-hidden="true">${escape(initials(s.name||'?'))}</span><h3>${escape(s.name||t('unknown'))}</h3><p>${escape(s.kuttab||t('unknown'))}</p><div class="progress-heading"><span>${t('hizbs')}</span><strong>${value(s.hizbs)}</strong></div><button class="text-button" data-profile="${escape(s.id)}">${t('profile')} <span aria-hidden="true">←</span></button></article>`;
+ return `<article class="student-card live-student"><span class="avatar ${['sage','sand','lavender','blue'][Array.from(s.id).reduce((sum,c)=>sum+c.charCodeAt(0),0)%4]}" aria-hidden="true">${escape(initials(s.name||'?'))}</span><h3>${escape(s.name||t('unknown'))}</h3><p>${escape(s.kuttab||t('unknown'))}${s.status==='archived'?` · ${t('archived')}`:''}</p><div class="progress-heading"><span>${t('hizbs')}</span><strong>${value(s.hizbs)}</strong></div><button class="text-button" data-profile="${escape(s.id)}">${t('profile')} <span aria-hidden="true">←</span></button></article>`;
 }
-function rosterFilters(){return `<div class="live-filter"><input type="search" id="live-search" aria-label="${t('search')}" placeholder="${t('search')}" value="${escape(search)}"><select id="live-school" aria-label="${t('school')}"><option value="">${t('all')}</option>${[...new Set(students.map(s=>s.kuttab).filter(Boolean))].sort().map(name=>`<option value="${escape(name)}" ${name===school?'selected':''}>${escape(name)}</option>`).join('')}</select></div>`;}
+function rosterFilters(){return `<div class="live-filter"><input type="search" id="live-search" aria-label="${t('search')}" placeholder="${t('search')}" value="${escape(search)}"><select id="live-school" aria-label="${t('school')}"><option value="">${t('all')}</option>${[...new Set(rosterStudents().map(s=>s.kuttab).filter(Boolean))].sort().map(name=>`<option value="${escape(name)}" ${name===school?'selected':''}>${escape(name)}</option>`).join('')}</select>${screen==='students'?`<label>${t('rosterState')}<select id="roster-state">${[['active','activeOnly'],['archived','archivedOnly'],['all','allRoster']].map(([v,k])=>`<option value="${v}" ${rosterState===v?'selected':''}>${t(k)}</option>`).join('')}</select></label>`:''}</div>`;}
 function errorNotice(){return error?`<p class="notice-error" role="alert">${t(error)}</p>`:'';}
 function render(){
  document.documentElement.lang=language;document.documentElement.dir=language==='ar'?'rtl':'ltr';document.title=`${user?screenTitle():t('welcome')} · Katatib`;root.setAttribute('aria-busy',String(state==='loading'));
@@ -241,9 +243,9 @@ async function refreshDeviceData(){if(hasSaves()||hasDrafts())throw Error('unsav
 function clearData() {
  for(const key of Object.keys(rememberedPages))delete rememberedPages[key];
   priorities.reset();localRecorder.reset();workspace.reset();allStudents=[];rosterIndex=0;
-  learningEpoch++;learningForm=blankLearning();learningRecords=[];learningState='idle';learningError='';learningSaved=false;learningSaving=false;learningPending=null;learningTouched=false;
+  learningEpoch++;learningForm=blankLearning();learningRecords=[];previousLearningRecords=[];learningState='idle';learningError='';learningSaved=false;learningSaving=false;learningPending=null;learningTouched=false;
   attendanceEpoch++; cloudRows.clear(); attendanceState='idle'; screen='today'; cloudContext={date:businessDate(),session:'morning'};
-  epoch++; historyEpoch++; students = []; role = ''; capped = false; search = ''; school = ''; dialog.close(); dialog.replaceChildren();
+  rosterState='active'; epoch++; historyEpoch++; students = []; role = ''; capped = false; search = ''; school = ''; dialog.close(); dialog.replaceChildren();
 }
 async function loadStudents() {
   priorities.reset();
@@ -283,17 +285,22 @@ function profileAttendance(){
  for(const [id,rows,cloud] of [['live-history',profileRows.history,false],['cloud-history',profileRows.cloud,true]]){
  const filtered=rows.filter(r=>(!from||r.date>=from)&&(!to||r.date<=to)).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
  const limit=profileRows.limits[id];
- document.getElementById(id).innerHTML=filtered.length?`<ul class="profile-attendance-list">${filtered.slice(0,limit).map(h=>`<li><div><time dir="ltr">${escape(h.date||t('unknown'))}</time><span class="profile-status">${escape(copy[language][h.status]||t('unknown'))}</span></div>${cloud?`<small>${t(h.session)} · ${t('cloudRevision')} ${value(h.revision)}</small>${h.note?`<p>${escape(h.note)}</p>`:''}`:''}</li>`).join('')}</ul>${filtered.length>limit?`<button class="secondary-button" data-profile-more="${id}">${pl('more')} (${filtered.length-limit})</button>`:''}`:`<p class="profile-empty-state">${pl('empty')}</p>`;
+ document.getElementById(id).innerHTML=filtered.length?`<ul class="profile-attendance-list">${filtered.slice(0,limit).map(h=>`<li><div><time dir="ltr">${escape(h.date||t('unknown'))}</time><span class="profile-status">${escape(copy[language][h.status]||t('unknown'))}</span></div>${!cloud&&h.session!=null?`<small>${t('session')}: ${value(h.session)}</small>`:''}${cloud?`<small>${t(h.session)} · ${t('cloudRevision')} ${value(h.revision)}</small>`:''}${h.note?`<p>${escape(h.note)}</p>`:''}</li>`).join('')}</ul>${filtered.length>limit?`<button class="secondary-button" data-profile-more="${id}">${pl('more')} (${filtered.length-limit})</button>`:''}`:`<p class="profile-empty-state">${pl('empty')}</p>`;
  }
 }
 async function profile(id, button) {
- const student=students.find(s=>s.id===id);if(!student||!user)return;
+ const student=allStudents.find(s=>s.id===id);if(!student||!user)return;
  trigger=button;profileRows=null;const generation=++historyEpoch;
- dialog.innerHTML=`<section class="live-profile"><header class="student-profile-header"><div><h2 id="student-heading">${escape(student.name)}</h2><p>${escape(student.kuttab||t('unknown'))} · ${t('age')}: ${value(student.age)}</p></div><button class="close-button" data-close aria-label="${t('close')}">×</button></header><div class="student-profile-tabs" role="tablist" aria-label="${escape(student.name)}">${['overview','learning','attendance'].map((tab,i)=>`<button id="profile-tab-${tab}" role="tab" data-profile-tab="${tab}" aria-controls="profile-panel-${tab}" aria-selected="${i===0}" tabindex="${i===0?0:-1}">${pl(tab)}</button>`).join('')}</div><div class="profile-content"><section id="profile-panel-overview" data-profile-panel="overview" role="tabpanel" aria-labelledby="profile-tab-overview"><dl class="profile-summary"><div><dt>${pl('baseline')}</dt><dd>${value(student.hizbs)}</dd></div><div><dt>${pl('rate')}</dt><dd>${value(student.attendance)}${student.attendance==null?'':'%'}</dd></div></dl><p class="profile-context">${pl('about')}</p><div id="profile-progress" role="status">${t('loading')}</div></section><section id="profile-panel-learning" data-profile-panel="learning" role="tabpanel" aria-labelledby="profile-tab-learning" hidden><h3>${t('learningHistory')}</h3><div id="profile-learning" role="status">${t('loading')}</div></section><section id="profile-panel-attendance" data-profile-panel="attendance" role="tabpanel" aria-labelledby="profile-tab-attendance" hidden><div class="profile-date-filters"><label>${pl('from')}<input type="date" data-profile-from></label><label>${pl('to')}<input type="date" data-profile-to></label></div><h3>${pl('recent')}</h3><div id="cloud-history" role="status">${t('loading')}</div><h3>${pl('previous')}</h3><div id="live-history" role="status">${t('loading')}</div></section></div></section>`;
+ dialog.innerHTML=`<section class="live-profile"><header class="student-profile-header"><div><h2 id="student-heading">${escape(student.name)}</h2><p>${escape(student.kuttab||t('unknown'))} · ${t('age')}: ${value(student.age)}</p></div><button class="close-button" data-close aria-label="${t('close')}">×</button></header><div class="student-profile-tabs" role="tablist" aria-label="${escape(student.name)}">${['overview','learning','attendance'].map((tab,i)=>`<button id="profile-tab-${tab}" role="tab" data-profile-tab="${tab}" aria-controls="profile-panel-${tab}" aria-selected="${i===0}" tabindex="${i===0?0:-1}">${pl(tab)}</button>`).join('')}</div><div class="profile-content"><section id="profile-panel-overview" data-profile-panel="overview" role="tabpanel" aria-labelledby="profile-tab-overview"><dl class="profile-summary"><div><dt>${pl('baseline')}</dt><dd>${value(student.hizbs)}</dd></div><div><dt>${pl('rate')}</dt><dd>${value(student.attendance)}${student.attendance==null?'':'%'}</dd></div></dl><p class="profile-context">${pl('about')}</p><details class="profile-calculation"><summary>${t('previousStats')}</summary><dl class="profile-summary">${['accuracy','memorizationProgress','totalScore','absentRate'].map(k=>`<div><dt>${t(k)}</dt><dd>${value(student[k])}${student[k]==null||k==='totalScore'?'':'%'}</dd></div>`).join('')}<div><dt>${t('gender')}</dt><dd class="profile-text-value">${student.gender?t(student.gender):t('unknown')}</dd></div><div><dt>${t('enrollmentDate')}</dt><dd class="profile-text-value">${escape(student.enrollmentDate||t('unknown'))}</dd></div></dl></details><p class="profile-context">${t('copyNotice')}</p>${navigator.onLine===false?`<p class="notice-error">${t('offlineCounts')}</p>`:''}<div id="profile-record-counts" role="status"></div><div id="profile-progress" role="status">${t('loading')}</div></section><section id="profile-panel-learning" data-profile-panel="learning" role="tabpanel" aria-labelledby="profile-tab-learning" hidden><h3>${t('previousLearning')}</h3><div id="profile-previous" role="status">${t('loading')}</div><h3>${t('newRecords')}</h3><div id="profile-learning" role="status">${t('loading')}</div><h3>${t('newPlans')}</h3><div id="profile-tasks" role="status">${t('loading')}</div></section><section id="profile-panel-attendance" data-profile-panel="attendance" role="tabpanel" aria-labelledby="profile-tab-attendance" hidden><div class="profile-date-filters"><label>${pl('from')}<input type="date" data-profile-from></label><label>${pl('to')}<input type="date" data-profile-to></label></div><h3>${pl('recent')}</h3><div id="cloud-history" role="status">${t('loading')}</div><h3>${pl('previous')}</h3><div id="live-history" role="status">${t('loading')}</div></section></div></section>`;
  dialog.showModal();
  try{
- const [history,cloud,learning]=await Promise.all([gateway.history(id),gateway.attendanceHistory(id),gateway.learningHistory(id)]);
+ const [source,cloud,learning,tasks]=await Promise.all([gateway.studentHistory(id),gateway.attendanceHistory(id),gateway.learningHistory(id),gateway.workspaceList('katatib_tasks',id)]);
+ const history=source.filter(r=>r.source==='V1'&&r.kind==='attendance').map(r=>({...r,session:r.sessionIndex}));
  if(generation!==historyEpoch||!dialog.open||!user)return;
+ const combined=completeHistory(source,learning,tasks,id);
+ document.getElementById('profile-record-counts').innerHTML=`<p class="profile-context">${t('recordCounts')}: <bdi>V1: ${combined.filter(r=>r.source==='V1').length} · V2: ${combined.filter(r=>r.source==='V2').length}</bdi></p>`;
+ document.getElementById('profile-previous').innerHTML=previousRecordsView(source.filter(r=>r.source==='V1'&&r.kind!=='attendance'),language,t);
+ document.getElementById('profile-tasks').innerHTML=previousRecordsView(combined.filter(r=>r.collection==='katatib_tasks'),language,t);
  profileRows={history,cloud,limits:{'live-history':8,'cloud-history':8}};
  document.getElementById('profile-progress').innerHTML=progressView(student,learning);
  const progress=document.querySelector('#profile-progress .learning-progress');
@@ -301,12 +308,13 @@ async function profile(id, button) {
  const details=document.createElement('details');details.className='profile-calculation';
  const summary=document.createElement('summary');summary.textContent=pl('calculation');details.append(summary,...paragraphs);progress.append(details);
  const labels=progress.querySelectorAll('dt');if(labels[0])labels[0].textContent=pl('baseline');if(labels[1])labels[1].textContent=pl('confirmed');
- document.getElementById('profile-learning').innerHTML=learningHistoryList(learning);
+ document.getElementById('profile-learning').innerHTML=learning.length?learningHistoryList(learning):`<p class="profile-empty-state">${t('noRecords')}</p>`;
  profileAttendance();
- }catch{if(generation===historyEpoch&&dialog.open)for(const id of ['live-history','cloud-history','profile-learning','profile-progress'])document.getElementById(id).textContent=t('historyError');}
+ }catch{if(generation===historyEpoch&&dialog.open)for(const id of ['live-history','cloud-history','profile-learning','profile-progress','profile-previous','profile-tasks','profile-record-counts'])document.getElementById(id).textContent=t('historyError');}
 }
 dialog.addEventListener('click',e=>{
  if(e.target.closest('[data-close]'))dialog.close();
+ const reveal=e.target.closest('[data-records-more]');if(reveal)revealRecords(reveal);
  const tab=e.target.closest('[data-profile-tab]');if(tab)profileTab(tab.dataset.profileTab);
  const more=e.target.closest('[data-profile-more]');if(more&&profileRows){profileRows.limits[more.dataset.profileMore]+=8;profileAttendance();}
 });
@@ -315,6 +323,7 @@ dialog.addEventListener('keydown',e=>{if(!e.target.matches('[data-profile-tab]')
 dialog.addEventListener('close',()=>{historyEpoch++;profileRows=null;dialog.replaceChildren();if(trigger?.isConnected)trigger.focus();});
 root.addEventListener('click', async e => {
   const b = e.target.closest('button'); if (!b || b.disabled) return;
+  if(b.hasAttribute('data-records-more')){revealRecords(b);return;}
   if(changeAppearance(b))return;
   const main=b.dataset.mainPage?pageGroups().find(g=>g.id===b.dataset.mainPage):null;
   const mainTarget=main?(main.items.includes(rememberedPages[main.id])?rememberedPages[main.id]:main.items[0]):null;
@@ -374,7 +383,7 @@ root.addEventListener('change', e=>{if(e.target.closest('#learning-form')&&e.tar
   learningForm[e.target.name]=e.target.type==='checkbox'?e.target.checked:e.target.value;learningTouched=true;learningSaved=false;learningError='';
   if(e.target.name==='kind'){learningForm.confirmMastered=false;learningForm.mistakes='';learningForm.score='';render();}
 
-}else if(e.target.id==='cloud-date'||e.target.id==='cloud-session'){const next={...cloudContext,...(e.target.id==='cloud-date'?{date:e.target.value}:{session:e.target.value})};try{attendanceId('validate',next.date,next.session);cloudContext=next;loadAttendance();}catch{render();}}else if(e.target.id === 'live-school'){school=e.target.value;rosterIndex=0;if(screen==='attendance')loadAttendance();else render();}});
+}else if(e.target.id==='cloud-date'||e.target.id==='cloud-session'){const next={...cloudContext,...(e.target.id==='cloud-date'?{date:e.target.value}:{session:e.target.value})};try{attendanceId('validate',next.date,next.session);cloudContext=next;loadAttendance();}catch{render();}}else if(e.target.id==='roster-state'){rosterState=e.target.value;rosterIndex=0;render();}else if(e.target.id === 'live-school'){school=e.target.value;rosterIndex=0;if(screen==='attendance')loadAttendance();else render();}});
 window.addEventListener('beforeunload',event=>{if(hasDrafts()||hasSaves()){event.preventDefault();event.returnValue='';}});
 // Browser history restoration must not resurrect a previous account's records.
 window.addEventListener('pagehide',()=>{clearData();user=null;state='signed-out';render();});

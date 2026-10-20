@@ -31,6 +31,7 @@ jobs:
           node --check public/katatib/app.mjs
           node --check public/katatib/domain.mjs
           python3 scripts/katatib-offline-manifest.py --check
+          node tests/katatib-records.test.mjs
           node tests/katatib-navigation.test.mjs
           node tests/katatib-followup.test.mjs
           node tests/katatib-offline.test.mjs

@@ -280,7 +280,7 @@ export const english={
   "rankingHint": "Ranking Hint",
   "rank": "Rank",
   "legacyTitle": "History and calendar",
-  "legacyIntro": "Original V1 records are read-only alongside V2 attendance. Old grades do not become certified mastery. Unknown or duplicate sessions are not guessed or merged.",
+  "legacyIntro": "Original V1 records are read-only alongside V2 attendance, learning and planned work. Old grades do not become certified mastery. Unknown or duplicate sessions are not guessed or merged.",
   "legacySource": "Source",
   "legacyKind": "Type",
   "legacyDate": "Date / due date",
