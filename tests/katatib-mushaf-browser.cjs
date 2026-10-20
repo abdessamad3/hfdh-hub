@@ -41,7 +41,7 @@ window.__open();
  const attempts=await page.evaluate(()=>window.__attempts);assert.equal(attempts.length,2);assert.deepEqual(attempts[0],attempts[1]);assert.equal(await page.evaluate(()=>window.__rows.length),1);
  assert.equal(await page.locator('#mushaf-art g#content').innerHTML(),glyphsBefore,'marks cannot rewrite printed glyphs or line layout');
  assert.equal(await page.locator('#mushaf-tools script').count(),0);assert.match(await page.locator('#mushaf-page-marks').innerText(),/ن/);
- await page.locator('[data-mushaf-open]').click();await page.locator('[data-mushaf-mark=correct]').click();await page.locator('#mushaf-mark-form [type=submit]').click();await page.waitForFunction(()=>document.querySelectorAll('.mushaf-history li').length===2);
+ await page.locator('[data-mushaf-open]').click();await page.locator('[data-mushaf-mark=correct]').click();await page.locator('#mushaf-mark-form [type=submit]').click();await page.waitForFunction(()=>document.querySelectorAll('.mushaf-history li').length===2);await page.locator('.verse-history-details summary').click();
  assert.match(await page.locator('.mushaf-history li').first().innerText(),/Correct/);assert.match(await page.locator('#mushaf-page-marks').innerText(),/ص/);
  await page.locator('[data-mushaf-move="1"]').click();assert.equal(await page.locator('#mushaf-verse-1-3').getAttribute('aria-pressed'),'true');assert.equal(await page.locator('#mushaf-verse-1-2').getAttribute('fill'),'#32885d');
  await page.locator('#mushaf-page').fill('42');await page.locator('#mushaf-page').press('Tab');await page.locator('#mushaf-verse-2-251').waitFor();
