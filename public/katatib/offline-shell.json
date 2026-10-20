@@ -95,7 +95,7 @@
     },
     {
       "path": "/live/mushaf-ui.mjs",
-      "sha256": "3b636abb452fd5b405085889502f06333e8386e5b7c5ee452205dc10e21054e9"
+      "sha256": "0e8bb2010fb3b7a2c7349af3bc6097dc38f40f827ea05cc6a95f58743d08d646"
     },
     {
       "path": "/live/offline-gateway.mjs",
@@ -159,11 +159,11 @@
     },
     {
       "path": "/live/live.css",
-      "sha256": "923b011a21032f3bfdbb8f0c388b237a546bee334346e1ee17072ac15de1c96a"
+      "sha256": "e9f33c9b8442c0f007577c916e02a3f946db94e59a759a49598cfa84d6e4ccee"
     },
     {
       "path": "/live/mushaf.css",
-      "sha256": "bc255bf09c00c0996ad4e19c99c6ba106b22c2c45be0e9eb75bc30e014758308"
+      "sha256": "f64577716e7b24068b52e693030bf9f15219ffe377ce6c4d462a594e65e62b0d"
     }
   ]
 }

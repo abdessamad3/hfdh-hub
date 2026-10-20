@@ -40,6 +40,11 @@ window.__open();
  await page.locator('#mushaf-verse-114-6').focus();await page.keyboard.press('Enter');assert.equal(await page.locator('[data-mushaf-move="1"]').isDisabled(),true);
  await page.locator('#mushaf-hizb').selectOption('60');await page.waitForFunction(()=>document.querySelector('#mushaf-page')?.value==='591'&&document.querySelector('.mushaf-svg'));
  await page.locator('#mushaf-surah').selectOption('1');await page.locator('#mushaf-verse-1-1').waitFor();
+ for(const size of [{width:390,height:844},{width:820,height:1180},{width:1360,height:900}]){
+  await page.setViewportSize(size);await page.locator('#mushaf-zoom').selectOption('100');
+  assert.ok(await page.locator('.mushaf-page-viewport').evaluate(el=>el.scrollHeight<=el.clientHeight+2&&el.scrollWidth<=el.clientWidth+2),'fit page has no internal scrolling on phone, tablet and laptop');
+  assert.ok(await page.locator('.mushaf-svg').evaluate(svg=>{const v=svg.closest('.mushaf-page-viewport').getBoundingClientRect(),r=svg.getBoundingClientRect();return r.top>=v.top&&r.bottom<=v.bottom+1&&r.left>=v.left&&r.right<=v.right+1;}),'the whole printed artwork fits inside its viewport');
+ }
  await page.setViewportSize({width:390,height:844});await page.locator('#mushaf-zoom').selectOption('200');
  assert.ok(await page.locator('.mushaf-page-viewport').evaluate(el=>el.scrollWidth>el.clientWidth),'zoom preserves the printed page and scrolls instead of reflowing verses');
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+2),'reader controls fit a narrow phone');
