@@ -257,7 +257,7 @@ let browser,failurePage,observedErrors;
  assert.ok((await page.locator('#profile-progress [data-baseline-hizbs]').innerText()).length>0);
  await page.keyboard.press('Escape');
  await openScreen(page,'students');
- assert.equal(await page.evaluate(()=>localStorage.length),0);
+ assert.deepEqual(await page.evaluate(()=>Object.keys(localStorage)),['katatib-appearance'],'only visual preferences are kept in localStorage without offline opt-in');
  assert.equal(await page.evaluate(()=>sessionStorage.length),0);
  await page.locator('[data-action=logout]').click();assert.equal(await page.locator('.student-card').count(),0);
  assert.equal(await page.locator('body').innerText().then(s=>s.includes('Maryam')),false);
