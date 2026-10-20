@@ -69,5 +69,11 @@ window.__open();
  assert.ok(external.every(url=>url.includes('/b4155f07e4aea087d2c458069acff9f7c7e749f6/mushafs/warsh/kfqc/svg/')),'only public pinned page references leave the site, without student identifiers');
  // The parser independently rejects executable content even if a different caller supplies an SVG string.
  assert.equal(await page.evaluate(async()=>{const {mountMushafPage}=await import('/live/mushaf-pages.mjs');try{mountMushafPage(document.createElement('div'),'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',{},1,()=>{});return false;}catch{return true;}}),true);
+ tamper=false;await page.setViewportSize({width:390,height:844});await page.reload();await page.locator('#mushaf-verse-1-1').waitFor();
+ assert.equal(await page.locator('.mushaf-settings').evaluate(el=>el.open),false,'phone reader starts with extra controls collapsed');
+ assert.ok(await page.locator('#mushaf-student').isVisible());assert.equal(await page.locator('.mushaf-page-count bdi').textContent(),'1 / 604');
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),'compact phone navigation does not overflow');
+ await page.locator('.mushaf-settings summary').click();await page.locator('#mushaf-zoom').selectOption('150');await page.locator('#mushaf-zoom').selectOption('100');await page.locator('.mushaf-settings summary').click();
+ await page.evaluate(()=>{document.documentElement.dir='rtl';document.documentElement.dataset.theme='dark';});await page.screenshot({path:'artifacts/katatib/mushaf-compact-phone-dark.png',fullPage:true});
  assert.deepEqual(errors,[]);console.log('PASS: real printed Warsh artwork, exact verse geometry/navigation, keyboard selection, unchanged glyph paths, immutable marks/lost-ack retry, scoped history, phone zoom/layout, family read-only view, failed-load clearing and source-integrity protection. Physical-device acceptance remains separate.');
 })().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{await browser?.close();});
