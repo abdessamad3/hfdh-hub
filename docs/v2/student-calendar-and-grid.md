@@ -21,3 +21,7 @@ Phone users can scroll the eight-column table horizontally while retaining norma
 ## Validation
 
 Model tests cover leap-year calendars, mixed sessions/sources, unknown dates, exact V1 portions, unmapped quantities, corrected V2 ranges and distinct evaluation/confirmation semantics. Browser checks exercise calendar navigation and day details, the sixty-by-eight table, cell details, evidence switching, and existing profile/read-only workflows. Physical phone acceptance remains part of the classroom trial.
+
+## Quran passage context
+
+Hizb rows now display their surah and source-checked opening words. The first column stays pinned horizontally. All eighth cells are inspectable, including empty cells, whose absence of student evidence remains explicit. Passage details show the exact opening, Warsh surah/ayah, the reader's 604-page number, and an expandable complete opening ayah. A source attribution links the pinned datasets and license. On phones the details form a closable bottom panel; Escape closes that panel before closing a surrounding profile. On larger screens the details remain inline beneath the selected hizb. The teacher can open the matching Mushaf page without losing the student context; unsaved drafts use the existing leave checks.

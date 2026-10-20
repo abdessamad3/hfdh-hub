@@ -26,6 +26,7 @@ export async function connect(){
  async provisionStudent(id,login,rev,event){window.__credentialCalls??=[];window.__credentialCalls.push({id,code:login.code,event});window.__credentialPointers??={};let current=window.__credentialPointers[id];if(current?.eventId!==event){if((current?.revision||0)!==rev)throw new Error('conflict');current={revision:rev+1,eventId:event};window.__credentialPointers[id]=current;}if(window.__credentialLostAck){window.__credentialLostAck=false;throw new Error('unavailable');}return current;},
  async logout(){observer(null);},
  async students(){if(window.__pending)await new Promise(r=>window.__release=r);if(window.__deny)throw new Error('no-access');const original=[{id:'a',name:'<img src=x onerror=alert(1)>',kuttab:'One',age:12,hizbs:3,attendance:80},{id:'b',name:'Maryam',kuttab:'Two',age:null,hizbs:null,attendance:null}];const students=(window.__roster||original).map(s=>({...s,teacherId:'legacy',status:'active',source:'copy',...window.__profiles[s.id]}));for(const [id,p] of Object.entries(window.__profiles))if(!students.some(s=>s.id===id))students.push({id,...p,hizbs:null,attendance:null});return {students,role:window.__role,capped:false};},
+ async verseMarks(){return [];},
  async noticeAcks(id){return Object.values(window.__workspace.katatib_notice_acks||{}).filter(r=>r.studentId===id&&r.readerUid==='reader-uid');},
  async legacyVersions(){return [];},
  async kuttabs(){return [{id:'one',name:'One',teacherId:'legacy',schedule:{lessons:{'1':{lessons:['Original session']}}}}];},
@@ -74,6 +75,7 @@ let browser,failurePage,observedErrors;
  const page=await browser.newPage({viewport:{width:390,height:844}});failurePage=page;
  page.on('pageerror',e=>errors.push(e.message));
  await page.route('**/live/gateway.mjs',r=>r.fulfill({contentType:'text/javascript',body:mock}));
+ await page.route('https://raw.githubusercontent.com/quran-ws/quran-svg/**',route=>{const match=route.request().url().match(/\/svg\/(\d{3})\.svg$/);const file=match?path.resolve('tests/fixtures/warsh-'+match[1]+'.svg'):'';return file&&fs.existsSync(file)?route.fulfill({contentType:'image/svg+xml',body:fs.readFileSync(file)}):route.fulfill({status:503,body:''});});
  const url=`http://127.0.0.1:${server.address().port}/live/`;
  await page.goto(new URL('/',url).href);
  assert.equal(new URL(page.url()).pathname,'/');
@@ -505,7 +507,17 @@ let browser,failurePage,observedErrors;
  assert.equal(await page.locator('#profile-hizb-grid .hizb-table thead th').count(),9);
  await page.locator('#profile-hizb-grid [data-hizb-cell="2:3"]').click();
  assert.ok((await page.locator('#profile-hizb-grid .hizb-cell-detail').innerText()).includes('Old note 0'));
- assert.equal(await page.locator('#profile-hizb-grid [data-hizb-cell="2:2"]').count(),0,'quantity does not guess first eighths');
+ assert.equal(await page.locator('#profile-hizb-grid [data-hizb-cell="2:2"]').getAttribute('data-evidence-state'),'empty','quantity does not guess first eighths');
+ await page.locator('#profile-hizb-grid [data-passage-close]').click();
+ await page.locator('#profile-hizb-grid [data-hizb-cell="2:2"]').click();
+ assert.ok((await page.locator('#profile-hizb-grid .passage-description').innerText()).includes('84'));
+ assert.ok((await page.locator('#profile-hizb-grid .passage-description').innerText()).includes('داخل الآية'));
+ await page.locator('#profile-hizb-grid .passage-full-ayah summary').click();assert.ok(await page.locator('#profile-hizb-grid .passage-full-ayah p').isVisible());
+ const pane=await page.locator('#profile-hizb-grid .hizb-cell-detail').boundingBox();assert.ok(pane.y>=0&&pane.y+pane.height<=844+1,'passage panel fits the phone');
+ await page.keyboard.press('Escape');assert.equal(await page.locator('#profile-hizb-grid .hizb-cell-detail').count(),0);
+ assert.ok(await page.locator('#student-dialog').isVisible(),'Escape closes passage details before the profile');
+ assert.ok((await page.locator('#profile-hizb-grid .hizb-row-heading').nth(2).innerText()).includes('سَيَقُولُ'));
+ assert.equal(await page.locator('#profile-hizb-grid .hizb-row-heading').first().evaluate(el=>getComputedStyle(el).position),'sticky');
  await page.locator('#profile-hizb-grid [data-hizb-view]').selectOption('confirmed');
  assert.equal(await page.locator('#profile-hizb-grid .hizb-cell-detail').count(),0,'changing evidence clears the old selected cell');
  await page.locator('#profile-hizb-grid [data-hizb-view]').selectOption('oldEvaluation');
@@ -515,7 +527,10 @@ let browser,failurePage,observedErrors;
  assert.equal(await page.locator('#profile-previous [data-previous-record]:visible').count(),16);
  assert.ok((await page.locator('#profile-previous').textContent()).includes('Old note 129'));
  await page.screenshot({path:'artifacts/katatib/profile-complete-history-phone.png',fullPage:true});
- await page.keyboard.press('Escape');
+ await page.locator('#profile-hizb-grid [data-hizb-start="1"]').click();
+ await page.locator('#profile-hizb-grid [data-passage-open="1:1"]').click();
+ await page.locator('.mushaf-reader').waitFor();assert.equal(await page.locator('#mushaf-student').inputValue(),'a');
+ assert.equal(await page.locator('#student-dialog').isVisible(),false);
  await openScreen(page,'dataReview');await page.locator('[data-work-action=review-records]').click();await page.locator('[data-review-students]').waitFor();
  const copiedEvaluation=page.locator('.workspace-table').first().locator('tbody tr').filter({has:page.locator('td:first-child',{hasText:'التقييم'})});
  assert.equal(await copiedEvaluation.locator('td').nth(1).innerText(),'130');

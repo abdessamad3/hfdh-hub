@@ -1,3 +1,5 @@
+import {passageReference} from './passages.mjs';
+let pendingMushafTarget=null;
 import {createStudentVisuals} from './student-visuals.mjs';
 const profileVisuals=createStudentVisuals(),learningVisuals=createStudentVisuals();
 import {recordLabels,previousRecordsView,revealRecords,completeHistory} from './records.mjs';
@@ -152,7 +154,15 @@ function learningView() {
 }
 function learningHistoryPanel(){const selected=students.find(s=>s.id===learningForm.studentId);return `<h2>${t('learningHistory')}</h2>${selected?`<p class="live-account">${escape(selected.name)}</p>`:''}${learningState==='ready'?progressView(selected,learningRecords)+`<div id="learning-hizb-grid"></div><section><h3>${t('previousLearning')} (${previousLearningRecords.length})</h3>${previousRecordsView(previousLearningRecords,language,t)}</section><h3>${t('newRecords')}</h3>`:''}${learningState==='loading'?`<p role="status">${t('loading')}</p>`:learningState==='error'?`<p class="notice-error" role="alert">${t('historyError')}</p><button class="secondary-button" data-action="learning-reload">${t('retry')}</button>`:learningHistoryList(learningRecords,true)}`;}
 
-function mountLearningVisuals(){const host=document.getElementById('learning-hizb-grid');if(screen==='learning'&&learningState==='ready'&&host)learningVisuals.mount({grid:host},{studentId:learningForm.studentId,history:previousLearningRecords,learning:learningRecords,language,t});else learningVisuals.reset();}
+function openStudentPassage(studentId,hizb,eighth){
+ const student=allStudents.find(s=>s.id===studentId);if(!user||!student||!screens().includes('mushaf'))return;
+ const ref=passageReference(hizb,eighth);
+ if(hasSaves()||workspace.busy()||!workspace.canLeave()||screen==='recording'&&!localRecorder.canLeave())return;
+ if(screen==='learning'&&(learningTouched||learningPending)&&!confirm(t('cloudLeave')))return;
+ pendingMushafTarget={studentId,surah:ref.surah,ayah:ref.ayah,page:ref.page};
+ if(dialog.open)dialog.close();workspace.reset();if(screen==='recording')localRecorder.reset();screen='mushaf';render();pendingMushafTarget=null;window.scrollTo(0,0);
+}
+function mountLearningVisuals(){const host=document.getElementById('learning-hizb-grid');if(screen==='learning'&&learningState==='ready'&&host)learningVisuals.mount({grid:host},{studentId:learningForm.studentId,history:previousLearningRecords,learning:learningRecords,language,t,openPassage:(h,e)=>openStudentPassage(learningForm.studentId,h,e)});else learningVisuals.reset();}
 function progressView(student,records) {
   const p=learningProgress(records,student?.hizbs??null);
   return `<section class="learning-progress" aria-label="${t('progressTitle')}" data-progress><h3>${t('progressTitle')}</h3><dl><div><dt>${t('baselineLabel')}</dt><dd data-baseline-hizbs>${value(p.baselineHizbs)}</dd></div><div><dt>${t('trackedLabel')}</dt><dd data-confirmed-hizbs>${value(p.confirmedHizbs,3)}</dd><small><span data-confirmed-eighths>${value(p.confirmedEighths)}</span> ${t('eighthsLabel')}</small></div><div><dt>${t('practiceLabel')}</dt><dd data-practice-eighths>${value(p.practiceEighths)}</dd></div><div><dt>${t('revisionCount')}</dt><dd>${value(p.revisions)}</dd></div><div><dt>${t('evaluationCount')}</dt><dd>${value(p.evaluations)}</dd></div></dl><div class="progress-track" role="progressbar" aria-label="${t('trackedOnly')}" aria-valuemin="0" aria-valuemax="480" aria-valuenow="${p.confirmedEighths}"><span style="width:${p.confirmedPercent}%"></span></div><p>${t('trackedOnly')}</p>${p.baselineHizbs!==0?`<p>${t('baselineUnknown')}</p>`:''}${p.unreviewed?`<p class="notice-error">${value(p.unreviewed)} ${t('unreviewedLabel')}</p>`:''}${p.conflicts?`<p class="notice-error" role="alert">${t('progressConflict')}</p>`:''}</section>`;
@@ -239,14 +249,14 @@ function render(){
  mountLearningVisuals();
  if(state==='ready'&&screen==='today')priorities.mount(document.getElementById('priorities-root'),{gateway,user,students,language,translate:t});
  if(state==='ready'&&screen==='recording')localRecorder.mount(document.getElementById('recording-root'),{user,students:allStudents,language});
- if(state==='ready'&&extraScreens.includes(screen))workspace.mount(document.getElementById('work-root'),{page:screen,gateway,user,role,students:allStudents,language,refresh:loadStudents});
+ if(state==='ready'&&extraScreens.includes(screen))workspace.mount(document.getElementById('work-root'),{page:screen,gateway,user,role,students:allStudents,language,refresh:loadStudents,mushafTarget:pendingMushafTarget});
 }
 
 async function refreshDeviceData(){if(hasSaves()||hasDrafts())throw Error('unsaved-draft');workspace.reset();cloudRows.clear();await loadStudents();if(state==='ready'&&screen==='attendance')await loadAttendance();if(state==='ready'&&screen==='learning')await loadLearning();}
 
 function clearData() {
  for(const key of Object.keys(rememberedPages))delete rememberedPages[key];
-  profileVisuals.reset();learningVisuals.reset();priorities.reset();localRecorder.reset();workspace.reset();allStudents=[];rosterIndex=0;
+  pendingMushafTarget=null;profileVisuals.reset();learningVisuals.reset();priorities.reset();localRecorder.reset();workspace.reset();allStudents=[];rosterIndex=0;
   learningEpoch++;learningForm=blankLearning();learningRecords=[];previousLearningRecords=[];learningState='idle';learningError='';learningSaved=false;learningSaving=false;learningPending=null;learningTouched=false;
   attendanceEpoch++; cloudRows.clear(); attendanceState='idle'; screen='today'; cloudContext={date:businessDate(),session:'morning'};
   rosterState='active'; epoch++; historyEpoch++; students = []; role = ''; capped = false; search = ''; school = ''; dialog.close(); dialog.replaceChildren();
@@ -314,7 +324,7 @@ async function profile(id, button) {
  const labels=progress.querySelectorAll('dt');if(labels[0])labels[0].textContent=pl('baseline');if(labels[1])labels[1].textContent=pl('confirmed');
  document.getElementById('profile-learning').innerHTML=learning.length?learningHistoryList(learning):`<p class="profile-empty-state">${t('noRecords')}</p>`;
  profileAttendance();
- profileVisuals.mount({calendar:document.getElementById('profile-attendance-calendar'),grid:document.getElementById('profile-hizb-grid')},{studentId:id,history:source,learning,language,t});
+ profileVisuals.mount({calendar:document.getElementById('profile-attendance-calendar'),grid:document.getElementById('profile-hizb-grid')},{studentId:id,history:source,learning,language,t,openPassage:(h,e)=>openStudentPassage(id,h,e)});
  }catch{if(generation===historyEpoch&&dialog.open)for(const id of ['live-history','cloud-history','profile-learning','profile-progress','profile-previous','profile-tasks','profile-record-counts','profile-attendance-calendar','profile-hizb-grid'])document.getElementById(id).textContent=t('historyError');}
 }
 dialog.addEventListener('click',e=>{

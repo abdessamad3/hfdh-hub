@@ -19,7 +19,7 @@
     },
     {
       "path": "/mushaf/manifest.json",
-      "sha256": "a8839bc4c0a9bbdcd9e1aa6107b9fb47842fea4a5653d1607e0cbbacacc661c1"
+      "sha256": "ec5c074a2c3c1e6cb40735aba120c8fb26f7ba0336b90baf78bce9da500340fb"
     },
     {
       "path": "/mushaf/source-license.txt",
@@ -35,7 +35,7 @@
     },
     {
       "path": "/live/app.mjs",
-      "sha256": "bab577a1c6daf912869342f21253d8f7f73b762859f17d4aa3681b2f30362d0e"
+      "sha256": "cbe97face2bc2e51af2bf3f6d90d0e2c1a2a65a73a81a0ee28cc387d2f5696f1"
     },
     {
       "path": "/live/appearance.mjs",
@@ -115,7 +115,7 @@
     },
     {
       "path": "/live/mushaf-ui.mjs",
-      "sha256": "a3f056de9e1e3c62aad43bb77eef364d736c277f303b3c8adf1680599057072a"
+      "sha256": "2013f6039fa4a96422df946e32ee5cb23d6ccc5733ba15161fa0636f07d69519"
     },
     {
       "path": "/live/navigation.mjs",
@@ -136,6 +136,14 @@
     {
       "path": "/live/offline-ui.mjs",
       "sha256": "ea0e0c7b9f700da80e5ccbbfc48f310ab0483a50928550e8f0ecc4c31ef6b1ee"
+    },
+    {
+      "path": "/live/passage-index.mjs",
+      "sha256": "ce6b08feeb3a8b847972cecc2a0ef60786eccef61018870dc39fcbd0801c5a1d"
+    },
+    {
+      "path": "/live/passages.mjs",
+      "sha256": "246a69f50a76cc748e1bf92f8223985c664d5c437b25a2493c68ab8e24fb54fd"
     },
     {
       "path": "/live/planning.mjs",
@@ -179,7 +187,7 @@
     },
     {
       "path": "/live/student-visuals.mjs",
-      "sha256": "7f53b15eefffbac69a219e5a59848373c5226b17476c4a9ec48c3bed3929733f"
+      "sha256": "fbdc6d5505cdad81e928aa86f0f5b0290d104a33df8473c64c5c58bcda4b428c"
     },
     {
       "path": "/live/teacher-attendance-ui.mjs",
@@ -199,7 +207,7 @@
     },
     {
       "path": "/live/live.css",
-      "sha256": "45a725d351e6f0e580d523510ae15f6084a68a7a59f7fdd9601ff478e11d4e4c"
+      "sha256": "1b261788ae21daabb8a32b00c6a5999f36b70e181e3115ebaa1a73153e6f3746"
     },
     {
       "path": "/live/mushaf.css",

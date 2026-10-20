@@ -6,7 +6,7 @@ The owner chose Madinah Warsh. The integrated website's **Mushaf** screen now us
 
 - Artwork/geometry: `quran-ws/quran-svg`, commit `b4155f07e4aea087d2c458069acff9f7c7e749f6`, directory `mushafs/warsh/kfqc`.
 - Publisher ancestor recorded by that source: `1442-ai-warsh.zip`, SHA-256 `2a0c65131dac5a922502fb4740034fb4ffc57792a0b6e5c1cc34c5a3339dd5d7`.
-- Navigation: `quran-center/quran-meta`, commit `3b7afc7f8c905da3d8fb3e8725f86805bd76b2bd`, `src/lists/WarshLists.ts` page and hizb-quarter starts. Surah names/counts/start pages come from the artwork edition. All 6,214 references were cross-checked for contiguous page coverage and every surah start agrees. No eighth-hizb boundaries were invented: that source explicitly lacks verified Warsh eighth data.
+- Navigation: `quran-center/quran-meta`, commit `3b7afc7f8c905da3d8fb3e8725f86805bd76b2bd`, `src/lists/WarshLists.ts` page and hizb-quarter starts. Surah names/counts/start pages come from the artwork edition. All 6,214 references were cross-checked for contiguous page coverage and every surah start agrees. That original source lacks Warsh eighth data. The later passage index adds source-checked eighth starts and corrects the shifted hizb starts; see `public/katatib/mushaf/passage-sources.md`.
 - Quran.ws metadata/geometry: CC BY 4.0. Original artwork retains the publisher's usage terms; the source reproduces permission for website/software use. Navigation metadata: MIT. Full notices are distributed under `public/katatib/mushaf/` and linked from the reader.
 
 References:
@@ -47,3 +47,9 @@ The change stays on `katatib-v2/teacher-preview`; no production merge, original-
 ### Passed release checks
 
 Commit `75a0bf9a81bfae47e97657f6ae0cdf21331aba1a` passed [Katatib model/browser/Auth/Firestore checks](https://github.com/abdessamad3/hfdh-hub/actions/runs/39241275192) and [the application build](https://github.com/abdessamad3/hfdh-hub/actions/runs/39241275148). The page/surah tables use encoded immutable constants to stay within Firestore’s expression limit while preserving full reference validation. The emulator checks ordinary and boundary pages through page 604. No Firebase deployment was executed from this environment.
+
+## Passage descriptions and hizb navigation correction
+
+The tracker now imports a public offline-capable index of 480 eighth starts, with original KFQC Warsh opening words, the complete opening ayah, and current 604-page references. Data provenance and adaptation details are in `public/katatib/mushaf/passage-sources.md`; the reproducible builder is `scripts/katatib-passage-index.py`. Every non-surah opening preview is compared with the KFQC text; surah starts use the first numbered KFQC ayah. Inside-ayah boundaries retain a matched character offset. No inferred numeric quantity supplies a Quran boundary.
+
+Twenty-two older hizb navigation offsets from the quarter-derived metadata were shifted relative to the checked textual starts. Only `hizbStarts` is corrected in the existing manifest. Artwork bytes/hashes, surah/ayah numbering, page starts, stored marks and learning records are unchanged. Student-to-Mushaf links validate the selected reference against the reader page, retain the intended student, and do not open the mark editor automatically. Archived student links have read-only reader controls; a missing student target never falls back to another student.
