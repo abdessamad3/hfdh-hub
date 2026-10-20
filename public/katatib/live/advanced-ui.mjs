@@ -1,3 +1,4 @@
+import {interfaceCopy} from './interface.mjs';
 import {offlineLabels} from './offline-ui.mjs';
 import { businessDate } from './dates.mjs';
 import { cleanSchedule,cleanLegacyCorrection,cleanQuestion,cleanAttempt,cleanLegacyTaskState,effectiveSchedule,loadRanking } from './advanced-model.mjs';
@@ -17,7 +18,7 @@ export function createAdvanced(){
  function reset(){lifetime++;generation++;ctx=null;host=null;screen='';loaded=false;loading=false;busy=false;error='';notice='';resources=[];selected='';rows=[];originals=[];draft=null;pending=null;page=0;bank='approved';previewDate=businessDate();quizIndex=0;answer=null;attempts=[];}
  function picker(key,items,value){return `<label>${t(key)}<select data-advanced-select="${key}" ${loading||busy||pending?'disabled':''}>${items.map(r=>`<option value="${esc(r.id)}" ${r.id===value?'selected':''}>${esc(r.name||r.prompt||r.arabicPrompt||r.id)}</option>`).join('')}</select></label>`;}
  function field(key,value,type='text',required=false){return `<label>${t(key)}${type==='textarea'?`<textarea name="${key}" maxlength="${key==='prompt'?2000:key==='options'?4004:500}" ${required?'required':''}>${esc(value)}</textarea>`:type==='checkbox'?`<input type="checkbox" name="${key}" ${value?'checked':''} ${required?'required':''}>`:`<input type="${type}" name="${key}" value="${esc(value)}" ${required?'required':''} ${type==='number'?'step="1"':''}>`}</label>`;}
- function table(keys,data){return `<div class="workspace-table-wrap"><table class="workspace-table"><thead><tr>${keys.map(k=>`<th>${t(k)}</th>`).join('')}</tr></thead><tbody>${data.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;}
+ function table(keys,data){return `<div class="workspace-table-wrap" role="region" aria-label="${keys.map(k=>t(k)).join(' · ')}" tabindex="0"><table class="workspace-table"><thead><tr>${keys.map(k=>`<th scope="col">${t(k)}</th>`).join('')}</tr></thead><tbody>${data.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;}
  const editButton=(id,source='')=>`<button class="text-button" data-advanced-edit="${esc(id)}" data-original="${source}">${t('edit')}</button>`;
  function versionView(versions){return `<details><summary>${t('version')} (${versions.length})</summary>${table(['version','date','score','note','reason'],versions.map(v=>[v.snapshot.revision,esc(v.snapshot.date||'—'),esc(v.snapshot.score??'—'),esc(v.snapshot.note),esc(v.snapshot.reason||v.snapshot.status||'')]))}</details>`;}
  function form(){if(!draft)return '';const d=draft.data;let fields='';
