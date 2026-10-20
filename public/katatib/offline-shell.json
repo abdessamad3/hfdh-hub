@@ -35,7 +35,7 @@
     },
     {
       "path": "/live/app.mjs",
-      "sha256": "665d74317072861763ae97328780a33ded677038687494b5eb060422d5cd2bf8"
+      "sha256": "e202c697a46c5005d473b23cb1072901a7760728b874b4c5f4ae249b5d122f1d"
     },
     {
       "path": "/live/attendance.mjs",
@@ -68,6 +68,10 @@
     {
       "path": "/live/family-ui.mjs",
       "sha256": "69004a621642e951e50649ca0ef4445c0ce60cfebf24b0da5a0b55e8622b2907"
+    },
+    {
+      "path": "/live/followup.mjs",
+      "sha256": "af6fddf8e195011caf4e063d550147951da06006cc9b946a6d9ebe0b08afb5ea"
     },
     {
       "path": "/live/gateway.mjs",
@@ -118,6 +122,10 @@
       "sha256": "23c93799eba25bc593d013f19e058c17a8d6f8a3a4d97bf81d40dd60fa9595aa"
     },
     {
+      "path": "/live/priorities-ui.mjs",
+      "sha256": "35334e0d550d34ecddf1a3a6c5d103e93c5af89a2cfcd9d3c42646dd5ff6bbc2"
+    },
+    {
       "path": "/live/progress.mjs",
       "sha256": "739a2d3c4ea9d4a2933be20f0b9ea069faab2777298129ad1149ff1ef9a198ad"
     },
@@ -159,11 +167,11 @@
     },
     {
       "path": "/live/workspace.mjs",
-      "sha256": "f78ad81ef45abf3f0f2cff373a642c46f9dcf7b7f175c7954f5a4af1571635e1"
+      "sha256": "189a54945eea6ba18c0a7d5f13c0fbfd62463ac410427c40613a54ed265762fb"
     },
     {
       "path": "/live/live.css",
-      "sha256": "f9cde96db516061178665ef010fc57ed17356af9d20071d8a37cb44de4eb354e"
+      "sha256": "6e2b2a1046792430d2c072d65f5acb247d3d3866b253750d416fe79f16e31bb2"
     },
     {
       "path": "/live/mushaf.css",
