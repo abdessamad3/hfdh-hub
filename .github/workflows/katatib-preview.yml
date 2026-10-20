@@ -37,6 +37,7 @@ jobs:
           node tests/katatib-domain.test.mjs
           node tests/katatib-audio-clips.test.mjs
           node tests/katatib-mushaf.test.mjs
+          node tests/katatib-mushaf-archive.test.mjs
           node tests/katatib-family.test.mjs
           node tests/katatib-student-login.test.mjs
           node tests/katatib-live-model.test.mjs
@@ -62,7 +63,7 @@ jobs:
           PLAYWRIGHT_MODULE: ${{ runner.temp }}/katatib-browser/node_modules/playwright
         run: |
           katatib_browser_failed=0
-          for katatib_test in tests/katatib-browser.cjs tests/katatib-live-browser.cjs tests/katatib-mushaf-browser.cjs tests/katatib-audio-browser.cjs tests/katatib-offline-browser.cjs; do
+          for katatib_test in tests/katatib-browser.cjs tests/katatib-live-browser.cjs tests/katatib-mushaf-browser.cjs tests/katatib-mushaf-download-browser.cjs tests/katatib-audio-browser.cjs tests/katatib-offline-browser.cjs; do
             if ! node "$katatib_test"; then katatib_browser_failed=1; fi
           done
           exit "$katatib_browser_failed"
