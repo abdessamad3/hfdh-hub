@@ -4,3 +4,4 @@ export function windowDates(window){const result=[];for(let t=Date.parse(window.
 export function recentRows(rows,window,older=false){if(older)return rows;return rows.filter(r=>{const date=r.date||r.due||'';return !/^\d{4}-\d{2}-\d{2}$/.test(date)||date>=window.from&&date<=window.to||['nextRevision','nextEvaluation'].includes(r.kind);});}
 export function currentAttendance(rows,date,session){const matches=rows.filter(r=>r.date===date&&r.session===session);if(matches.length>1)throw Error('duplicate-offline-attendance');const r=matches[0];return r?{status:r.status,note:r.note||'',revision:r.revision}:{status:'unmarked',note:'',revision:0};}
 export function snapshotBytes(cache){return new TextEncoder().encode(JSON.stringify(cache)).byteLength;}
+export function snapshotStudents(students,{role,groups=['__all']}={}){return students.filter(s=>(role!=='teacher'||s.status!=='archived')&&(groups.includes('__all')||groups.includes(s.kuttab)));}

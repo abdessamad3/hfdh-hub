@@ -127,7 +127,7 @@
     },
     {
       "path": "/live/offline-snapshot.mjs",
-      "sha256": "bb5b448fd21c2cd227f9b9951c228b8f43a534175b3f570cac318368715cb318"
+      "sha256": "8d162ab39afea1a6e3ba3dbcbae936e3e9c702d0b43ec80939a223bab5e4f9f5"
     },
     {
       "path": "/live/offline-store.mjs",
@@ -135,7 +135,7 @@
     },
     {
       "path": "/live/offline-ui.mjs",
-      "sha256": "749054546895f89398be56fbcf35ef5cb923db91563e33747b8303e62d6d3991"
+      "sha256": "ea0e0c7b9f700da80e5ccbbfc48f310ab0483a50928550e8f0ecc4c31ef6b1ee"
     },
     {
       "path": "/live/planning.mjs",
