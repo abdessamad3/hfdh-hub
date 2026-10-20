@@ -306,7 +306,7 @@ root.addEventListener('click', async e => {
     if(hasSaves())return;
     if(gateway.offlinePending?.()){alert(offlineLabels[language].noLogout);return;}
     if(hasDrafts()&&!confirm(t('cloudLeave')))return;
-    localRecorder.reset();
+    localRecorder.reset();workspace.reset();
     const previousState=state,leavingUid=user?.uid;pendingLogin=true;state='loading';render();
     try { await gateway.logout(); } catch(e) { if(user?.uid===leavingUid)state=previousState;if(e.message==='offline-sync-first')alert(offlineLabels[language].noLogout);else error='error'; } finally {pendingLogin=false;render();}
   } else if (b.dataset.action === 'retry') { if (user) loadStudents(); else if (gateway) {state='signed-out';error='';render();} else start(); }
