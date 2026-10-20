@@ -99,7 +99,7 @@
     },
     {
       "path": "/live/offline-gateway.mjs",
-      "sha256": "3b91c1f71b612f45684bdcaf10b59c474721dc144a25170dbf6b213f0ff5393e"
+      "sha256": "7a3d79d77e53c1e2c965b6c1021e391282e8390f616a24e0c612896274bfc7e3"
     },
     {
       "path": "/live/offline-store.mjs",
