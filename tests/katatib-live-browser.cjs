@@ -109,6 +109,14 @@ let browser,failurePage,observedErrors;
  assert.equal(await page.locator('#profile-panel-attendance').isVisible(),false);
  assert.ok(await page.locator('#student-dialog').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'profile has no horizontal overflow');
  await page.locator('[data-profile-tab=attendance]').click();
+ await page.locator('[data-calendar-day="2026-10-18"]').waitFor();
+ await page.locator('[data-calendar-day="2026-10-18"]').click();
+ assert.ok((await page.locator('.calendar-day-detail').innerText()).includes('Présent'));
+ await page.locator('[data-calendar-day="2026-10-17"]').click();
+ assert.ok((await page.locator('.calendar-day-detail').innerText()).includes('Aucune présence'));
+ await page.locator('[data-calendar-shift="-1"]').click();assert.equal(await page.locator('[data-calendar-month]').inputValue(),'2026-09');
+ await page.locator('[data-calendar-shift="1"]').click();assert.equal(await page.locator('[data-calendar-month]').inputValue(),'2026-10');
+ await page.locator('.profile-attendance-lists > summary').click();
  await page.locator('#live-history li').waitFor();assert.ok((await page.locator('#live-history').innerText()).includes('Présent'));
  for(const [width,height] of [[390,844],[820,1180],[1360,900]]){
    await page.setViewportSize({width,height});
@@ -487,9 +495,20 @@ let browser,failurePage,observedErrors;
  await page.locator('#history-student').selectOption('b');
  const childHistoryCount=await page.evaluate(async()=>{const {currentLearning}=await import('/live/learning.mjs');return Object.keys(window.__records).filter(key=>key.startsWith('b~')).length+currentLearning(Object.values(window.__learning).filter(r=>r.studentId==='b')).length+Object.values(window.__workspace.katatib_tasks).filter(r=>r.studentId==='b').length;});await page.waitForFunction(n=>document.querySelector('[data-history-count]')?.textContent.startsWith(n+' '),childHistoryCount);
  assert.equal((await page.locator('#work-root').innerText()).includes('Old note'),false,'switching a child cannot retain another child’s history');
+ // Exact V1 identifiers populate the eight-column map; quantity alone remains unlocated.
+ await page.evaluate(()=>{window.__legacy.a[0].data.quantityIdentifier='r2';});
  // Profiles reveal old educational records as well as new learning, without another main destination.
  await openScreen(page,'students');await page.locator('[data-profile=a]').click();
  await page.locator('[data-profile-tab=learning]').click();await page.locator('#profile-previous [data-previous-record]').first().waitFor();
+ await page.locator('#profile-hizb-grid .hizb-table').waitFor();
+ assert.equal(await page.locator('#profile-hizb-grid .hizb-table tbody > tr').count(),60);
+ assert.equal(await page.locator('#profile-hizb-grid .hizb-table thead th').count(),9);
+ await page.locator('#profile-hizb-grid [data-hizb-cell="2:3"]').click();
+ assert.ok((await page.locator('#profile-hizb-grid .hizb-cell-detail').innerText()).includes('Old note 0'));
+ assert.equal(await page.locator('#profile-hizb-grid [data-hizb-cell="2:2"]').count(),0,'quantity does not guess first eighths');
+ await page.locator('#profile-hizb-grid [data-hizb-view]').selectOption('confirmed');
+ assert.equal(await page.locator('#profile-hizb-grid .hizb-cell-detail').count(),0,'changing evidence clears the old selected cell');
+ await page.locator('#profile-hizb-grid [data-hizb-view]').selectOption('oldEvaluation');
  assert.equal(await page.locator('#profile-previous [data-previous-record]').count(),131);
  assert.equal(await page.locator('#profile-previous [data-previous-record]:visible').count(),8);
  await page.locator('#profile-previous [data-records-more]').click();

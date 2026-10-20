@@ -35,7 +35,7 @@
     },
     {
       "path": "/live/app.mjs",
-      "sha256": "5fde27aaea0a26e28f744dd308dec7eed1327e003ec9c235565b128b9887c195"
+      "sha256": "bab577a1c6daf912869342f21253d8f7f73b762859f17d4aa3681b2f30362d0e"
     },
     {
       "path": "/live/appearance.mjs",
@@ -178,6 +178,10 @@
       "sha256": "0a2ded4f8da4496c7081618ccc868d67bc813d162be0a60ff2263b7a97ba95e4"
     },
     {
+      "path": "/live/student-visuals.mjs",
+      "sha256": "7f53b15eefffbac69a219e5a59848373c5226b17476c4a9ec48c3bed3929733f"
+    },
+    {
       "path": "/live/teacher-attendance-ui.mjs",
       "sha256": "e73db103ddba94f4187a9a366f82a7c35279d5bd05de96266e63d1e4d5573d68"
     },
@@ -195,7 +199,7 @@
     },
     {
       "path": "/live/live.css",
-      "sha256": "3618fd68e555dfca73d989dd5302c91d4a6f9fbab99ad4c5d0b8d156bbb254cd"
+      "sha256": "45a725d351e6f0e580d523510ae15f6084a68a7a59f7fdd9601ff478e11d4e4c"
     },
     {
       "path": "/live/mushaf.css",
