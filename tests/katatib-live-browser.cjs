@@ -105,7 +105,25 @@ let browser,failurePage,observedErrors;
  await page.locator('#live-school').selectOption('One');assert.equal(await page.locator('.student-card').count(),1);
  await page.evaluate(()=>window.__history=[{date:'2026-10-18',status:'present',session:0}]);
  await page.locator('[data-profile=a]').click();
+ assert.equal(await page.locator('[data-profile-tab=overview]').getAttribute('aria-selected'),'true');
+ assert.equal(await page.locator('#profile-panel-attendance').isVisible(),false);
+ assert.ok(await page.locator('#student-dialog').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'profile has no horizontal overflow');
+ await page.locator('[data-profile-tab=attendance]').click();
  await page.locator('#live-history li').waitFor();assert.ok((await page.locator('#live-history').innerText()).includes('Présent'));
+ for(const [width,height] of [[390,844],[820,1180],[1360,900]]){
+   await page.setViewportSize({width,height});
+   assert.ok(await page.locator('#student-dialog').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
+   const close=await page.locator('#student-dialog [data-close]').boundingBox();
+   assert.ok(close.y>=0&&close.y+close.height<=height,'close stays inside viewport');
+ }
+ await page.setViewportSize({width:390,height:844});
+ await page.locator('[data-profile-from]').fill('2026-10-19');
+ assert.equal(await page.locator('#live-history li').count(),0);
+ await page.locator('[data-profile-from]').fill('');
+ assert.equal(await page.locator('#live-history li').count(),1);
+ await page.locator('[data-profile-tab=attendance]').focus();await page.keyboard.press('Home');
+ assert.equal(await page.locator('[data-profile-tab=overview]').getAttribute('aria-selected'),'true');
+ 
  await page.keyboard.press('Escape');assert.equal(await page.getByRole('dialog').count(),0);
  await page.locator('#live-school').selectOption('');
  await page.waitForFunction(()=>document.documentElement.scrollWidth<=window.innerWidth+1);
@@ -222,6 +240,7 @@ let browser,failurePage,observedErrors;
  await page.screenshot({path:'artifacts/katatib/mobile-learning-ar.png',fullPage:true});
  await openScreen(page,'students');
  await page.locator('[data-profile=a]').click();
+ await page.locator('[data-profile-tab=learning]').click();
  await page.locator('#profile-learning li').first().waitFor();
  assert.equal(await page.locator('#profile-learning > ul > li').count(),4);
  await page.keyboard.press('Escape');

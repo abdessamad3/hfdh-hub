@@ -265,23 +265,54 @@ async function start() {
     gateway.observe(next => { clearData(); user = next; error = ''; if (user) loadStudents(); else { state = 'signed-out'; render(); } });
   } catch (e) { state = 'error'; error = errorKey(e); render(); }
 }
-let trigger;
-async function profile(id, button) {
-  const student = students.find(s=>s.id === id); if (!student || !user) return;
-  trigger = button; const generation = ++historyEpoch;
-  dialog.innerHTML = `<section class="live-profile"><button class="close-button" data-close aria-label="${t('close')}">×</button><h2 id="student-heading">${escape(student.name)}</h2><dl><div><dt>${t('school')}</dt><dd>${escape(student.kuttab || t('unknown'))}</dd></div><div><dt>${t('age')}</dt><dd>${value(student.age)}</dd></div><div><dt>${t('hizbs')}</dt><dd>${value(student.hizbs)}</dd></div><div><dt>${t('attendance')}</dt><dd>${value(student.attendance)}${student.attendance == null ? '' : '%'}</dd></div></dl><p class="live-status">${t('source')}</p><h3>${t('history')}</h3><div id="live-history" role="status">${t('loading')}</div><h3>${t('cloudHistory')}</h3><div id="cloud-history" role="status">${t('loading')}</div><h3>${t('learningHistory')}</h3><div id="profile-progress" role="status"></div><div id="profile-learning" role="status">${t('loading')}</div></section>`;
-  dialog.showModal();
-  try {
-    const [history, cloudHistory, learningHistory] = await Promise.all([gateway.history(id),gateway.attendanceHistory(id),gateway.learningHistory(id)]);
-    if (generation !== historyEpoch || !dialog.open || !user) return;
-    document.getElementById('profile-progress').innerHTML=progressView(student,learningHistory);
-    document.getElementById('profile-learning').innerHTML=learningHistoryList(learningHistory);
-    document.getElementById('cloud-history').innerHTML=cloudHistory.length?`<ul>${cloudHistory.map(h=>`<li>${escape(h.date)} · ${t(h.session)} · ${escape(copy[language][h.status]||t('unknown'))} · ${t('cloudRevision')} ${value(h.revision)}<p>${escape(h.note)}</p></li>`).join('')}</ul>`:t('noHistory');
-    document.getElementById('live-history').innerHTML = history.length ? `<ul>${history.map(h=>`<li>${escape(h.date || t('unknown'))} · ${escape(copy[language][h.status] || t('unknown'))}${h.session == null ? '' : ` · ${t('session')}: ${value(h.session)}`}</li>`).join('')}</ul>` : t('noHistory');
-  } catch { if (generation === historyEpoch && dialog.open) for(const id of ['live-history','cloud-history','profile-learning','profile-progress'])document.getElementById(id).textContent = t('historyError'); }
+let trigger, profileRows=null;
+const profileLabels={
+ ar:{overview:'نظرة عامة',learning:'التعلم',attendance:'الحضور',previous:'السجلات السابقة',recent:'السجلات الجديدة',more:'عرض المزيد',from:'من تاريخ',to:'إلى تاريخ',calculation:'كيف يُحسب التقدم؟',empty:'لا توجد سجلات ضمن هذه الفترة.',baseline:'الرصيد السابق (أحزاب)',confirmed:'الحفظ المثبت الجديد (أحزاب)',rate:'الحضور السابق',about:'بيانات من السجلات السابقة؛ لا تُجمع مع الحفظ الجديد.'},
+ fr:{overview:'Aperçu',learning:'Apprentissage',attendance:'Présence',previous:'Anciens relevés',recent:'Nouveaux relevés',more:'Afficher plus',from:'Depuis',to:'Jusqu’au',calculation:'Comment le progrès est-il calculé ?',empty:'Aucun relevé pour cette période.',baseline:'Solde précédent (hizbs)',confirmed:'Nouveau mémorisé confirmé (hizbs)',rate:'Présence antérieure',about:'Valeurs des anciens relevés, séparées du nouveau mémorisé.'},
+ en:{overview:'Overview',learning:'Learning',attendance:'Attendance',previous:'Previous records',recent:'New records',more:'Show more',from:'From date',to:'To date',calculation:'How is progress calculated?',empty:'No records in this date range.',baseline:'Previous balance (hizbs)',confirmed:'New confirmed memorization (hizbs)',rate:'Previous attendance',about:'Previous record values are kept separate from new memorization.'}
+};
+const pl=key=>profileLabels[language][key];
+function profileTab(tab){
+ for(const b of dialog.querySelectorAll('[data-profile-tab]')){const active=b.dataset.profileTab===tab;b.setAttribute('aria-selected',String(active));b.tabIndex=active?0:-1;}
+ for(const panel of dialog.querySelectorAll('[data-profile-panel]'))panel.hidden=panel.dataset.profilePanel!==tab;
+ dialog.querySelector('.profile-content').scrollTop=0;
 }
-dialog.addEventListener('click', e=>{ if(e.target.closest('[data-close]')) dialog.close(); });
-dialog.addEventListener('close',()=>{historyEpoch++;dialog.replaceChildren();if(trigger?.isConnected)trigger.focus();});
+function profileAttendance(){
+ if(!profileRows)return;
+ const from=dialog.querySelector('[data-profile-from]').value,to=dialog.querySelector('[data-profile-to]').value;
+ for(const [id,rows,cloud] of [['live-history',profileRows.history,false],['cloud-history',profileRows.cloud,true]]){
+ const filtered=rows.filter(r=>(!from||r.date>=from)&&(!to||r.date<=to)).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+ const limit=profileRows.limits[id];
+ document.getElementById(id).innerHTML=filtered.length?`<ul class="profile-attendance-list">${filtered.slice(0,limit).map(h=>`<li><div><time dir="ltr">${escape(h.date||t('unknown'))}</time><span class="profile-status">${escape(copy[language][h.status]||t('unknown'))}</span></div>${cloud?`<small>${t(h.session)} · ${t('cloudRevision')} ${value(h.revision)}</small>${h.note?`<p>${escape(h.note)}</p>`:''}`:''}</li>`).join('')}</ul>${filtered.length>limit?`<button class="secondary-button" data-profile-more="${id}">${pl('more')} (${filtered.length-limit})</button>`:''}`:`<p class="profile-empty-state">${pl('empty')}</p>`;
+ }
+}
+async function profile(id, button) {
+ const student=students.find(s=>s.id===id);if(!student||!user)return;
+ trigger=button;profileRows=null;const generation=++historyEpoch;
+ dialog.innerHTML=`<section class="live-profile"><header class="student-profile-header"><div><h2 id="student-heading">${escape(student.name)}</h2><p>${escape(student.kuttab||t('unknown'))} · ${t('age')}: ${value(student.age)}</p></div><button class="close-button" data-close aria-label="${t('close')}">×</button></header><div class="student-profile-tabs" role="tablist" aria-label="${escape(student.name)}">${['overview','learning','attendance'].map((tab,i)=>`<button id="profile-tab-${tab}" role="tab" data-profile-tab="${tab}" aria-controls="profile-panel-${tab}" aria-selected="${i===0}" tabindex="${i===0?0:-1}">${pl(tab)}</button>`).join('')}</div><div class="profile-content"><section id="profile-panel-overview" data-profile-panel="overview" role="tabpanel" aria-labelledby="profile-tab-overview"><dl class="profile-summary"><div><dt>${pl('baseline')}</dt><dd>${value(student.hizbs)}</dd></div><div><dt>${pl('rate')}</dt><dd>${value(student.attendance)}${student.attendance==null?'':'%'}</dd></div></dl><p class="profile-context">${pl('about')}</p><div id="profile-progress" role="status">${t('loading')}</div></section><section id="profile-panel-learning" data-profile-panel="learning" role="tabpanel" aria-labelledby="profile-tab-learning" hidden><h3>${t('learningHistory')}</h3><div id="profile-learning" role="status">${t('loading')}</div></section><section id="profile-panel-attendance" data-profile-panel="attendance" role="tabpanel" aria-labelledby="profile-tab-attendance" hidden><div class="profile-date-filters"><label>${pl('from')}<input type="date" data-profile-from></label><label>${pl('to')}<input type="date" data-profile-to></label></div><h3>${pl('recent')}</h3><div id="cloud-history" role="status">${t('loading')}</div><h3>${pl('previous')}</h3><div id="live-history" role="status">${t('loading')}</div></section></div></section>`;
+ dialog.showModal();
+ try{
+ const [history,cloud,learning]=await Promise.all([gateway.history(id),gateway.attendanceHistory(id),gateway.learningHistory(id)]);
+ if(generation!==historyEpoch||!dialog.open||!user)return;
+ profileRows={history,cloud,limits:{'live-history':8,'cloud-history':8}};
+ document.getElementById('profile-progress').innerHTML=progressView(student,learning);
+ const progress=document.querySelector('#profile-progress .learning-progress');
+ const paragraphs=[...progress.querySelectorAll(':scope > p:not(.notice-error)')];
+ const details=document.createElement('details');details.className='profile-calculation';
+ const summary=document.createElement('summary');summary.textContent=pl('calculation');details.append(summary,...paragraphs);progress.append(details);
+ const labels=progress.querySelectorAll('dt');if(labels[0])labels[0].textContent=pl('baseline');if(labels[1])labels[1].textContent=pl('confirmed');
+ document.getElementById('profile-learning').innerHTML=learningHistoryList(learning);
+ profileAttendance();
+ }catch{if(generation===historyEpoch&&dialog.open)for(const id of ['live-history','cloud-history','profile-learning','profile-progress'])document.getElementById(id).textContent=t('historyError');}
+}
+dialog.addEventListener('click',e=>{
+ if(e.target.closest('[data-close]'))dialog.close();
+ const tab=e.target.closest('[data-profile-tab]');if(tab)profileTab(tab.dataset.profileTab);
+ const more=e.target.closest('[data-profile-more]');if(more&&profileRows){profileRows.limits[more.dataset.profileMore]+=8;profileAttendance();}
+});
+dialog.addEventListener('change',e=>{if(e.target.matches('[data-profile-from],[data-profile-to]')&&profileRows){profileRows.limits={'live-history':8,'cloud-history':8};profileAttendance();}});
+dialog.addEventListener('keydown',e=>{if(!e.target.matches('[data-profile-tab]'))return;const tabs=[...dialog.querySelectorAll('[data-profile-tab]')];let i=tabs.indexOf(e.target);if(e.key==='Home')i=0;else if(e.key==='End')i=tabs.length-1;else if(['ArrowRight','ArrowLeft'].includes(e.key))i=(i+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;else return;e.preventDefault();profileTab(tabs[i].dataset.profileTab);tabs[i].focus();});
+dialog.addEventListener('close',()=>{historyEpoch++;profileRows=null;dialog.replaceChildren();if(trigger?.isConnected)trigger.focus();});
 root.addEventListener('click', async e => {
   const b = e.target.closest('button'); if (!b || b.disabled) return;
   if(changeAppearance(b))return;

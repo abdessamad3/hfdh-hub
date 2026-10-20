@@ -35,7 +35,7 @@
     },
     {
       "path": "/live/app.mjs",
-      "sha256": "709aab2cf2feea5863a7434489892c7423b3942215383082931873a3b415f5a8"
+      "sha256": "59b84d267f83d9512b9df176fb2900db99907768338a09ca446630a22eac5bc6"
     },
     {
       "path": "/live/appearance.mjs",
@@ -191,7 +191,7 @@
     },
     {
       "path": "/live/live.css",
-      "sha256": "bb540e41d266138168734bfd8e904846108dd81ea6e1741b3d40a5cb0799f637"
+      "sha256": "67f2adfed0752d91ac80305bd5d2595280c27284389ff1a46099826be4a57ec9"
     },
     {
       "path": "/live/mushaf.css",
