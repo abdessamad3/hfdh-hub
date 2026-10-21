@@ -46,7 +46,7 @@ export function hizbGrid(history,learning,view='oldEvaluation',marks=[]){
  }
  for(const row of rows)for(const cell of row.cells){
   cell.coverage=view==='oldEvaluation'?(cell.records.length?'complete':'empty'):passageCoverage(cell.records.map(recordPassage),(row.hizb-1)*8+cell.eighth-1);
-  cell.records.sort((a,b)=>Number(validCalendarDate(b.date))-Number(validCalendarDate(a.date))||String(b.date||'').localeCompare(String(a.date||''))||String(a.key||a.id).localeCompare(String(b.key||b.id)));
+  cell.records.sort((a,b)=>Number(validCalendarDate(b.date))-Number(validCalendarDate(a.date))||String(b.date||'').localeCompare(String(a.date||''))||(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0)||(b.createdAt?.nanoseconds||0)-(a.createdAt?.nanoseconds||0)||String(b.key||b.id).localeCompare(String(a.key||a.id)));
   if(cell.records.length&&validCalendarDate(cell.records[0].date)){const latest=cell.records[0].date;const same=cell.records.filter(r=>r.date===latest);cell.mistakes=same.every(r=>(view==='oldEvaluation'?legacyEighths(r.identifier).length===1:passageCells(recordPassage(r)).length===1)&&typeof r.mistakes==='number'&&Number.isFinite(r.mistakes)&&r.mistakes>=0)?Math.max(...same.map(r=>r.mistakes)):null;}
  }
  for(const row of rows)for(const cell of row.cells){
@@ -54,7 +54,7 @@ export function hizbGrid(history,learning,view='oldEvaluation',marks=[]){
   const cellIndex=(row.hizb-1)*8+cell.eighth-1;
   const linked=marks.filter(m=>m.recitationId===record.id);
   if(linked.length){
-   const latest=new Map();for(const mark of linked){const key=mark.surah+':'+mark.ayah,prior=latest.get(key);if(!prior||(mark.createdAt?.seconds||0)>(prior.createdAt?.seconds||0)||(mark.createdAt?.seconds||0)===(prior.createdAt?.seconds||0)&&mark.id>prior.id)latest.set(key,mark);}
+   const latest=new Map();for(const mark of [...linked].sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0)||(b.createdAt?.nanoseconds||0)-(a.createdAt?.nanoseconds||0)||b.id.localeCompare(a.id))){const key=mark.surah+':'+mark.ayah,prior=latest.get(key);if(!prior)latest.set(key,mark);}
    let ambiguous=false;const relevant=[...latest.values()].filter(mark=>{const p=recordPassage({passage:{mode:'ayahs',fromSurah:mark.surah,fromAyah:mark.ayah,toSurah:mark.surah,toAyah:mark.ayah}});if(p.start<boundaries[cellIndex+1]&&p.end>boundaries[cellIndex]){if(p.start<boundaries[cellIndex]||p.end>boundaries[cellIndex+1])ambiguous=true;return true;}return false;});
    cell.markCounts=Object.fromEntries(['forgot','error','hesitated','correct'].map(k=>[k,relevant.filter(m=>m.mark===k).length]));
    cell.mistakes=ambiguous?null:relevant.filter(m=>m.mark!=='correct').length;cell.ambiguous=ambiguous;

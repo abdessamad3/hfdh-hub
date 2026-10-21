@@ -203,7 +203,7 @@
     },
     {
       "path": "/live/student-visuals.mjs",
-      "sha256": "31fa68be44a6c034f8e400c06f633adaadf1e8d61634fc1e4c8d2d8657dcb526"
+      "sha256": "044d702ee1ecb05ed88beda2065e25195724de69ebf8e96581205cc8748bccf2"
     },
     {
       "path": "/live/teacher-attendance-ui.mjs",
