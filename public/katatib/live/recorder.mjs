@@ -1,3 +1,4 @@
+import {attendanceId} from './attendance.mjs';
 import {passageFields,passageFromForm,passageText,passageCopy,updatePassagePreview} from './recitation-passage.mjs';
 import {businessDate} from './dates.mjs';
 import { english } from './english.mjs';
@@ -19,7 +20,7 @@ export function createLocalRecorder(){
  }
  function stop(){if(recorder?.state==='recording'){recorder.stop();clearInterval(timer);timer=null;}}
  async function start(){if(!trusted||saving||status==='permissionWait'||status==='listening'||url||!ctx?.students.some(s=>s.id===selected))return;failure='';if(!globalThis.MediaRecorder||!navigator.mediaDevices?.getUserMedia){failure='unsupported';paint();return;}
-  try{recordContext={...(ctx.recitationId?{recitationId:ctx.recitationId}:{}),studentId:selected,date:form.date,session:form.session,passage:passageFromForm(form)};}catch{failure='error';paint();return;}
+  try{recordContext={...(ctx.recitationId?{recitationId:ctx.recitationId}:{}),studentId:selected,date:form.date,session:form.session,passage:passageFromForm(form)};attendanceId(recordContext.studentId,recordContext.date,recordContext.session);}catch{failure='error';paint();return;}
   const token=++generation;status='permissionWait';paint();let acquired;
   try{
    acquired=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true},video:false});

@@ -1,3 +1,4 @@
+import {attendanceId} from './attendance.mjs';
 async function uploadBlob(url,blob,mime,onProgress){
  if(!globalThis.XMLHttpRequest)return fetch(url,{method:'PUT',headers:{'Content-Type':mime,'x-upsert':'false'},body:blob});
  return new Promise((resolve,reject)=>{const xhr=new XMLHttpRequest();xhr.open('PUT',url);xhr.timeout=120000;xhr.setRequestHeader('Content-Type',mime);xhr.setRequestHeader('x-upsert','false');xhr.upload.onprogress=e=>{if(e.lengthComputable)onProgress(Math.floor(e.loaded/e.total*85));};xhr.onload=()=>resolve({ok:xhr.status>=200&&xhr.status<300,status:xhr.status});xhr.onerror=xhr.ontimeout=()=>reject(Error('audio-upload-interrupted'));xhr.send(blob);});
@@ -33,7 +34,7 @@ export function createRecordingLibrary({uid:authUid,request,store=recordingStore
  return {
   async activate(uid){owner=uid;rows=[];if(uid)await refresh(uid);},pending,rows:()=>rows.map(r=>({...r})),
   async save({blob,studentId,date,session,passage,recitationId,duration,id=crypto.randomUUID()}){
-   const uid=owner;current(uid);if(!(blob instanceof Blob)||!blob.size||blob.size>MAX_RECORDING_BYTES||!['audio/webm','audio/ogg','audio/mp4'].includes(blob.type.split(';')[0])||!Number.isFinite(duration)||duration<0||duration>2705)throw Error('invalid-audio');
+   const uid=owner;current(uid);attendanceId(studentId,date,session);if(!(blob instanceof Blob)||!blob.size||blob.size>MAX_RECORDING_BYTES||!['audio/webm','audio/ogg','audio/mp4'].includes(blob.type.split(';')[0])||!Number.isFinite(duration)||duration<0||duration>2705)throw Error('invalid-audio');
    const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',await blob.arrayBuffer())),x=>x.toString(16).padStart(2,'0')).join('');current(uid);
    const row={...(recitationId?{recitationId}:{}),sha256,id,uid,studentId,date,session,passage:cleanPassage(passage),duration,bytes:blob.size,mime:blob.type.split(';')[0],createdAt:new Date().toISOString(),state:'local',blob};
    await put(row);try{await navigator.storage?.persist?.();}catch{}return row;

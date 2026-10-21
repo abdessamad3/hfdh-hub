@@ -171,7 +171,7 @@
     },
     {
       "path": "/live/recorder.mjs",
-      "sha256": "99f31720ef060219bbe41574c7e84bf4435953a12052cc140f2bc0c719e53e22"
+      "sha256": "2dbd71f31fc3566ff73d3e2aa6f3e7f2a1e6c78a88aa22e76cd3971b99612fdb"
     },
     {
       "path": "/live/recording-history.mjs",
@@ -179,7 +179,7 @@
     },
     {
       "path": "/live/recording-library.mjs",
-      "sha256": "c7b9ba3d8a8aedccf024c06cc1aa3905ca8d3d751f8d58a058921d07708b3bb2"
+      "sha256": "563726ffa7c9c7693235c6661f702584d2a22ab28cd7d99b24c8a504f361f3bd"
     },
     {
       "path": "/live/records.mjs",
