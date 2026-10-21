@@ -139,7 +139,7 @@
     },
     {
       "path": "/live/offline-ui.mjs",
-      "sha256": "a15f3537ca4092033d83d488c73d518f0780eae33408ee6f380cf455e97817af"
+      "sha256": "56472a6fb67247f3f3f0b3f6eba5608c472a28063b1498da0374a61292ee4b01"
     },
     {
       "path": "/live/passage-index.mjs",
@@ -211,7 +211,7 @@
     },
     {
       "path": "/live/live.css",
-      "sha256": "4cc1b389ac3209df0f71d8527a312069736e35f8b63e8d5d82be178efeacf5c5"
+      "sha256": "da952d03146e07160f4820b7c240be51ed32dde9fdc892713fec9c2a577adb16"
     },
     {
       "path": "/live/mushaf.css",
