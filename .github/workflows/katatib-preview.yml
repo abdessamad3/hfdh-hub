@@ -63,6 +63,11 @@ jobs:
           bash -n scripts/deploy-katatib-connected.sh
           python3 -m py_compile scripts/katatib-test-access.py
           bash -n scripts/deploy-katatib-preview.sh
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Check the Supabase recording function in its Deno runtime
+        run: deno check supabase/functions/recitations/index.ts
       - name: Install browser test tools outside the application
         run: |
           npm install --prefix "$RUNNER_TEMP/katatib-browser" --no-package-lock --ignore-scripts playwright@1.56.1
