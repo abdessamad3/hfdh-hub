@@ -15,7 +15,7 @@ test('Warsh navigation covers exactly 6214 references on 604 pages without Hafs 
  for(const n of m.hizbStarts)assert.equal(verseOrdinal(m,...Object.values(verseReference(m,n))),n);
  assert.throws(()=>versePage(m,2,286));assert.throws(()=>verseReference(m,6215));assert.throws(()=>pageReferences(m,605));
 });
-test('opening and last-page artwork match the pinned Git blob fingerprints; changed bytes fail',async()=>{
+test('opening, adjacent and last-page artwork match the pinned Git blob fingerprints; changed bytes fail',async()=>{
  for(const n of [1,42,591,604]){const b=fs.readFileSync(`tests/fixtures/warsh-${String(n).padStart(3,'0')}.svg`);const bytes=b.buffer.slice(b.byteOffset,b.byteOffset+b.byteLength);assert.match(await verifyPageBytes(bytes,m.pages[n-1]),/<svg /);const changed=bytes.slice(0);new Uint8Array(changed)[100]^=1;await assert.rejects(verifyPageBytes(changed,m.pages[n-1]));}
 });
 test('marks bind the exact edition, page and Warsh reference; history keeps previous mistakes',()=>{
