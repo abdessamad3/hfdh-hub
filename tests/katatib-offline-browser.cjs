@@ -3,6 +3,9 @@ const {openScreen}=require('./katatib-navigation-helpers.cjs');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http'),crypto=require('node:crypto');
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const root=path.resolve('public/katatib');let browser,server,failurePage,deny=false,corruptShell=false;const records=new Map(),learning=new Map(),tasks=new Map(),marks=new Map(),events=new Set();
+// Keep genuine opening/page-3 artwork; synthetic remaining pages verify full-package orchestration without 330 MiB in CI.
+const filler=Buffer.alloc(1024,65),fillerSha=crypto.createHash('sha1').update(Buffer.concat([Buffer.from('blob '+filler.length+'\0'),filler])).digest('hex');
+const testManifest=JSON.parse(fs.readFileSync(path.join(root,'mushaf/manifest.json'),'utf8'));testManifest.pages=testManifest.pages.map(p=>p.page<=3?p:{...p,bytes:filler.length,sha:fillerSha});
 const raw=`
 const user={uid:'offline-teacher',email:'offline@example.com',emailVerified:true,displayName:'Offline teacher'};
 async function request(name,args=[]){const r=await fetch('/test-api',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,args})});const data=await r.json();if(!r.ok)throw Object.assign(Error(data.code),{code:data.code});return data;}
@@ -10,7 +13,7 @@ export async function connect(){let observer;return {
  observe(cb){observer=cb;cb(localStorage.getItem('test-user')?user:null);},async login(){localStorage.setItem('test-user','yes');observer(user);},async logout(){localStorage.removeItem('test-user');observer(null);},async trustDevice(){localStorage.setItem('katatib-offline-trusted','yes');},async untrustDevice(){localStorage.removeItem('katatib-offline-trusted');},
  ...Object.fromEntries(['students','attendance','studentHistory','history','attendanceHistory','learningHistory','workspaceList','kuttabs','scheduleRows','studentVerseMarks','verseMarks','saveAttendance','saveLearning','workspaceSave','saveVerseMark'].map(name=>[name,(...args)=>request(name,args)]))};}
 `;
-function content(p){if(p==='/live/gateway.mjs')return Buffer.from(raw);if(p==='/live/app.mjs')return Buffer.from(fs.readFileSync(path.join(root,p),'utf8')+'\nObject.defineProperty(window,"__testGateway",{get:()=>gateway});\n');return fs.readFileSync(path.join(root,p==='/'?'index.html':p));}
+function content(p){if(p==='/mushaf/manifest.json')return Buffer.from(JSON.stringify(testManifest));if(p==='/live/gateway.mjs')return Buffer.from(raw);if(p==='/live/app.mjs')return Buffer.from(fs.readFileSync(path.join(root,p),'utf8')+'\nObject.defineProperty(window,"__testGateway",{get:()=>gateway});\n');return fs.readFileSync(path.join(root,p==='/'?'index.html':p));}
 function reply(res,data,status=200){res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(data));}
 (async()=>{
  server=http.createServer(async(req,res)=>{try{
@@ -36,10 +39,11 @@ function reply(res,data,status=200){res.writeHead(status,{'Content-Type':'applic
  browser=await chromium.launch({headless:true,...(process.env.KATATIB_CHROMIUM_EXECUTABLE?{executablePath:process.env.KATATIB_CHROMIUM_EXECUTABLE}:{})});const context=await browser.newContext(),errors=[];
  await context.route('https://fonts.googleapis.com/**',r=>r.fulfill({contentType:'text/css',body:''}));
 
- await context.route('https://raw.githubusercontent.com/quran-ws/quran-svg/**/svg/*.svg',r=>{const number=r.request().url().match(/(\d{3})\.svg$/)[1];return r.fulfill({contentType:'image/svg+xml',body:fs.readFileSync('tests/fixtures/warsh-'+number+'.svg')});});
+ await context.route('https://raw.githubusercontent.com/quran-ws/quran-svg/**/svg/*.svg',r=>{const number=r.request().url().match(/(\d{3})\.svg$/)[1];return r.fulfill({contentType:'image/svg+xml',body:Number(number)<=3?fs.readFileSync('tests/fixtures/warsh-'+number+'.svg'):filler});});
  let page=await context.newPage();failurePage=page;page.on('pageerror',e=>errors.push(e.stack||e.message));await page.goto(url);await page.locator('[data-action=login]').click();await page.locator('[data-screen=attendance]').waitFor({state:'attached'});await page.locator('[data-lang=en]').click();
- await page.locator('#offline-device-root summary').click();await page.locator('[data-offline-prepare] [name=trust]').check();await page.locator('[data-offline-prepare] [name=full]').uncheck();await page.locator('[data-offline-prepare] [name=date]').fill('2026-10-19');await page.locator('[data-offline-prepare] [name=last]').fill('3');await page.locator('[data-offline-prepare] button[type=submit]').click();
+ await page.locator('#offline-device-root summary').click();await page.locator('[data-offline-prepare] [name=trust]').check();await page.locator('[data-offline-prepare] [name=date]').fill('2026-10-19');await page.locator('[data-offline-prepare] button[type=submit]').click();
  await page.waitForFunction(()=>window.__testGateway?.offline.status().preparedAt,{},{timeout:60000});
+ assert.equal(await page.evaluate(()=>window.__testGateway.offline.status().fullMushaf),true);assert.equal(await page.evaluate(async()=>(await (await caches.open('katatib-warsh-pages-v1')).keys()).length),604,'one preparation includes every verified Mushaf page');
  assert.equal(await page.evaluate(()=>window.__testGateway.offline.status().preparedDate),'2026-10-19');assert.deepEqual(await page.evaluate(()=>window.__testGateway.offline.status().preparedWindow),{from:'2026-09-20',to:'2026-10-26',days:30,upcoming:7});assert.ok(await page.locator('.offline-copy-summary').isVisible(),'offline scope and last-update receipt are visible');
  const cached=await page.evaluate(async()=>{const m=await caches.open('katatib-offline-meta'),p=await m.match('/active-package'),c=await caches.open(await p.text());return (await c.keys()).map(r=>r.url);});assert.ok(['firebase-app.js','firebase-auth.js','firebase-firestore.js'].every(name=>cached.some(u=>u.endsWith('/'+name))),'the pinned Firebase SDK modules are downloaded');assert.ok(cached.every(u=>!u.includes('test-api')&&!u.includes('Synthetic')),'no private responses enter public resource caches');
  // A failed update keeps the old complete package; a successful refresh replaces it without leaking caches.

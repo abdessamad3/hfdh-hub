@@ -78,3 +78,7 @@ Scope checking runs on opening a prepared account and reconnection, or with **Ch
 The main card has one primary button: **Prepare this phone** before setup, **Sync now** for a prepared device, or **Review conflicts** for blocked changes. Connected/offline, pending-count and last-check status stay visible. The full Mushaf remains the default download; its approximate size is disclosed during setup. Class selection, date/page ranges, exports and maintenance actions are under **Advanced settings**. Conflict records appear before these options, with localized attendance statuses, notes and available local/server timestamps. Reviewing a conflict does not retry its upload.
 
 Admins/managers default to the classes in their authorized roster and can reduce the download in Advanced settings. Teachers retain their assigned active-student scope. Account, permission and important deletion actions remain online-only; the simplified card does not broaden offline capabilities.
+
+## Complete Mushaf required
+
+Phone preparation and Sync now always verify the full 604-page printed Mushaf. There is no partial-page checkbox or page-range setting. Existing verified pages are reused; missing or corrupt pages download again. Preparation is marked ready only after the full archive is verified. Older partial packages show that the complete Mushaf download is needed. Student-record progress and Mushaf-page progress have separate labels and direction-safe counters. Cancelling keeps verified public pages for resume; it does not mark the package complete.
