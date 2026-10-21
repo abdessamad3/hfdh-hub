@@ -104,3 +104,18 @@ test('a local save made during staged preparation prevents replacement and survi
  const f=fixture();await f.init();let entered,release;const started=new Promise(r=>entered=r);f.raw.studentHistory=async()=>{entered();await new Promise(r=>release=r);return [];};const preparing=f.api.offline.prepare({date:context.date,students:['a']});await started;f.offline();await f.api.saveAttendance('a',context,{status:'present',note:'Keep me'},0);release();await assert.rejects(preparing,/offline-sync-first/);assert.equal(f.api.offlinePending(),1);assert.equal((await f.api.attendance(['a'],context)).a.note,'Keep me');
 });
 test('access denial during preparation removes cached private access',async()=>{const f=fixture();await f.init();f.deny();await assert.rejects(f.api.offline.prepare({date:context.date,students:['a']}),/denied/);assert.equal(f.api.offline.status().enabled,false);assert.deepEqual(f.api.offline.status().cache,{});});
+
+test('reopening online and checking cloud changes never uploads pending work without explicit sync',async()=>{
+ const f=fixture();await f.init();await f.api.offline.completePreparation();f.offline();await f.api.saveAttendance('a',context,{status:'present',note:'Wait for me'},0);f.online();
+ const reopened=createOfflineGateway(f.raw,f.options);await f.observe(reopened);await reopened.offline.check();assert.equal(f.writes,0);assert.equal(reopened.offlinePending(),1);
+ f.raw.learningHistory=async()=>[{id:'new-server-record'}];await reopened.offline.check();assert.ok(reopened.offline.status().remoteChanges>0);assert.equal(f.writes,0);assert.equal((await f.store.read(user.uid)).cache['["learningHistory","a"]'].length,0,'checking does not replace the downloaded baseline');
+ await reopened.offline.retry();assert.equal(reopened.offlinePending(),0);assert.equal(f.writes,1);
+});
+test('whole-student verse snapshot enables page 3 through 604 without hundreds of cloud queries',async()=>{
+ const f=fixture();let reads=0;f.raw.studentVerseMarks=async id=>{reads++;return [{studentId:id,page:3,id:'stored-mark'}];};f.raw.verseMarks=async()=>{throw Error('per-page request not needed');};
+ await f.init();assert.equal(reads,1);f.offline();assert.equal((await f.api.verseMarks('a',3))[0].id,'stored-mark');assert.deepEqual(await f.api.verseMarks('a',604),[]);await assert.rejects(f.api.verseMarks('b',3),/no-access/);
+});
+test('revision preflight blocks the batch before any upload if a later record conflicts',async()=>{
+ const f=fixture();await f.init();f.offline();await f.api.saveAttendance('a',context,{status:'present',note:'First edit'},0);const evening={...context,session:'evening'};await f.api.saveAttendance('a',evening,{status:'absent',note:'My evening edit'},0);
+ f.remote.set('a'+evening.date+evening.session,{status:'late',note:'Another teacher',revision:1});f.online();await f.api.offline.sync();assert.equal(f.writes,0);assert.equal(f.api.offlinePending(),2);const blocked=f.api.offline.status().queue.find(r=>r.status==='blocked');assert.equal(blocked.error,'conflict');assert.equal(blocked.serverVersion.note,'Another teacher');
+});

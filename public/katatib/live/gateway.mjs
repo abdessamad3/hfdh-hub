@@ -171,6 +171,9 @@ export async function connect() {
       return results;
 
     },
+    async studentVerseMarks(studentId) {
+      return readPages(async after=>{const snapshot=await getDocsFromServer(query(collection(db,'katatib_verse_marks'),where('studentId','==',studentId),orderBy(documentId()),...(after?[startAfter(after)]:[]),limit(100)));return snapshot.docs.map(d=>({...d.data(),id:d.id}));});
+    },
     async verseMarks(studentId,page) {
       return readPages(async after=>{const snapshot=await getDocsFromServer(query(collection(db,'katatib_verse_marks'),where('studentId','==',studentId),where('page','==',page),orderBy(documentId()),...(after?[startAfter(after)]:[]),limit(100)));return snapshot.docs.map(d=>({...d.data(),id:d.id}));});
     },

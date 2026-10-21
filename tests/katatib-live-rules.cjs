@@ -220,6 +220,7 @@ const {doc,setDoc,getDoc,collection,getDocs,getDocsFromServer,query,where,limit,
   for(const role of ['parent','student']){
     const portal=as(role+'@example.com');
     const read=await assertSucceeds(getDocs(query(collection(portal,'katatib_verse_marks'),where('studentId','==','a'),where('page','==',1),limit(100))));assert.equal(read.size,2);
+    const allPages=await assertSucceeds(getDocs(query(collection(portal,'katatib_verse_marks'),where('studentId','==','a'),limit(100))));assert.equal(allPages.size,2,'whole-Mushaf offline marks retain the same student scope');
     await assertFails(verseSave(portal,'new-'+role+'@example.com',verseInput,'verse-portal-event-'+role));
     await assertFails(getDocs(query(collection(portal,'katatib_verse_marks'),limit(100))));
   }

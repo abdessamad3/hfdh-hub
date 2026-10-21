@@ -79,7 +79,7 @@
     },
     {
       "path": "/live/gateway.mjs",
-      "sha256": "e11ab48810935f80920f3a77e22be5a6a142e4fe30b1616feab6fe147f26d00a"
+      "sha256": "f3b93c8682295f0be735967bb64119c59cddd73b602006e32e1a748abd436291"
     },
     {
       "path": "/live/interface.mjs",
@@ -103,7 +103,7 @@
     },
     {
       "path": "/live/mushaf-download-ui.mjs",
-      "sha256": "1301efc37a565c6fc8d0f5c84abe8bee316836daf14dec4ec6d38fc535480652"
+      "sha256": "058c8b288ca1d6d04cc9e0dbd8b3e3f70151cc6d4525a1256d8080670c3169b1"
     },
     {
       "path": "/live/mushaf-model.mjs",
@@ -127,7 +127,7 @@
     },
     {
       "path": "/live/offline-gateway.mjs",
-      "sha256": "c5568b0a4a0c94f70f7699a1597473766e84ff127a49c0ab29654c40df4e1bfd"
+      "sha256": "8dadad0b5ff0126a1b5ccad893f64c8c1b26ec8415e1434cb2e6acdea4b109d5"
     },
     {
       "path": "/live/offline-snapshot.mjs",
@@ -139,7 +139,7 @@
     },
     {
       "path": "/live/offline-ui.mjs",
-      "sha256": "ea0e0c7b9f700da80e5ccbbfc48f310ab0483a50928550e8f0ecc4c31ef6b1ee"
+      "sha256": "6b11b006dc0c80d5f7c4b62a898d00c01e1c42824d392cbb2695e5dd2803c37f"
     },
     {
       "path": "/live/passage-index.mjs",
@@ -211,7 +211,7 @@
     },
     {
       "path": "/live/live.css",
-      "sha256": "1b261788ae21daabb8a32b00c6a5999f36b70e181e3115ebaa1a73153e6f3746"
+      "sha256": "4cc1b389ac3209df0f71d8527a312069736e35f8b63e8d5d82be178efeacf5c5"
     },
     {
       "path": "/live/mushaf.css",

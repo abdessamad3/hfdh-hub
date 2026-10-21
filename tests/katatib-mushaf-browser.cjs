@@ -70,6 +70,15 @@ window.__open();
  assert.equal(await page.locator('#mushaf-student').inputValue(),'b');assert.equal(await page.locator('#mushaf-verse-1-3').getAttribute('aria-pressed'),'true');assert.equal(await page.locator('.verse-mark-editor').isVisible(),false,'passage links select the ayah without opening an editor');
  await page.evaluate(()=>{window.__archivedStudent=true;window.__open('teacher',{studentId:'b',page:1,surah:1,ayah:1});});await page.locator('#mushaf-verse-1-1').waitFor();assert.equal(await page.locator('#mushaf-mark-form').count(),0,'archived pupil target is read-only');assert.equal(await page.locator('#mushaf-recording').count(),0);
  await page.evaluate(()=>{window.__archivedStudent=false;window.__open('teacher',{studentId:'not-permitted',page:1,surah:1,ayah:1});});assert.equal(await page.locator('.mushaf-svg').count(),0,'invalid student target never falls back to another pupil');
+ // Non-opening pages use the original, full-height coordinate system.
+ for(const number of [3,42,591,604]){
+  await page.evaluate(async n=>{const m=await (await fetch('/mushaf/manifest.json')).json(),{pageReferences}=await import('/live/mushaf-model.mjs');window.__open('teacher',{studentId:'a',page:n,...pageReferences(m,n)[0]});},number);
+  await page.locator('.mushaf-svg .ayahPolygon').first().waitFor();
+  const hit=await page.locator('.ayahPolygon').first().evaluate(p=>{const b=p.getBBox(),matrix=p.getScreenCTM();for(let y=b.y+1;y<b.y+b.height;y+=3)for(let x=b.x+1;x<b.x+b.width;x+=3){if(!p.isPointInFill(new DOMPoint(x,y)))continue;const q=new DOMPoint(x,y).matrixTransform(matrix);if(q.y>0&&q.y<innerHeight&&document.elementFromPoint(q.x,q.y)===p)return {x:q.x,y:q.y};}return null;});
+  assert.ok(hit,'verse touch area is reachable on page '+number);await page.mouse.click(hit.x,hit.y);assert.ok(await page.locator('.verse-mark-editor').isVisible());
+  for(const mark of ['forgot','hesitated','error','correct']){await page.locator('[data-mushaf-mark='+mark+']').click();assert.equal(await page.locator('[data-mushaf-mark='+mark+']').getAttribute('aria-pressed'),'true');}
+  page.once('dialog',d=>d.accept());await page.locator('[data-mushaf-close]').click();
+ }
  tamper=true;await page.evaluate(()=>window.__open('teacher'));await page.locator('[data-mushaf-status][role=alert]').waitFor();assert.equal(await page.locator('.mushaf-svg').count(),0,'tampered pages are never mounted');
  assert.ok(external.every(url=>url.includes('/b4155f07e4aea087d2c458069acff9f7c7e749f6/mushafs/warsh/kfqc/svg/')),'only public pinned page references leave the site, without student identifiers');
  // The parser independently rejects executable content even if a different caller supplies an SVG string.
