@@ -50,6 +50,9 @@ jobs:
           node tests/katatib-cloud-attendance.test.mjs
           node tests/katatib-teacher-attendance.test.mjs
           node tests/katatib-advanced.test.mjs
+          node tests/katatib-recording-server.test.mjs
+          node tests/katatib-recording-library.test.mjs
+          node tests/katatib-recitation-passage.test.mjs
           node tests/katatib-learning.test.mjs
           node tests/katatib-progress.test.mjs
           node tests/katatib-workspace.test.mjs
@@ -69,7 +72,7 @@ jobs:
           PLAYWRIGHT_MODULE: ${{ runner.temp }}/katatib-browser/node_modules/playwright
         run: |
           katatib_browser_failed=0
-          for katatib_test in tests/katatib-browser.cjs tests/katatib-live-browser.cjs tests/katatib-mushaf-browser.cjs tests/katatib-mushaf-download-browser.cjs tests/katatib-audio-browser.cjs tests/katatib-offline-browser.cjs tests/katatib-offline-controls-browser.cjs tests/katatib-priorities-browser.cjs; do
+          for katatib_test in tests/katatib-browser.cjs tests/katatib-live-browser.cjs tests/katatib-mushaf-browser.cjs tests/katatib-mushaf-download-browser.cjs tests/katatib-audio-browser.cjs tests/katatib-recording-browser.cjs tests/katatib-offline-browser.cjs tests/katatib-offline-controls-browser.cjs tests/katatib-priorities-browser.cjs; do
             if ! node "$katatib_test"; then katatib_browser_failed=1; fi
           done
           exit "$katatib_browser_failed"

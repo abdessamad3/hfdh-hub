@@ -51,7 +51,7 @@ export async function connect(){
  async saveLearning(input,id){
   if(window.__learningFail)throw new Error('unavailable');
   if(window.__learning[id]&&JSON.stringify(window.__learning[id].input)!==JSON.stringify(input))throw Object.assign(new Error('learning-conflict'),{code:'learning-conflict'});
-  window.__learning[id]={schemaVersion:2,...input,input,id};
+  window.__learning[id]={schemaVersion:input.passage?3:2,...input,input,id};
   if(window.__learningLostAck){window.__learningLostAck=false;throw new Error('unavailable');}
   return window.__learning[id];
  },
@@ -69,7 +69,7 @@ export async function connect(){
 let browser,failurePage,observedErrors;
 (async()=>{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
- browser=await chromium.launch({headless:true,args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});
+ browser=await chromium.launch({headless:true,...(process.env.KATATIB_CHROMIUM_EXECUTABLE?{executablePath:process.env.KATATIB_CHROMIUM_EXECUTABLE}:{}),args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});
  const errors=[];observedErrors=errors;
  fs.mkdirSync('artifacts/katatib',{recursive:true});
  const page=await browser.newPage({viewport:{width:390,height:844}});failurePage=page;
@@ -190,9 +190,9 @@ let browser,failurePage,observedErrors;
  await page.evaluate(()=>window.__delayLearning=true);
  await page.locator('#learning-student').selectOption('a');
  await page.waitForFunction(()=>typeof window.__releaseLearning==='function');
- await page.locator('#learning-form [name=hizb]').fill('4');
+ await page.locator('#learning-form [name=hizb]').selectOption('4');
  await page.locator('#learning-form [name=fromEighth]').selectOption('2');
- await page.locator('#learning-form [name=toEighth]').selectOption('4');
+ await page.locator('#learning-form [name=amount]').selectOption('custom');await page.locator('#learning-form [name=toEighth]').selectOption('4');
  await page.locator('#learning-form [name=note]').fill('حفظ <img src=x onerror=alert(1)>');
  await page.locator('#learning-form [name=confirmMastered]').count().then(async n=>{if(n)await page.locator('#learning-form [name=confirmMastered]').check();});
  await page.evaluate(()=>window.__releaseLearning());await page.locator('#learning-history-panel [data-confirmed-hizbs]').waitFor();
@@ -223,7 +223,7 @@ let browser,failurePage,observedErrors;
  await page.locator('.learning-versions summary').click();
  for(const kind of ['revision','evaluation']){
   await page.locator('#learning-form [name=kind]').selectOption(kind);
-  await page.locator('#learning-form [name=hizb]').fill('5');
+  await page.locator('#learning-form [name=hizb]').selectOption('5');
   await page.locator('#learning-form [name=mistakes]').fill('2');
   await page.locator('#learning-form [name=score]').fill('85');
   await page.locator('#learning-form button[type=submit]').click();
@@ -232,7 +232,7 @@ let browser,failurePage,observedErrors;
  }
  await page.waitForFunction(()=>document.querySelectorAll('.learning-history > li').length===3);
  assert.equal(await page.locator('.learning-history > li').count(),3);
- await page.locator('#learning-form [name=hizb]').fill('6');
+ await page.locator('#learning-form [name=hizb]').selectOption('6');
  await page.locator('#learning-form [name=mistakes]').fill('0');
  await page.locator('#learning-form [name=score]').fill('90');
  await page.evaluate(()=>window.__learningLostAck=true);
@@ -260,8 +260,8 @@ let browser,failurePage,observedErrors;
  await page.waitForFunction(()=>document.querySelectorAll('.learning-history > li').length===4);
  // Practice does not increase progress; an explicit confirmed edit does.
  await page.locator('#learning-form [name=kind]').selectOption('practice');
- await page.locator('#learning-form [name=hizb]').fill('7');
- await page.locator('#learning-form [name=toEighth]').selectOption('2');
+ await page.locator('#learning-form [name=hizb]').selectOption('7');
+ await page.locator('#learning-form [name=amount]').selectOption('custom');await page.locator('#learning-form [name=toEighth]').selectOption('2');
  await page.locator('#learning-form button[type=submit]').click();
  await page.waitForFunction(()=>Object.keys(window.__learning).length===6);
  await page.waitForFunction(()=>document.querySelectorAll('.learning-history > li').length===5);
@@ -338,7 +338,7 @@ let browser,failurePage,observedErrors;
  await page.locator('[data-work-form] [name=note]').fill('Revise the assigned portion');
  await page.locator('[data-work-form] button[type=submit]').click();
  await page.waitForFunction(()=>!document.querySelector('[data-work-form]'));
- assert.ok((await page.locator('#work-root').innerText()).includes('Revise the assigned portion'));
+ await page.waitForFunction(()=>document.querySelector('#work-root')?.innerText.includes('Revise the assigned portion'));
  const taskId=await page.evaluate(()=>Object.keys(window.__workspace.katatib_tasks)[0]);
  await page.locator(`[data-work-edit="${taskId}"]`).click();
  await page.locator('[data-work-form] [name=status]').selectOption('done');
@@ -445,7 +445,7 @@ let browser,failurePage,observedErrors;
  await page.waitForFunction(()=>document.documentElement.scrollWidth<=window.innerWidth+1);
  await openScreen(page,'recording');
  await page.evaluate(()=>{const get=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);navigator.mediaDevices.getUserMedia=async input=>{const stream=await get(input);window.__recordingTracks=stream.getTracks();return stream;};});
- await page.locator('[data-recorder=start]').click();
+ await page.locator('[data-audio-trust]').check();await page.locator('[data-recorder=start]').click();
  await page.locator('[data-recording-state=listening]').waitFor();
  assert.equal(await page.locator('#recording-student').isDisabled(),true);
  await page.waitForTimeout(1100);
@@ -462,10 +462,10 @@ let browser,failurePage,observedErrors;
  assert.equal(await page.locator('.local-recorder').count(),0);
  await openScreen(page,'recording');
  await page.evaluate(()=>{window.__workingMicrophone=navigator.mediaDevices.getUserMedia;navigator.mediaDevices.getUserMedia=async()=>{throw new DOMException('Denied','NotAllowedError');};});
- await page.locator('[data-recorder=start]').click();await page.getByRole('alert').waitFor();
+ await page.locator('[data-audio-trust]').check();await page.locator('[data-recorder=start]').click();await page.getByRole('alert').waitFor();
  assert.equal(await page.locator('[data-recording-state=ready]').count(),1);
  await page.evaluate(()=>navigator.mediaDevices.getUserMedia=window.__workingMicrophone);
- await page.locator('[data-recorder=start]').click();await page.locator('[data-recording-state=listening]').waitFor();
+ await page.locator('[data-audio-trust]').check();await page.locator('[data-recorder=start]').click();await page.locator('[data-recording-state=listening]').waitFor();
  page.once('dialog',d=>d.accept());await page.locator('[data-action=logout]').click();
  assert.equal(await page.evaluate(()=>window.__recordingTracks.every(t=>t.readyState==='ended')),true,'logout releases an active microphone and discards local audio');
  await page.evaluate(()=>window.__role='parent');
@@ -611,7 +611,7 @@ let browser,failurePage,observedErrors;
  await page.locator('[data-notice-form] [name=body]').fill('Private family message');
  await page.locator('[data-notice-form] button[type=submit]').click();
  await page.locator('[data-notice-edit]').waitFor();assert.equal(await page.locator('#work-root script').count(),0);
- await page.locator('[data-action=logout]').click();await page.evaluate(()=>window.__role='parent');await page.locator('[data-action=login]').click();
+ await page.locator('[data-action=logout]').click();await page.evaluate(()=>window.__role='parent');await page.locator('[data-action=login]').click();await page.locator('[data-dashboard-students]').waitFor();
  await openScreen(page,'notices');await page.locator('[data-notice-read]').waitFor();assert.equal(await page.locator('[data-family-new]').count(),0);
  await page.locator('[data-notice-read]').click();await page.locator('[data-notice-read][disabled]').waitFor();
  await openScreen(page,'consent');await page.locator('[data-consent=audio]:not([disabled])').first().waitFor();

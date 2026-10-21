@@ -1,3 +1,4 @@
+import {cleanPassage} from './recitation-passage.mjs';
 import { attendanceId } from './attendance.mjs';
 export const LEARNING_KINDS = Object.freeze(['memorization','practice','revision','evaluation']);
 export const isGradedLearning = kind => ['revision','evaluation'].includes(kind);
@@ -5,6 +6,8 @@ export const sameLearningFamily = (a,b) => a===b || (['memorization','practice']
 export function cleanLearning(input) {
   if(!input || !LEARNING_KINDS.includes(input.kind)) throw new Error('invalid-learning');
   attendanceId(input.studentId,input.date,input.session);
+  const passage=input.passage?cleanPassage(input.passage):null;
+  if(passage)input={...input,hizb:Math.floor(passage.startCell/8)+1,fromEighth:passage.startCell%8+1,toEighth:Math.min(8,passage.endCell-Math.floor(passage.startCell/8)*8+1)};
   const integer=(n,min,max)=>Number.isInteger(n)&&n>=min&&n<=max;
   if(!integer(input.hizb,1,60)||!integer(input.fromEighth,1,8)||!integer(input.toEighth,input.fromEighth,8))throw new Error('invalid-portion');
   if(typeof input.note!=='string'||input.note.length>500)throw new Error('invalid-note');
@@ -13,10 +16,10 @@ export function cleanLearning(input) {
   if(!graded&&(input.mistakes!==null||input.score!==null))throw new Error('invalid-grade');
   const supersedesId=input.supersedesId??null;
   if(supersedesId!==null&&(typeof supersedesId!=='string'||!/^[A-Za-z0-9-]{16,80}$/.test(supersedesId)))throw new Error('invalid-correction');
-  return {studentId:input.studentId,kind:input.kind,date:input.date,session:input.session,hizb:input.hizb,fromEighth:input.fromEighth,toEighth:input.toEighth,quantity:input.toEighth-input.fromEighth+1,mistakes:input.mistakes,score:input.score,note:input.note,supersedesId};
+  return {...(passage?{passage}:{}),studentId:input.studentId,kind:input.kind,date:input.date,session:input.session,hizb:input.hizb,fromEighth:input.fromEighth,toEighth:input.toEighth,quantity:passage?(passage.mode==='divisions'?passage.endCell-passage.startCell+1:null):input.toEighth-input.fromEighth+1,mistakes:input.mistakes,score:input.score,note:input.note,supersedesId};
 }
 export function sameLearning(stored,input,userId) {
-  return stored.createdBy===userId&&Object.entries(input).every(([key,value])=>stored[key]===value);
+  return stored.createdBy===userId&&Object.entries(input).every(([key,value])=>JSON.stringify(stored[key])===JSON.stringify(value));
 }
 export async function commitLearning(db,sdk,userId,input,id) {
   const clean=cleanLearning(input);
@@ -32,7 +35,7 @@ export async function commitLearning(db,sdk,userId,input,id) {
       const prior=await tx.get(sdk.doc(db,'katatib_learning',clean.supersedesId));
       if(!prior.exists()||prior.data().studentId!==clean.studentId||!sameLearningFamily(prior.data().kind,clean.kind))throw new Error('invalid-correction');
     }
-    tx.set(ref,{schemaVersion:2,...clean,createdBy:userId,createdAt:sdk.serverTimestamp()});
+    tx.set(ref,{schemaVersion:clean.passage?3:2,...clean,createdBy:userId,createdAt:sdk.serverTimestamp()});
     return {id,...clean};
   });
 }

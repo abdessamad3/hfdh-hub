@@ -365,6 +365,14 @@ const {doc,setDoc,getDoc,collection,getDocs,getDocsFromServer,query,where,limit,
   assert.equal((await getDocFromServer(doc(teacher,'katatib_learning','learning-memo-0001'))).data().note,'original');
   assert.equal((await getDocFromServer(doc(teacher,'katatib_learning','learning-correct-001'))).data().supersedesId,'learning-memo-0001');
   assert.equal((await assertSucceeds(getDocs(query(collection(teacher,'katatib_learning'),where('studentId','==','a'),limit(30))))).size,4);
+  const {cleanPassage}=await import('../public/katatib/live/recitation-passage.mjs');
+  const precise={...learningInput,studentId:'c',passage:cleanPassage({mode:'ayahs',fromSurah:1,fromAyah:3,toSurah:1,toAyah:6})};
+  await assertSucceeds(learningSave(admin,'new-admin@example.com',precise,'learning-ayahs-0001'));
+  const preciseStored=(await getDocFromServer(doc(admin,'katatib_learning','learning-ayahs-0001'))).data();
+  assert.equal(preciseStored.schemaVersion,3);
+  await assertFails(setDoc(doc(teacher,'katatib_learning','learning-forged-001'),{...preciseStored,passage:{...preciseStored.passage,end:62150000},createdAt:serverTimestamp()}));
+  const inside={...learningInput,studentId:'c',passage:cleanPassage({mode:'divisions',startCell:2,endCell:5})};
+  await assertSucceeds(learningSave(admin,'new-admin@example.com',inside,'learning-divisions-1'));
   await assertFails(getDocs(query(collection(teacher,'katatib_learning'),limit(30))));
   await assertFails(getDocs(query(collection(teacher,'katatib_learning'),where('studentId','==','a'),limit(31))));
   await assertFails(updateDoc(doc(admin,'katatib_learning','learning-memo-0001'),{note:'overwrite'}));
@@ -403,6 +411,10 @@ const {doc,setDoc,getDoc,collection,getDocs,getDocsFromServer,query,where,limit,
   const legacyProgress=await readProgress();assert.equal(legacyProgress.unreviewed,1);assert.equal(legacyProgress.confirmedEighths,3);
   await assertSucceeds(learningSave(teacher,'new-teacher@example.com',{...learningInput,hizb:6,toEighth:4,supersedesId:'progress-legacy-0001'},'progress-review-0001'));
   const reviewed=await readProgress();assert.equal(reviewed.unreviewed,0);assert.equal(reviewed.confirmedEighths,7);
+  await assertSucceeds(learningSave(teacher,'new-teacher@example.com',{...precise,studentId:'a'},'learning-teacher-ayah'));
+  await assertSucceeds(verseSave(teacher,'new-teacher@example.com',{...verseInput,ayah:3,recitationId:'learning-teacher-ayah'},'verse-linked-recitation'));
+  await assertFails(verseSave(teacher,'new-teacher@example.com',{...verseInput,ayah:1,recitationId:'learning-teacher-ayah'},'verse-outside-recitation'));
+  await assertFails(verseSave(teacher,'new-teacher@example.com',{...verseInput,ayah:3,recitationId:'learning-ayahs-0001'},'verse-wrong-recitation'));
   await env.withSecurityRulesDisabled(ctx=>updateDoc(doc(ctx.firestore(),'katatib_access/teacher@example.com'),{active:false}));
   await assertFails(getDoc(doc(teacher,'students/a')));
   await assertFails(save(teacher,'new-teacher@example.com','a',context,{status:'present',note:'revoked'},3,'event-revoked-001'));

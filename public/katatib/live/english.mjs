@@ -67,7 +67,7 @@ export const english={
   "oldLearningLabel": "Earlier learning entries",
   "learningTab": "Learning",
   "learningTitle": "Record learning",
-  "learningHint": "Enter one hizb and an inclusive range of eighths. Split portions spanning hizbs into separate records. Confirm memorization explicitly.",
+  "learningHint": "Choose ayahs or eighths, quarters, halves and hizbs. Check the passage boundaries before saving. Confirm memorization explicitly.",
   "learningStudent": "Student",
   "chooseStudent": "Choose a student",
   "learningType": "Record type",

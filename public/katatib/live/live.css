@@ -84,3 +84,13 @@
 /* Daily use keeps one primary action; setup and maintenance stay collapsed. */
 .offline-simple:not(:has(.offline-setup-intro)){padding:12px 16px}.offline-simple .offline-main-actions{margin-block:10px}.offline-simple .offline-main-actions button{min-height:44px}.offline-simple [data-offline-status]{font-size:13px;line-height:1.6}.offline-simple .offline-setup-size{font-size:12px}.offline-simple details{border-top:1px solid var(--line)}.offline-simple details>summary{min-height:40px;color:var(--muted)}.offline-simple details time{display:block;font-size:12px;color:var(--muted)}@media(min-width:601px){.offline-simple .offline-main-actions{justify-content:flex-start}.offline-simple .offline-main-actions button{min-width:140px}}@media print{.offline-simple{display:none!important}}
 @media(min-width:601px){.offline-simple:not(:has(.offline-setup-intro)){display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px 16px}.offline-simple:not(:has(.offline-setup-intro))>form,.offline-simple:not(:has(.offline-setup-intro))>form>fieldset{display:contents}.offline-simple:not(:has(.offline-setup-intro)) .offline-status-line{grid-column:1;grid-row:1}.offline-simple:not(:has(.offline-setup-intro)) .offline-main-actions{grid-column:2;grid-row:1;margin:0}.offline-simple:not(:has(.offline-setup-intro)) details,.offline-simple:not(:has(.offline-setup-intro))>p,.offline-simple:not(:has(.offline-setup-intro))>label{grid-column:1/-1}}
+/* Recitation passages and durable audio share the session workspace. */
+.passage-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:12px;width:100%}
+.passage-fields label{min-width:0}.passage-fields select,.passage-fields input{width:100%}
+.recording-passage{border:0;padding:0;margin:16px 0;display:grid;gap:12px}
+[data-recording-library] ul,.recording-history-list{list-style:none;padding:0;display:grid;gap:12px}
+[data-recording-library] li,.recording-history-list li{padding:12px;border:1px solid var(--line);border-radius:12px;overflow-wrap:anywhere}
+[data-recording-library] button,.recording-history-list button{margin:4px;min-height:44px}
+[data-recording-library] audio,.recording-history-list audio{display:block;width:100%;margin-block:12px}
+.hizb-cell[data-evidence-state=partial]{background:var(--surface);border-style:dashed;color:var(--ink)}
+.hizb-cell[data-evidence-state=review]{border:2px solid #c18421}

@@ -23,7 +23,8 @@ export function pageReferences(m,page){
 export function cleanVerseMark(input,m){
  if(!input||typeof input.studentId!=='string'||!input.studentId||input.studentId.length>128||/[~/\r\n]/.test(input.studentId)||input.edition!==MUSHAF_EDITION||input.sourceVersion!==MUSHAF_COMMIT||!VERSE_MARKS[input.mark]||typeof input.note!=='string'||input.note.length>500)throw new Error('invalid-verse-mark');
  if(versePage(m,input.surah,input.ayah)!==input.page)throw new Error('invalid-warsh-reference');
- return {studentId:input.studentId,edition:MUSHAF_EDITION,sourceVersion:MUSHAF_COMMIT,page:input.page,surah:input.surah,ayah:input.ayah,mark:input.mark,note:input.note};
+ if(input.recitationId!==undefined&&(!/^[A-Za-z0-9-]{16,80}$/.test(input.recitationId)))throw Error('invalid-recitation');
+ return {...(input.recitationId?{recitationId:input.recitationId}:{}),studentId:input.studentId,edition:MUSHAF_EDITION,sourceVersion:MUSHAF_COMMIT,page:input.page,surah:input.surah,ayah:input.ayah,mark:input.mark,note:input.note};
 }
 export async function commitVerseMark(db,sdk,uid,input,eventId,m){
  const data=cleanVerseMark(input,m);

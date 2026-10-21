@@ -1,3 +1,4 @@
+import {createRecordingLibrary} from './recording-library.mjs';
 import { commitVerseMark } from './mushaf-model.mjs';
 import { applyLegacyCorrections, applyLegacyTaskStates } from './advanced-model.mjs';
 import { teacherView, commitTeacherAttendance, TEACHER_CURRENT, TEACHER_HISTORY } from './teacher-attendance.mjs';
@@ -20,9 +21,15 @@ export async function connect() {
   const db = initializeFirestore(app, { localCache: memoryLocalCache() });
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });
+  const audio=createRecordingLibrary({uid:()=>auth.currentUser?.uid,request:async(action,payload)=>{
+    const token=await auth.currentUser?.getIdToken();if(!token)throw Error('no-access');
+    const response=await fetch('https://tqtfnynimyoysfgftkof.supabase.co'+'/functions/v1/recitations',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token,apikey:'sb_publishable_ctuznFV8I8gy2bcsrgL0rg_o27MzM_f'},body:JSON.stringify({action,...payload})});
+    if(!response.ok)throw Error('audio-service-'+response.status);return response.json();
+  }});
   return {
+    audio,
     authUid: () => auth.currentUser?.uid,
-    observe: callback => onAuthStateChanged(auth, callback),
+    observe: callback => onAuthStateChanged(auth, next=>{audio.activate(next?.uid).catch(()=>{}).finally(()=>{if(auth.currentUser?.uid===next?.uid)callback(next);});}),
     login: () => signInWithPopup(auth, provider),
     studentLogin: (code,pin) => signInWithEmailAndPassword(auth,studentAddress(code),studentSecret(pin)),
     async studentCredential(studentId) {
@@ -40,7 +47,7 @@ export async function connect() {
     },
     async trustDevice(){await setPersistence(auth,browserLocalPersistence);localStorage.setItem('katatib-offline-trusted','yes');},
     async untrustDevice(){await setPersistence(auth,browserSessionPersistence);localStorage.removeItem('katatib-offline-trusted');},
-    logout: () => signOut(auth),
+    logout: async () => {await audio.forget();return signOut(auth);},
     async students(user) {
       const identity=await permittedIdentity(user);
       const access = await getDocFromServer(doc(db, 'katatib_access', identity.address));

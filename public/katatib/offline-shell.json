@@ -35,7 +35,7 @@
     },
     {
       "path": "/live/app.mjs",
-      "sha256": "ec8135c0143aca5316da5dac87c1bee34efaaebe8328fe782f344ca96d7c4bf2"
+      "sha256": "45cd93ff0beb1c91fb27e885547be58ea155364c8aa1aa39fddbeea4a7bc466f"
     },
     {
       "path": "/live/appearance.mjs",
@@ -63,7 +63,7 @@
     },
     {
       "path": "/live/english.mjs",
-      "sha256": "fcebf662aac50f58a26f4ce04a2c695808eabdbebd0868b04f9263828e49dcb7"
+      "sha256": "9d4e61789891aec57b6ff70f8d8f3ff9829cda7a495559640f941ed9c65fa7ba"
     },
     {
       "path": "/live/family-model.mjs",
@@ -79,7 +79,7 @@
     },
     {
       "path": "/live/gateway.mjs",
-      "sha256": "f3b93c8682295f0be735967bb64119c59cddd73b602006e32e1a748abd436291"
+      "sha256": "d4e2f7865811a75fe3983114ce480e79f79f05889f3e2cb113b15aa3b38baa61"
     },
     {
       "path": "/live/interface.mjs",
@@ -87,7 +87,7 @@
     },
     {
       "path": "/live/learning.mjs",
-      "sha256": "821e4859f40f489bcbd60ffd24ef168b3edf15c46e69accb0e5959d8fd4fde0a"
+      "sha256": "0dfc0cd36d994f5256ed58d81d49f152aff57f8082acccf5cde93b6e224819f0"
     },
     {
       "path": "/live/legacy.mjs",
@@ -107,7 +107,7 @@
     },
     {
       "path": "/live/mushaf-model.mjs",
-      "sha256": "5fcf046a69d7be64efc159adb10c1a1bdd87f1f9b233f195f173aab81c043437"
+      "sha256": "46bb696e86a1c9c67f4db586b411f26c495a52ebba4eef3530c1f4919b629aad"
     },
     {
       "path": "/live/mushaf-pages.mjs",
@@ -119,7 +119,7 @@
     },
     {
       "path": "/live/mushaf-ui.mjs",
-      "sha256": "46916f3997db5c774472e825594f589fd9489bd899987c92353073e7e70914c6"
+      "sha256": "e51be08aef9027b79935d7faa693049359b1a439ccf64f91f3b22a2015fa663a"
     },
     {
       "path": "/live/navigation.mjs",
@@ -127,7 +127,7 @@
     },
     {
       "path": "/live/offline-gateway.mjs",
-      "sha256": "d321d54be3586464273bf07b9ec38071c289a3625f993724f11196d4bb033ae0"
+      "sha256": "4951025316a7be98403cd1d978d57e464ae1ced367b13bf2e7eb2dc5c2171d3d"
     },
     {
       "path": "/live/offline-snapshot.mjs",
@@ -139,7 +139,7 @@
     },
     {
       "path": "/live/offline-ui.mjs",
-      "sha256": "2e7da420c3be7ee00cbb2011f00bcc2df78bae19a61ad035ec5ed414ebc712da"
+      "sha256": "88a1f4f7e0270e24ef49b67f199d4a96d84d577a8eeddd9f4a5bb5552f855d03"
     },
     {
       "path": "/live/passage-index.mjs",
@@ -159,19 +159,31 @@
     },
     {
       "path": "/live/progress.mjs",
-      "sha256": "739a2d3c4ea9d4a2933be20f0b9ea069faab2777298129ad1149ff1ef9a198ad"
+      "sha256": "91caf926723db46b89df61d4b9bdf5b722756942910129f1863a17089767d3b7"
     },
     {
       "path": "/live/readiness.mjs",
       "sha256": "63f9247c26070558576a896696054bdae2b60d5c1d9834a46e53b0e2018dffd0"
     },
     {
+      "path": "/live/recitation-passage.mjs",
+      "sha256": "ef0caaca93b37a1afade0273550228ee557533e48117aabd369f77d25acafae9"
+    },
+    {
       "path": "/live/recorder.mjs",
-      "sha256": "fdbd3f4834e8b1984dd1148caa70106a8ae098e0aa456e9552d8fb5454000edb"
+      "sha256": "99f31720ef060219bbe41574c7e84bf4435953a12052cc140f2bc0c719e53e22"
+    },
+    {
+      "path": "/live/recording-history.mjs",
+      "sha256": "4836d33777a6c27792ec93cd2f327e00e5eab2421e72cc17ad7190d7113ea789"
+    },
+    {
+      "path": "/live/recording-library.mjs",
+      "sha256": "c7b9ba3d8a8aedccf024c06cc1aa3905ca8d3d751f8d58a058921d07708b3bb2"
     },
     {
       "path": "/live/records.mjs",
-      "sha256": "00b494d79a11db1acca1d35feff58b2757b411a8be1af56b7a638e4cd2ff8865"
+      "sha256": "b8f1830782ae40953a8aace184a47298254f335bb906230da01b1bf73d906246"
     },
     {
       "path": "/live/reports.mjs",
@@ -191,7 +203,7 @@
     },
     {
       "path": "/live/student-visuals.mjs",
-      "sha256": "fbdc6d5505cdad81e928aa86f0f5b0290d104a33df8473c64c5c58bcda4b428c"
+      "sha256": "31fa68be44a6c034f8e400c06f633adaadf1e8d61634fc1e4c8d2d8657dcb526"
     },
     {
       "path": "/live/teacher-attendance-ui.mjs",
@@ -202,16 +214,20 @@
       "sha256": "82ceca89404e4f8ea327121965b6660c3483d3f897367225c4a11dc1624aced2"
     },
     {
+      "path": "/live/warsh-reference.mjs",
+      "sha256": "567f009afedc5316afe763d06a631f9b1866a859637db8f3d47293aa45c35d10"
+    },
+    {
       "path": "/live/workspace-model.mjs",
       "sha256": "e86814bb1209b7079b154b2df6ac312289a54ba4a7a2b4a30727a1b853bbd300"
     },
     {
       "path": "/live/workspace.mjs",
-      "sha256": "c64e61ac11a52caad924f372a4b079f8fae15295bd37c016d52f4b653983d078"
+      "sha256": "9eeb7525bf725d729522369e8eb33b96aaa9bca6424451d9bcc203c0280637fa"
     },
     {
       "path": "/live/live.css",
-      "sha256": "da952d03146e07160f4820b7c240be51ed32dde9fdc892713fec9c2a577adb16"
+      "sha256": "a20bdf0e851542826fc298d26f863f478d6e525afe1190ae7b6a85614a84596b"
     },
     {
       "path": "/live/mushaf.css",
