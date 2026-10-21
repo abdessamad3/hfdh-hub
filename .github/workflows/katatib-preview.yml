@@ -67,7 +67,7 @@ jobs:
         with:
           deno-version: v2.x
       - name: Check the Supabase recording function in its Deno runtime
-        run: deno check supabase/functions/recitations/index.ts
+        run: deno check --node-modules-dir=none supabase/functions/recitations/index.ts
       - name: Install browser test tools outside the application
         run: |
           npm install --prefix "$RUNNER_TEMP/katatib-browser" --no-package-lock --ignore-scripts playwright@1.56.1
