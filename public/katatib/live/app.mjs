@@ -346,6 +346,7 @@ root.addEventListener('click', async e => {
   if(nextScreen&&(!screens().includes(nextScreen)||workspace.busy()||extraScreens.includes(screen)&&nextScreen!==screen&&!workspace.canLeave()||screen==='recording'&&nextScreen!==screen&&!localRecorder.canLeave()))return;
   if(nextScreen&&nextScreen!==screen&&(learningSaving||[...cloudRows.values()].some(r=>r.saving)))return;
   if(nextScreen&&nextScreen!==screen&&(['attendance','learning'].includes(screen))&&(learningTouched||learningPending||[...cloudRows.values()].some(rowDirty))&&!confirm(t('cloudLeave')))return;
+  if(nextScreen&&nextScreen!==screen&&screen==='today')priorities.reset();
   if(nextScreen&&nextScreen!==screen&&extraScreens.includes(screen))workspace.reset();
   if(nextScreen&&nextScreen!==screen&&screen==='recording')localRecorder.reset();
   if(b.dataset.rosterPage!==undefined){rosterIndex=Number(b.dataset.rosterPage);if(screen==='attendance')loadAttendance();else render();return;}

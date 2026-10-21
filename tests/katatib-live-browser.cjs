@@ -95,7 +95,7 @@ let browser,failurePage,observedErrors;
  await page.locator('[data-action=login]').click();
  await page.locator('.student-card').first().waitFor();
  assert.equal(await page.locator('[data-dashboard-students]').innerText(),'2');assert.equal(await page.locator('[data-main-page]').count(),5,'staff see five main destinations');
- await page.locator('[data-priorities-load]').click();await page.locator('.priorities-counts').waitFor();assert.equal(await page.locator('.priorities-counts strong').first().innerText(),'0');
+ await page.locator('.priorities-counts').waitFor();assert.equal(await page.locator('[data-priorities-load]').count(),0,'tasks load automatically without a Show tasks button');assert.equal(await page.locator('.priorities-counts strong').first().innerText(),'0');
  assert.ok((await page.locator('h1').innerText()).includes('Teacher Test'));
  assert.equal(await page.locator('a[href*=demo]').count(),0);
  await page.screenshot({path:'artifacts/katatib/unified-today-phone-fr.png',fullPage:true});
