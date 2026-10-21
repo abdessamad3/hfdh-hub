@@ -20,3 +20,5 @@
 
 /* Fit mode reserves horizontal gestures for page turns; zoom mode keeps native panning. */
 .mushaf-page-viewport[data-zoomed=false]{touch-action:pan-y pinch-zoom}.mushaf-page-viewport[data-zoomed=true]{touch-action:pan-x pan-y pinch-zoom}.mushaf-swipe-hint{font-size:12px;color:var(--muted);line-height:1.8;margin-block:0 16px}
+
+.mushaf-page-viewport[data-native-zoomed=true]{touch-action:pan-x pan-y pinch-zoom}

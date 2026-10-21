@@ -29,10 +29,13 @@ export function bindMushafSwipe(host,{enabled,direction,zoom,onTurn,now=()=>perf
   const dx=t.clientX-g.x,dy=t.clientY-g.y;if(Math.hypot(dx,dy)>9)suppress();
   if(e.touches.length||g.vertical||!g.viewport.isConnected||!enabled())return;
   const turn=swipeTurn({dx,dy,duration:now()-g.at,width:g.width,direction:direction(),zoom:zoom()});
-  if(turn){suppress();onTurn(turn);}
+  if(turn){suppress();onTurn(turn);suppress();}
  }
  function cancel(){gesture=null;suppress();}
  function click(e){if(e.detail!==0&&now()<suppressUntil&&e.target.closest?.('.mushaf-page-viewport')){e.preventDefault();e.stopImmediatePropagation();}}
+ const visual=globalThis.visualViewport;
+ function nativeZoom(){for(const viewport of host.querySelectorAll('.mushaf-page-viewport'))viewport.dataset.nativeZoomed=String((visual?.scale||1)>1.05);}
+ visual?.addEventListener('resize',nativeZoom);nativeZoom();
  host.addEventListener('touchstart',start,{passive:true});host.addEventListener('touchmove',move,{passive:true});host.addEventListener('touchend',end,{passive:true});host.addEventListener('touchcancel',cancel,{passive:true});host.addEventListener('click',click,true);
- return ()=>{gesture=null;host.removeEventListener('touchstart',start);host.removeEventListener('touchmove',move);host.removeEventListener('touchend',end);host.removeEventListener('touchcancel',cancel);host.removeEventListener('click',click,true);};
+ return ()=>{gesture=null;visual?.removeEventListener('resize',nativeZoom);host.removeEventListener('touchstart',start);host.removeEventListener('touchmove',move);host.removeEventListener('touchend',end);host.removeEventListener('touchcancel',cancel);host.removeEventListener('click',click,true);};
 }
