@@ -107,7 +107,7 @@ export function createOfflineGateway(raw,{store=deviceStore(),online=()=>navigat
   if(!locks?.request)throw Error('offline-locks-unavailable');attendanceId('prepare',date,'morning');const window=snapshotWindow(date,days,upcoming),dates=windowDates(window);
   if(!Array.isArray(students)||!students.length||students.length>5000||new Set(students).size!==students.length||!Array.isArray(pages)||pages.length>10||pages.some(p=>!Number.isInteger(p)||p<1||p>604))throw Error('invalid-offline-preparation');
   if(state.storageFailed)throw Error('offline-storage-unavailable');if(!identity||!online())throw Error('offline-prepare-online');if(preparing)throw Error('offline-sync-first');
-  if(pendingRows(state).length)await sync();const uid=identity.uid;await refresh(uid);if(pendingRows(state).length)throw Error('offline-sync-first');prepareDone=0;prepareTotal=students.length;preparing=true;notify();
+  const uid=identity.uid;await refresh(uid);if(pendingRows(state).length)throw Error('offline-sync-first');prepareDone=0;prepareTotal=students.length;preparing=true;notify();
   try{await syncLock(async()=>{
    await refresh(uid);if(pendingRows(state).length)throw Error('offline-sync-first');const roster=await raw.students(identity);current(uid);if(!OFFLINE_ROLES.includes(roster.role))throw Error('no-access');
    const selected=roster.students.filter(s=>students.includes(s.id));if(selected.length!==students.length)throw Error('no-access');
