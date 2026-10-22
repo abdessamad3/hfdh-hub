@@ -1,0 +1,41 @@
+{
+  "scope": "unauthenticated public HTTP checks; not a browser or classroom-speed comparison",
+  "observations": [
+    {
+      "url": "https://hifd-kouttab.web.app/",
+      "final_url": "https://hifd-kouttab.web.app/",
+      "status": 200,
+      "elapsed_ms": 886,
+      "bytes": 627,
+      "title": "Hifdh Hub",
+      "cache_control": "max-age=3600",
+      "content_type": "text/html; charset=utf-8"
+    },
+    {
+      "url": "https://katatib-64049.web.app/",
+      "final_url": "https://katatib-64049.web.app/",
+      "status": 200,
+      "elapsed_ms": 1062,
+      "bytes": 968,
+      "title": "Katatib \u00b7 \u0643\u062a\u0627\u062a\u064a\u0628",
+      "cache_control": "no-store",
+      "content_type": "text/html; charset=utf-8"
+    },
+    {
+      "url": "https://katatib-64049.web.app/live/",
+      "final_url": "https://katatib-64049.web.app/",
+      "status": 200,
+      "elapsed_ms": 1146,
+      "bytes": 968,
+      "title": "Katatib \u00b7 \u0643\u062a\u0627\u062a\u064a\u0628",
+      "cache_control": "no-store",
+      "content_type": "text/html; charset=utf-8"
+    },
+    {
+      "url": "https://katatib-64049.web.app/live/legacy.mjs",
+      "error": "HTTP Error 404: Not Found",
+      "elapsed_ms": 267
+    }
+  ],
+  "recorded_at_utc": "2026-10-18T21:37:11.444117+00:00"
+}

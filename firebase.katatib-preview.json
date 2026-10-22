@@ -1,0 +1,73 @@
+{
+  "hosting": {
+    "site": "katatib-64049",
+    "public": "public/katatib",
+    "ignore": [
+      "**/.*",
+      "**/node_modules/**",
+      "demo/**",
+      "app.mjs",
+      "domain.mjs"
+    ],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          },
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          },
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      }
+    ],
+    "redirects": [
+      {
+        "source": "/index.html",
+        "destination": "/",
+        "type": 302
+      },
+      {
+        "source": "/live",
+        "destination": "/",
+        "type": 302
+      },
+      {
+        "source": "/live/",
+        "destination": "/",
+        "type": 302
+      },
+      {
+        "source": "/live/index.html",
+        "destination": "/",
+        "type": 302
+      },
+      {
+        "source": "/demo",
+        "destination": "/",
+        "type": 302
+      },
+      {
+        "source": "/demo/",
+        "destination": "/",
+        "type": 302
+      },
+      {
+        "source": "/demo/**",
+        "destination": "/",
+        "type": 302
+      }
+    ]
+  }
+}

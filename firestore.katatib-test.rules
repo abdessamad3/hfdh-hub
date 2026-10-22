@@ -1,0 +1,482 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function googleUser() {
+      return request.auth != null && request.auth.token.get('email_verified', false) == true &&
+        request.auth.token.get('firebase', {}).get('sign_in_provider', '') == 'google.com' &&
+        request.auth.token.get('email', null) is string;
+    }
+    function codedAddress(address) { return address.matches('[a-z2-7]{20}@students[.]katatib[.]invalid'); }
+    function codeUser() {
+      return request.auth != null && request.auth.token.get('email',null) is string &&
+        request.auth.token.get('firebase',{}).get('sign_in_provider','') == 'password' && codedAddress(request.auth.token.email);
+    }
+    function email() { return request.auth.token.email.lower(); }
+    function access() { return get(/databases/$(database)/documents/katatib_access/$(email())).data; }
+    function member() {
+      return (googleUser() || codeUser()) && exists(/databases/$(database)/documents/katatib_access/$(email())) &&
+        access().get('active', false) == true && access().get('role', '') in ['admin', 'manager', 'teacher', 'parent', 'student'] &&
+        (googleUser() || access().role == 'student' && access().get('authUid','') == request.auth.uid &&
+          access().studentIds.size() == 1 && access().kuttabNames.size() == 0 && access().teacherIds.size() == 0 &&
+          get(/databases/$(database)/documents/katatib_student_credentials/$(access().studentIds[0])).data.address == email());
+    }
+    function scopeAllowed(data) {
+      let a = access();
+      return a.role == 'admin' || (a.role in ['manager','teacher'] &&
+        (data.get('kuttabName','') in a.get('kuttabNames',[]) || data.get('teacherId','') in a.get('teacherIds',[])));
+    }
+    function studentAllowed(data) { return member() && scopeAllowed(data); }
+    function staff() { return member() && access().role in ['admin','manager','teacher']; }
+    function linkedStudent(id) { return member() && access().role in ['parent','student'] && id in access().get('studentIds', []); }
+    function studentIdAllowed(id) {
+      let a = access();
+      return member() && (a.role in ['parent','student'] ? id in a.get('studentIds',[]) :
+        (exists(/databases/$(database)/documents/students/$(id)) ? scopeAllowed(get(/databases/$(database)/documents/students/$(id)).data) :
+         exists(/databases/$(database)/documents/katatib_students/$(id)) && scopeAllowed(get(/databases/$(database)/documents/katatib_students/$(id)).data)));
+    }
+    function historyAllowed(data) {
+      return data.get('studentId', null) is string &&
+        studentIdAllowed(data.studentId);
+    }
+    function teacherScope(data,id) {
+      return manage() && data.get('role','') == 'teacher' &&
+        (access().role == 'admin' || data.get('kuttabName','') in access().get('kuttabNames',[]) || id in access().get('teacherIds',[]));
+    }
+    function teacherAllowed(id) {
+      return id is string && exists(/databases/$(database)/documents/users/$(id)) &&
+        teacherScope(get(/databases/$(database)/documents/users/$(id)).data,id);
+    }
+    match /users/{id} {
+      allow get: if teacherScope(resource.data,id);
+      allow list: if request.query.limit <= 100 && teacherScope(resource.data,id);
+      allow write: if false;
+    }
+    match /teacher_attendance/{id} {
+      allow get: if teacherAllowed(resource.data.teacherId);
+      allow list: if request.query.limit <= 100 && teacherAllowed(resource.data.teacherId);
+      allow write: if false;
+    }
+    function teacherDate(value) {
+      let parts=value.split('-');
+      let year=int(parts[0]);
+      let month=int(parts[1]);
+      let day=int(parts[2]);
+      let leap=year % 400 == 0 || year % 4 == 0 && year % 100 != 0;
+      return year >= 1 && day <= (month == 2 ? (leap ? 29 : 28) : (month in [4,6,9,11] ? 30 : 31));
+    }
+    function validTeacherAttendance(d,id) {
+      return d.keys().hasAll(['schemaVersion','recordId','teacherId','date','session','status','note','revision','updatedBy','updatedAt','eventId']) &&
+        d.keys().hasOnly(['schemaVersion','recordId','teacherId','date','session','status','note','revision','updatedBy','updatedAt','eventId']) &&
+        d.schemaVersion == 1 && d.recordId == id && d.teacherId is string && d.teacherId.size() > 0 && d.teacherId.size() <= 500 && !d.teacherId.matches('.*[~/].*') &&
+        d.date is string && d.date.matches('[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])') && teacherDate(d.date) &&
+        d.session in ['morning','afternoon','evening'] && id == d.teacherId + '~' + d.date + '~' + d.session &&
+        d.status in ['present','absent','excused','late','leftEarly','unmarked'] && d.note is string && d.note.size() <= 500 &&
+        d.revision is int && d.revision > 0 && d.updatedBy == request.auth.uid && d.updatedAt == request.time &&
+        d.eventId is string && d.eventId.matches('[A-Za-z0-9-]{16,80}') && teacherAllowed(d.teacherId);
+    }
+    function teacherHistoryAppended(d) {
+      return !exists(/databases/$(database)/documents/katatib_teacher_attendance_history/$(d.eventId)) &&
+        getAfter(/databases/$(database)/documents/katatib_teacher_attendance_history/$(d.eventId)).data == d;
+    }
+    match /katatib_teacher_attendance/{id} {
+      allow get: if manage() && (!exists(/databases/$(database)/documents/katatib_teacher_attendance/$(id)) || teacherAllowed(resource.data.teacherId));
+      allow list: if request.query.limit <= 100 && teacherAllowed(resource.data.teacherId);
+      allow create: if validTeacherAttendance(request.resource.data,id) && request.resource.data.revision == 1 && teacherHistoryAppended(request.resource.data);
+      allow update: if validTeacherAttendance(request.resource.data,id) && request.resource.data.teacherId == resource.data.teacherId &&
+        request.resource.data.date == resource.data.date && request.resource.data.session == resource.data.session &&
+        request.resource.data.revision == resource.data.revision + 1 && teacherHistoryAppended(request.resource.data);
+      allow delete: if false;
+    }
+    match /katatib_teacher_attendance_history/{id} {
+      allow get: if teacherAllowed(resource.data.teacherId);
+      allow list: if request.query.limit <= 100 && teacherAllowed(resource.data.teacherId);
+      allow create: if request.resource.data.eventId == id && validTeacherAttendance(request.resource.data,request.resource.data.recordId) &&
+        getAfter(/databases/$(database)/documents/katatib_teacher_attendance/$(request.resource.data.recordId)).data == request.resource.data;
+      allow update, delete: if false;
+    }
+    match /katatib_access/{address} {
+      allow get: if member() && access().role == 'admin' || (googleUser() || codeUser()) && address == email();
+      allow list: if member() && access().role == 'admin' && request.query.limit <= 100;
+      allow create, update: if member() && access().role == 'admin' && address != email() && validAccess(request.resource.data, address) && workspaceRevision() && audited('katatib_access',address,request.resource.data);
+      allow delete: if false;
+    }
+    match /students/{id} {
+      allow get: if staff() && !exists(/databases/$(database)/documents/students/$(id)) || studentAllowed(resource.data) || linkedStudent(id);
+      allow list: if request.query.limit <= 100 && (studentAllowed(resource.data) || linkedStudent(id));
+      allow write: if false;
+    }
+    match /attendance/{id} {
+      allow get: if historyAllowed(resource.data);
+      allow list: if request.query.limit <= 100 && historyAllowed(resource.data);
+      allow write: if false;
+    }
+    // Copied legacy activities are readable only through the student's actual scope.
+    match /{legacyCollection}/{id} {
+      allow get: if legacyCollection in ['evaluations','revisions','memorizations','next_revisions','next_evaluations'] && historyAllowed(resource.data);
+      allow list: if legacyCollection in ['evaluations','revisions','memorizations','next_revisions','next_evaluations'] && request.query.limit <= 100 && historyAllowed(resource.data);
+      allow write: if false;
+    }
+    function validAttendance(d, id) {
+      return d.keys().hasAll(['schemaVersion', 'recordId', 'studentId', 'date', 'session', 'status', 'note', 'revision', 'updatedBy', 'updatedAt', 'eventId']) &&
+        d.keys().hasOnly(['schemaVersion', 'recordId', 'studentId', 'date', 'session', 'status', 'note', 'revision', 'updatedBy', 'updatedAt', 'eventId']) &&
+        d.schemaVersion == 1 && d.recordId == id &&
+        d.studentId is string && d.studentId.size() > 0 && d.studentId.size() <= 500 && !d.studentId.matches('.*[~/].*') &&
+        d.date is string && d.date.matches('[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])') &&
+        d.session in ['morning', 'afternoon', 'evening'] && id == d.studentId + '~' + d.date + '~' + d.session &&
+        d.status in ['present', 'absent', 'excused', 'late', 'leftEarly', 'unmarked'] &&
+        d.note is string && d.note.size() <= 500 && d.revision is int && d.revision > 0 &&
+        d.updatedBy == request.auth.uid && d.updatedAt == request.time &&
+        staff() && d.eventId is string && d.eventId.matches('[A-Za-z0-9-]{16,80}') && historyAllowed(d);
+    }
+    function appendedHistory(d) {
+      return !exists(/databases/$(database)/documents/katatib_attendance_history/$(d.eventId)) &&
+        getAfter(/databases/$(database)/documents/katatib_attendance_history/$(d.eventId)).data == d;
+    }
+    match /katatib_attendance/{id} {
+      // Missing records contain no student data. Creation is checked against the actual student.
+      allow get: if member() && (!exists(/databases/$(database)/documents/katatib_attendance/$(id)) || historyAllowed(resource.data));
+      allow list: if request.query.limit <= 100 && historyAllowed(resource.data);
+      allow create: if validAttendance(request.resource.data, id) && request.resource.data.revision == 1 && appendedHistory(request.resource.data);
+      allow update: if validAttendance(request.resource.data, id) &&
+        request.resource.data.studentId == resource.data.studentId &&
+        request.resource.data.date == resource.data.date && request.resource.data.session == resource.data.session &&
+        request.resource.data.revision == resource.data.revision + 1 && appendedHistory(request.resource.data);
+      allow delete: if false;
+    }
+    match /katatib_attendance_history/{id} {
+      allow get: if historyAllowed(resource.data);
+      allow list: if request.query.limit <= 100 && historyAllowed(resource.data);
+      allow create: if request.resource.data.eventId == id &&
+        validAttendance(request.resource.data, request.resource.data.recordId) &&
+        getAfter(/databases/$(database)/documents/katatib_attendance/$(request.resource.data.recordId)).data == request.resource.data;
+      allow update, delete: if false;
+    }
+    function validLearningPassage(p) {
+      let edges = '10000,230000,320000,400000,480000,600000,660000,730000,820000,910151,980000,1070000,1120000,1200000,1300000,1390000,1480000,1540000,1640000,1720000,1830000,1910000,1950000,2020393,2080000,2180000,2240000,2320000,2380000,2400242,2480000,2530000,2580000,2640000,2690000,2730000,2780000,2860000,2890000,2970000,3070000,3150000,3250000,3340000,3430000,3550000,3660000,3720187,3830000,3950000,4050000,4130000,4250000,4360000,4450000,4520000,4630000,4730000,4780000,4880000,4980000,5030000,5050000,5110209,5160000,5210000,5280000,5370000,5490000,5560000,5650000,5700000,5780000,5830415,5910000,5960000,6050000,6150000,6210000,6310000,6390000,6480089,6570000,6650000,6710000,6740000,6800000,6860000,6920000,7010235,7100000,7140000,7180000,7270000,7360000,7420000,7510000,7590000,7660000,7750000,7800000,7900000,8030000,8160000,8260000,8380000,8490000,8590000,8700000,8810000,8850000,8930000,9010000,9100000,9170000,9250000,9300000,9350000,9410000,9480000,9600000,9760000,9860000,9940000,10020000,10120000,10240000,10320000,10430000,10550000,10720000,10870000,10980000,11050000,11120000,11190000,11270000,11350000,11440000,11550000,11670000,11770000,11840000,11930000,12030000,12110000,12230000,12340000,12430000,12500000,12570000,12660000,12720000,12780000,12840000,12930000,12990000,13080000,13140000,13240000,13320000,13400000,13500000,13560000,13620000,13710000,13790000,13870000,13940000,14050000,14170000,14290000,14390000,14510000,14610000,14720000,14830000,14920000,15010000,15090000,15180000,15300000,15380000,15490000,15600000,15700000,15820000,15940000,16080000,16210000,16310000,16400000,16510000,16640000,16750000,16860000,16990000,17090000,17140000,17240000,17300000,17400000,17450000,17540000,17660000,17750000,17830000,17940000,18080000,18290000,18560000,18850000,19070000,19210000,19360000,19440000,19570000,19690000,19770000,19850000,19960000,20040000,20170000,20260000,20350000,20450000,20570000,20700000,20840000,20950000,21040000,21190000,21330000,21450000,21610000,21670000,21740000,21850000,21930000,22020000,22180000,22290000,22420000,22550000,22700000,22890000,23080000,23240000,23490000,23830000,24020000,24190000,24290000,24430000,24560000,24720000,24830000,24970000,25120000,25240000,25330000,25540000,25680000,25820000,25940000,26040000,26120000,26210000,26290000,26400000,26510000,26630000,26700000,26930000,27080000,27270000,27450000,27630000,27850000,27990000,28090000,28180000,28230000,28300000,28390000,28460000,28490000,28600000,28710000,28850000,28950000,29110000,29280000,29510000,29770000,30090000,30380000,30730000,31080000,31370000,31590000,31700000,31800000,31950000,32110000,32210000,32370000,32490000,32590000,32690000,32770000,32870000,32990000,33110000,33240000,33310000,33430000,33520000,33610000,33720000,33820000,33960000,34130000,34260000,34340000,34450000,34580000,34740000,34850000,34960000,35080000,35180000,35280000,35360000,35450000,35520000,35580000,35640222,35760000,35800000,35870000,36010000,36100000,36180000,36240000,36370000,36460000,36620000,36690000,36850000,36950000,37060000,37270000,37450000,37590000,37790000,38040000,38330000,38650000,38960000,39270000,39650000,39840000,39940000,40150000,40470000,40590000,40700000,40810000,40900000,41010000,41140000,41230000,41320000,41430000,41520000,41630000,41750000,41880000,42000000,42140000,42220000,42300000,42430000,42520000,42620000,42700000,42770000,42840000,42980000,43070000,43190000,43320000,43510000,43720000,43940000,44220000,44550000,44670000,44780000,44910000,45040000,45100000,45220000,45350000,45450000,45580000,45710000,45810000,45890000,45930000,46010000,46060000,46190000,46370000,46560000,46860000,47110000,47370000,47570000,47880000,48080000,48330000,48600000,48790000,49180000,49560000,50070000,50330000,50610000,50690000,50750000,50830000,50900000,50960000,51050262,51140000,51280000,51340000,51410000,51550000,51660000,51740000,51830000,51950000,52000279,52070000,52140000,52190000,52380000,52680000,52970000,53190000,53540000,53930000,54120000,54280000,54500050,54730000,55040000,55290000,55680000,55860000,56140000,56490000,56890000,57290000,57760000,58050000,58370000,58750000,58960000,59240000,59590000,60010000,60360000,60680000,61090000,61340000,61720000,62150000'.split(',');
+      let counts = '7,285,200,175,122,167,206,76,130,109,121,111,44,54,99,128,110,105,99,134,111,76,119,62,77,226,95,88,69,59,33,30,73,54,46,82,182,86,72,84,53,50,89,56,36,34,39,29,18,45,60,47,61,55,77,99,28,21,24,13,14,11,11,18,12,12,31,52,52,44,30,28,18,55,39,31,50,40,45,42,29,19,36,25,22,17,19,26,32,20,15,21,11,8,8,20,5,8,9,11,10,8,3,9,5,5,6,3,6,3,5,4,5,6'.split(',');
+      let offsets = '0,7,292,492,667,789,956,1162,1238,1368,1477,1598,1709,1753,1807,1906,2034,2144,2249,2348,2482,2593,2669,2788,2850,2927,3153,3248,3336,3405,3464,3497,3527,3600,3654,3700,3782,3964,4050,4122,4206,4259,4309,4398,4454,4490,4524,4563,4592,4610,4655,4715,4762,4823,4878,4955,5054,5082,5103,5127,5140,5154,5165,5176,5194,5206,5218,5249,5301,5353,5397,5427,5455,5473,5528,5567,5598,5648,5688,5733,5775,5804,5823,5859,5884,5906,5923,5942,5968,6000,6020,6035,6056,6067,6075,6083,6103,6108,6116,6125,6136,6146,6154,6157,6166,6171,6176,6182,6185,6191,6194,6199,6203,6208'.split(',');
+      return p.keys().hasOnly(['mode','start','end','startCell','endCell','fromSurah','fromAyah','toSurah','toAyah']) &&
+        p.mode in ['ayahs','divisions'] && p.start is int && p.end is int && p.start < p.end &&
+        p.startCell is int && p.startCell >= 0 && p.endCell is int && p.endCell >= p.startCell && p.endCell < 480 &&
+        p.fromSurah is int && p.fromSurah >= 1 && p.fromSurah <= 114 && p.toSurah is int && p.toSurah >= 1 && p.toSurah <= 114 &&
+        p.fromAyah is int && p.fromAyah >= 1 && p.fromAyah <= int(counts[p.fromSurah-1]) && p.toAyah is int && p.toAyah >= 1 && p.toAyah <= int(counts[p.toSurah-1]) &&
+        int(edges[p.startCell]) <= p.start && int(edges[p.startCell+1]) > p.start && int(edges[p.endCell]) < p.end && int(edges[p.endCell+1]) >= p.end &&
+        ((p.mode == 'ayahs' && p.start == (int(offsets[p.fromSurah-1])+p.fromAyah)*10000 && p.end == (int(offsets[p.toSurah-1])+p.toAyah+1)*10000) ||
+         (p.mode == 'divisions' && p.start == int(edges[p.startCell]) && p.end == int(edges[p.endCell+1]) &&
+          p.start >= (int(offsets[p.fromSurah-1])+p.fromAyah)*10000 && p.start < (int(offsets[p.fromSurah-1])+p.fromAyah+1)*10000 &&
+          p.end > (int(offsets[p.toSurah-1])+p.toAyah)*10000 && p.end <= (int(offsets[p.toSurah-1])+p.toAyah+1)*10000));
+    }
+    function validLearning(d, id) {
+      return id.matches('[A-Za-z0-9-]{16,80}') &&
+        d.keys().hasAll(['schemaVersion','studentId','kind','date','session','hizb','fromEighth','toEighth','quantity','mistakes','score','note','supersedesId','createdBy','createdAt']) &&
+        d.keys().hasOnly(['schemaVersion','studentId','kind','date','session','hizb','fromEighth','toEighth','quantity','mistakes','score','note','supersedesId','createdBy','createdAt','passage']) &&
+        ((d.schemaVersion == 2 && !('passage' in d)) || (d.schemaVersion == 3 && validLearningPassage(d.passage))) && historyAllowed(d) && access().role in ['admin','manager','teacher'] &&
+        d.kind in ['memorization','practice','revision','evaluation'] &&
+        d.date is string && d.date.matches('[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])') &&
+        d.session in ['morning','afternoon','evening'] &&
+        d.hizb is int && d.hizb >= 1 && d.hizb <= 60 &&
+        d.fromEighth is int && d.fromEighth >= 1 && d.fromEighth <= 8 &&
+        d.toEighth is int && d.toEighth >= d.fromEighth && d.toEighth <= 8 &&
+        ((d.schemaVersion == 2 && d.quantity is int && d.quantity == d.toEighth - d.fromEighth + 1) || (d.schemaVersion == 3 && ((d.passage.mode == 'ayahs' && d.quantity == null) || (d.passage.mode == 'divisions' && d.quantity == d.passage.endCell-d.passage.startCell+1)))) &&
+        ((d.kind in ['memorization','practice'] && d.mistakes == null && d.score == null) ||
+         (d.kind in ['revision','evaluation'] && d.mistakes is int && d.mistakes >= 0 && d.mistakes <= 999 && d.score is int && d.score >= 0 && d.score <= 100)) &&
+        d.note is string && d.note.size() <= 500 && d.createdBy == request.auth.uid && d.createdAt == request.time &&
+        (d.supersedesId == null || validCorrection(d, id));
+    }
+    function validCorrection(d, id) {
+      return d.supersedesId is string && d.supersedesId != id &&
+        exists(/databases/$(database)/documents/katatib_learning/$(d.supersedesId)) &&
+        get(/databases/$(database)/documents/katatib_learning/$(d.supersedesId)).data.studentId == d.studentId &&
+        (get(/databases/$(database)/documents/katatib_learning/$(d.supersedesId)).data.kind == d.kind ||
+         (get(/databases/$(database)/documents/katatib_learning/$(d.supersedesId)).data.kind in ['memorization','practice'] && d.kind in ['memorization','practice']));
+    }
+    match /katatib_learning/{id} {
+      allow get: if member() && (!exists(/databases/$(database)/documents/katatib_learning/$(id)) || historyAllowed(resource.data));
+      allow list: if request.query.limit <= 30 && historyAllowed(resource.data);
+      allow create: if validLearning(request.resource.data, id);
+      allow update, delete: if false;
+    }
+
+    function validMeta(d) {
+      return d.schemaVersion == 1 && d.revision is int && d.revision > 0 && d.updatedBy == request.auth.uid && d.updatedAt == request.time && d.eventId is string && d.eventId.matches('[A-Za-z0-9_-]{1,128}');
+    }
+    function workspaceRevision() { return request.resource.data.revision == (request.method == 'create' ? 1 : resource.data.get('revision',0) + 1); }
+    function audited(c,id,d) {
+      return !exists(/databases/$(database)/documents/katatib_audit/$(d.eventId)) &&
+        getAfter(/databases/$(database)/documents/katatib_audit/$(d.eventId)).data == {'collection':c,'recordId':id,'snapshot':d};
+    }
+    function manage() { return member() && access().role in ['admin','manager']; }
+    // Assignment documents contain edition configuration only, never rosters or learning data.
+    // Active members may get a known configuration; enumeration is restricted to admins.
+    function mushafKey(value) { return value.replace('%','%25').replace('/','%2F').replace('~','%7E'); }
+    function mushafSchoolId(name) { return 'school~' + mushafKey(name); }
+    function mushafGroupId(d) { return 'group~' + mushafKey(d.kuttabName) + '~' + mushafKey(d.group) + '~' + mushafKey(d.teacherId); }
+    function validMushafPolicy(d,id) {
+      return member() && access().role == 'admin' &&
+        d.keys().hasOnly(['schemaVersion','kuttabName','defaultEdition','teacherCanAssign','revision','updatedBy','updatedAt','eventId']) && validMeta(d) &&
+        d.kuttabName is string && d.kuttabName.size() > 0 && d.kuttabName.size() <= 120 && id == mushafSchoolId(d.kuttabName) &&
+        d.defaultEdition == 'warsh-kfqc-1442' && d.teacherCanAssign is bool;
+    }
+    function mushafAnchor(d) {
+      return exists(/databases/$(database)/documents/students/$(d.studentId)) ?
+        get(/databases/$(database)/documents/students/$(d.studentId)).data :
+        get(/databases/$(database)/documents/katatib_students/$(d.studentId)).data;
+    }
+    function mushafProfile(d) {
+      return exists(/databases/$(database)/documents/katatib_students/$(d.studentId)) ?
+        get(/databases/$(database)/documents/katatib_students/$(d.studentId)).data : {};
+    }
+    function mushafEditor(d) {
+      return staff() && studentIdAllowed(d.studentId) && (access().role == 'admin' ||
+        exists(/databases/$(database)/documents/katatib_mushaf_policies/$(mushafSchoolId(d.kuttabName))) &&
+        get(/databases/$(database)/documents/katatib_mushaf_policies/$(mushafSchoolId(d.kuttabName))).data.teacherCanAssign == true);
+    }
+    function validMushafAssignment(d,id) {
+      return d.keys().hasOnly(['schemaVersion','studentId','kuttabName','group','teacherId','edition','revision','updatedBy','updatedAt','eventId']) && validMeta(d) &&
+        d.studentId is string && d.studentId.size() > 0 && d.studentId.size() <= 128 && !d.studentId.matches('.*[~/].*') &&
+        d.kuttabName is string && d.kuttabName.size() > 0 && d.kuttabName.size() <= 120 && d.group is string && d.group.size() <= 80 &&
+        d.teacherId is string && d.teacherId.size() <= 128 && id == mushafGroupId(d) && d.edition in ['inherit','warsh-kfqc-1442'] &&
+        mushafEditor(d) && d.kuttabName == mushafAnchor(d).get('kuttabName','') && d.group == mushafProfile(d).get('group','') &&
+        d.teacherId == (d.group == '' ? mushafAnchor(d).get('teacherId','') : '') && mushafProfile(d).get('status','active') != 'archived';
+    }
+    match /katatib_mushaf_policies/{id} {
+      allow get: if member();
+      allow list: if member() && access().role == 'admin' && request.query.limit <= 100;
+      allow create, update: if validMushafPolicy(request.resource.data,id) && workspaceRevision() && audited('katatib_mushaf_policies',id,request.resource.data);
+      allow delete: if false;
+    }
+    match /katatib_mushaf_assignments/{id} {
+      allow get: if member();
+      allow list: if member() && access().role == 'admin' && request.query.limit <= 100;
+      allow create, update: if validMushafAssignment(request.resource.data,id) && workspaceRevision() && audited('katatib_mushaf_assignments',id,request.resource.data);
+      allow delete: if false;
+    }
+    function validProfile(d,id) {
+      return d.keys().hasOnly(['schemaVersion','name','kuttabName','teacherId','group','age','status','source','revision','updatedBy','updatedAt','eventId']) && validMeta(d) &&
+        d.name is string && d.name.size() > 0 && d.name.size() <= 120 && d.kuttabName is string && d.kuttabName.size() > 0 && d.kuttabName.size() <= 120 &&
+        d.teacherId is string && d.teacherId.size() <= 128 && d.group is string && d.group.size() <= 80 &&
+        (d.age == null || d.age is int && d.age >= 1 && d.age <= 120) && d.status in ['active','archived'] &&
+        ((d.source == 'copy' && exists(/databases/$(database)/documents/students/$(id)) &&
+          d.kuttabName == get(/databases/$(database)/documents/students/$(id)).data.get('kuttabName','') &&
+          d.teacherId == get(/databases/$(database)/documents/students/$(id)).data.get('teacherId','')) ||
+         (d.source == 'new' && !exists(/databases/$(database)/documents/students/$(id)))) && studentAllowed(d);
+    }
+    match /katatib_students/{id} {
+      allow get: if member() && (!exists(/databases/$(database)/documents/katatib_students/$(id)) || linkedStudent(id) || studentAllowed(resource.data));
+      allow list: if request.query.limit <= 100 && (studentAllowed(resource.data) || linkedStudent(id));
+      allow create: if manage() && validProfile(request.resource.data,id) && request.resource.data.revision == 1 && audited('katatib_students',id,request.resource.data);
+      allow update: if manage() && studentAllowed(resource.data) && validProfile(request.resource.data,id) && workspaceRevision() &&
+        request.resource.data.source == resource.data.source && request.resource.data.kuttabName == resource.data.kuttabName && request.resource.data.teacherId == resource.data.teacherId && audited('katatib_students',id,request.resource.data);
+      allow delete: if false;
+    }
+    function validTask(d) {
+      return d.keys().hasOnly(['schemaVersion','studentId','kind','due','hizb','fromEighth','toEighth','note','status','revision','updatedBy','updatedAt','eventId']) && validMeta(d) && historyAllowed(d) &&
+        d.kind in ['memorization','revision','evaluation'] && d.status in ['planned','done','cancelled'] &&
+        d.due is string && d.due.matches('[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])') &&
+        d.hizb is int && d.hizb >= 1 && d.hizb <= 60 && d.fromEighth is int && d.fromEighth >= 1 && d.fromEighth <= 8 && d.toEighth is int && d.toEighth >= d.fromEighth && d.toEighth <= 8 &&
+        d.note is string && d.note.size() <= 500;
+    }
+    match /katatib_tasks/{id} {
+      allow get: if member() && (!exists(/databases/$(database)/documents/katatib_tasks/$(id)) || historyAllowed(resource.data));
+      allow list: if request.query.limit <= 100 && historyAllowed(resource.data);
+      allow create: if staff() && validTask(request.resource.data) && request.resource.data.revision == 1 && audited('katatib_tasks',id,request.resource.data);
+      allow update: if staff() && validTask(request.resource.data) && request.resource.data.studentId == resource.data.studentId && workspaceRevision() && audited('katatib_tasks',id,request.resource.data);
+      allow delete: if false;
+    }
+    function validAccess(d,address) {
+      return d.keys().hasOnly(['schemaVersion','active','role','kuttabNames','teacherIds','studentIds','authUid','revision','updatedBy','updatedAt','eventId']) && validMeta(d) &&
+        address.matches('[^/ @]+@[^/ @]+\\.[^/ @]+') && address == address.lower() &&
+        d.active is bool && d.role in ['admin','manager','teacher','parent','student'] &&
+        (!codedAddress(address) ? !d.keys().hasAny(['authUid']) :
+          d.role == 'student' && d.studentIds.size() == 1 && d.teacherIds.size() == 0 && d.kuttabNames.size() == 0 &&
+          d.authUid is string && d.authUid.size() > 0 && d.authUid.size() <= 128 &&
+          (!d.active || getAfter(/databases/$(database)/documents/katatib_student_credentials/$(d.studentIds[0])).data.address == address &&
+            getAfter(/databases/$(database)/documents/katatib_student_credentials/$(d.studentIds[0])).data.authUid == d.authUid)) &&
+        d.kuttabNames is list && d.kuttabNames.size() <= 10 && d.teacherIds is list && d.teacherIds.size() <= 10 && d.studentIds is list && d.studentIds.size() <= 10 &&
+        (d.role == 'admin' || (d.role in ['parent','student'] ? d.studentIds.size() > 0 : d.kuttabNames.size() + d.teacherIds.size() > 0));
+    }
+    function validCredential(d,id) {
+      let grant=getAfter(/databases/$(database)/documents/katatib_access/$(d.address)).data;
+      return d.keys().hasOnly(['schemaVersion','studentId','address','authUid','revision','updatedBy','updatedAt','eventId']) &&
+        validMeta(d) && d.studentId == id && studentIdAllowed(id) && codedAddress(d.address) &&
+        grant.active == true && grant.role == 'student' && grant.authUid == d.authUid && grant.studentIds == [id] &&
+        audited('katatib_student_credentials',id,d);
+    }
+    match /katatib_student_credentials/{id} {
+      allow get: if member() && access().role == 'admin';
+      allow list: if member() && access().role == 'admin' && request.query.limit <= 100;
+      allow create: if member() && access().role == 'admin' && validCredential(request.resource.data,id) && request.resource.data.revision == 1;
+      allow update: if member() && access().role == 'admin' && validCredential(request.resource.data,id) && workspaceRevision() &&
+        request.resource.data.address != resource.data.address &&
+        getAfter(/databases/$(database)/documents/katatib_access/$(resource.data.address)).data.active == false;
+      allow delete: if false;
+    }
+    match /katatib_audit/{id} {
+      allow get, list: if member() && (access().role == 'admin' || resource.data.collection in ['katatib_legacy_corrections','katatib_legacy_task_states'] && historyAllowed(resource.data.snapshot)) && (request.method == 'get' || request.query.limit <= 100);
+      allow create: if member() && request.resource.data.keys().hasOnly(['collection','recordId','snapshot']) &&
+        request.resource.data.collection in ['katatib_mushaf_policies','katatib_mushaf_assignments','katatib_students','katatib_tasks','katatib_access','katatib_schedules','katatib_legacy_corrections','katatib_questions','katatib_challenge_attempts','katatib_legacy_task_states','katatib_student_credentials','katatib_notices','katatib_notice_acks','katatib_consents'] &&
+        request.resource.data.recordId is string && request.resource.data.snapshot.eventId == id &&
+        request.resource.data.snapshot.updatedBy == request.auth.uid && request.resource.data.snapshot.updatedAt == request.time &&
+        getAfter(/databases/$(database)/documents/$(request.resource.data.collection)/$(request.resource.data.recordId)).data == request.resource.data.snapshot;
+      allow update, delete: if false;
+    }
+    function kuttabScope(d) {
+      return staff() && (access().role == 'admin' || d.get('name','') in access().get('kuttabNames',[]) || d.get('teacherId','') in access().get('teacherIds',[]));
+    }
+    function kuttabAllowed(id) { return id is string && exists(/databases/$(database)/documents/kuttabs/$(id)) && kuttabScope(get(/databases/$(database)/documents/kuttabs/$(id)).data); }
+    match /kuttabs/{id} {
+      allow get: if kuttabScope(resource.data);
+      allow list: if request.query.limit <= 100 && kuttabScope(resource.data);
+      allow write: if false;
+    }
+    function clockTime(t) { return t is string && (t == '' || t.matches('([01][0-9]|2[0-3]):[0-5][0-9]')); }
+    function calendarDate(t) { return t is string && t.matches('[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])') && teacherDate(t); }
+    function boundedNullable(v,min,max) { return v == null || v is int && v >= min && v <= max; }
+    function validSchedule(d,id) {
+      return d.keys().hasOnly(['schemaVersion','kuttabId','key','morning','afternoon','evening','note','revision','updatedBy','updatedAt','eventId']) && validMeta(d) && manage() && kuttabAllowed(d.kuttabId) &&
+        d.key is string && (d.key.matches('[0-6]') || calendarDate(d.key)) && id == d.kuttabId + '~' + d.key &&
+        clockTime(d.morning) && clockTime(d.afternoon) && clockTime(d.evening) &&
+        (d.morning == '' || d.morning != d.afternoon && d.morning != d.evening) && (d.afternoon == '' || d.afternoon != d.evening) && d.note is string && d.note.size() <= 500;
+    }
+    match /katatib_schedules/{id} {
+      allow get: if staff() && (!exists(/databases/$(database)/documents/katatib_schedules/$(id)) || kuttabAllowed(resource.data.kuttabId));
+      allow list: if request.query.limit <= 100 && kuttabAllowed(resource.data.kuttabId);
+      allow create: if validSchedule(request.resource.data,id) && request.resource.data.revision == 1 && audited('katatib_schedules',id,request.resource.data);
+      allow update: if validSchedule(request.resource.data,id) && workspaceRevision() && request.resource.data.kuttabId == resource.data.kuttabId && request.resource.data.key == resource.data.key && audited('katatib_schedules',id,request.resource.data);
+      allow delete: if false;
+    }
+    function validLegacyCorrection(d,id) {
+      return d.keys().hasOnly(['schemaVersion','sourceCollection','sourceId','studentId','date','hizb','quantity','identifier','surah','fromAyah','toAyah','mistakes','score','note','reason','revision','updatedBy','updatedAt','eventId']) && validMeta(d) && staff() && historyAllowed(d) &&
+        d.sourceCollection in ['evaluations','revisions','memorizations'] && d.sourceId is string && d.sourceId.size() > 0 && d.sourceId.size() <= 128 && !d.sourceId.matches('.*[~/].*') &&
+        id == d.sourceCollection + '~' + d.sourceId && exists(/databases/$(database)/documents/$(d.sourceCollection)/$(d.sourceId)) && get(/databases/$(database)/documents/$(d.sourceCollection)/$(d.sourceId)).data.studentId == d.studentId &&
+        calendarDate(d.date) && boundedNullable(d.hizb,1,60) && boundedNullable(d.quantity,1,8) && boundedNullable(d.mistakes,0,999) && boundedNullable(d.score,0,100) &&
+        boundedNullable(d.fromAyah,1,286) && boundedNullable(d.toAyah,1,286) && (d.fromAyah == null || d.toAyah == null || d.fromAyah <= d.toAyah) &&
+        d.identifier is string && d.identifier.size() <= 120 && d.surah is string && d.surah.size() <= 120 && d.note is string && d.note.size() <= 500 && d.reason is string && d.reason.size() > 0 && d.reason.size() <= 500;
+    }
+    match /katatib_legacy_corrections/{id} {
+      allow get: if member() && (!exists(/databases/$(database)/documents/katatib_legacy_corrections/$(id)) || historyAllowed(resource.data));
+      allow list: if request.query.limit <= 100 && historyAllowed(resource.data);
+      allow create: if validLegacyCorrection(request.resource.data,id) && request.resource.data.revision == 1 && audited('katatib_legacy_corrections',id,request.resource.data);
+      allow update: if validLegacyCorrection(request.resource.data,id) && workspaceRevision() && request.resource.data.sourceCollection == resource.data.sourceCollection && request.resource.data.sourceId == resource.data.sourceId && request.resource.data.studentId == resource.data.studentId && audited('katatib_legacy_corrections',id,request.resource.data);
+      allow delete: if false;
+    }
+    match /smart_questions/{id} {
+      allow get: if member() && access().role == 'admin';
+      allow list: if member() && access().role == 'admin' && request.query.limit <= 100;
+      allow write: if false;
+    }
+    function questionOption(v) { return v is string && v.size() > 0 && v.size() <= 1000; }
+    function validLegacyTaskState(d,id) {
+      return d.keys().hasOnly(['schemaVersion','sourceCollection','sourceId','studentId','status','note','revision','updatedBy','updatedAt','eventId']) && validMeta(d) && staff() && historyAllowed(d) &&
+        d.sourceCollection in ['next_revisions','next_evaluations'] && d.sourceId is string && d.sourceId.size() > 0 && d.sourceId.size() <= 128 && !d.sourceId.matches('.*[~/].*') &&
+        id == d.sourceCollection + '~' + d.sourceId && exists(/databases/$(database)/documents/$(d.sourceCollection)/$(d.sourceId)) && get(/databases/$(database)/documents/$(d.sourceCollection)/$(d.sourceId)).data.studentId == d.studentId &&
+        d.status in ['planned','done','cancelled'] && d.note is string && d.note.size() <= 500;
+    }
+    match /katatib_legacy_task_states/{id} {
+      allow get: if member() && (!exists(/databases/$(database)/documents/katatib_legacy_task_states/$(id)) || historyAllowed(resource.data));
+      allow list: if request.query.limit <= 100 && historyAllowed(resource.data);
+      allow create: if validLegacyTaskState(request.resource.data,id) && request.resource.data.revision == 1 && audited('katatib_legacy_task_states',id,request.resource.data);
+      allow update: if validLegacyTaskState(request.resource.data,id) && workspaceRevision() && request.resource.data.sourceCollection == resource.data.sourceCollection && request.resource.data.sourceId == resource.data.sourceId && request.resource.data.studentId == resource.data.studentId && audited('katatib_legacy_task_states',id,request.resource.data);
+      allow delete: if false;
+    }
+    function validQuestion(d) {
+      return d.keys().hasOnly(['schemaVersion','prompt','options','answerIndex','edition','reference','active','reviewed','sourceId','revision','updatedBy','updatedAt','eventId']) && validMeta(d) && member() && access().role == 'admin' &&
+        d.prompt is string && d.prompt.size() > 0 && d.prompt.size() <= 2000 && d.options is list && d.options.size() >= 2 && d.options.size() <= 4 &&
+        questionOption(d.options[0]) && questionOption(d.options[1]) && (d.options.size() < 3 || questionOption(d.options[2])) && (d.options.size() < 4 || questionOption(d.options[3])) && d.options.toSet().size() == d.options.size() &&
+        d.answerIndex is int && d.answerIndex >= 0 && d.answerIndex < d.options.size() && d.edition in ['warsh','general'] &&
+        d.reference is string && d.reference.size() > 0 && d.reference.size() <= 500 && d.active is bool && d.reviewed == true && d.sourceId is string &&
+        (d.sourceId == '' || d.sourceId.size() <= 128 && !d.sourceId.matches('.*[~/].*') && exists(/databases/$(database)/documents/smart_questions/$(d.sourceId)));
+    }
+    match /katatib_questions/{id} {
+      allow get: if member() && (!exists(/databases/$(database)/documents/katatib_questions/$(id)) || access().role == 'admin' || resource.data.active == true && resource.data.reviewed == true);
+      allow list: if member() && request.query.limit <= 100 && (access().role == 'admin' || resource.data.active == true && resource.data.reviewed == true);
+      allow create: if validQuestion(request.resource.data) && request.resource.data.revision == 1 && audited('katatib_questions',id,request.resource.data);
+      allow update: if validQuestion(request.resource.data) && workspaceRevision() && request.resource.data.sourceId == resource.data.sourceId && audited('katatib_questions',id,request.resource.data);
+      allow delete: if false;
+    }
+    function validAttempt(d) {
+      let q=get(/databases/$(database)/documents/katatib_questions/$(d.questionId)).data;
+      return d.keys().hasOnly(['schemaVersion','studentId','questionId','questionRevision','choice','correct','date','revision','updatedBy','updatedAt','eventId']) && validMeta(d) && historyAllowed(d) && calendarDate(d.date) &&
+        q.active == true && q.reviewed == true && d.questionRevision == q.revision && d.choice is int && d.choice >= 0 && d.choice < q.options.size() && d.correct is bool && d.correct == (d.choice == q.answerIndex);
+    }
+    match /katatib_challenge_attempts/{id} {
+      allow get: if member() && (!exists(/databases/$(database)/documents/katatib_challenge_attempts/$(id)) || historyAllowed(resource.data));
+      allow list: if request.query.limit <= 100 && historyAllowed(resource.data);
+      allow create: if validAttempt(request.resource.data) && request.resource.data.revision == 1 && audited('katatib_challenge_attempts',id,request.resource.data);
+      allow update, delete: if false;
+    }
+
+    function validNotice(d) {
+      return d.keys().hasOnly(['schemaVersion','studentId','title','body','kind','active','revision','updatedBy','updatedAt','eventId']) && validMeta(d) && staff() && historyAllowed(d) &&
+        d.title is string && d.title.size() > 0 && d.title.size() <= 120 && d.body is string && d.body.size() > 0 && d.body.size() <= 2000 &&
+        d.kind in ['info','attendance','learning'] && d.active is bool;
+    }
+    match /katatib_notices/{id} {
+      allow get: if member() && (!exists(/databases/$(database)/documents/katatib_notices/$(id)) || historyAllowed(resource.data));
+      allow list: if request.query.limit <= 100 && historyAllowed(resource.data);
+      allow create: if validNotice(request.resource.data) && request.resource.data.revision == 1 && audited('katatib_notices',id,request.resource.data);
+      allow update: if validNotice(request.resource.data) && workspaceRevision() && request.resource.data.studentId == resource.data.studentId && audited('katatib_notices',id,request.resource.data);
+      allow delete: if false;
+    }
+    function validNoticeAck(d,id) {
+      let notice=get(/databases/$(database)/documents/katatib_notices/$(d.noticeId)).data;
+      return d.keys().hasOnly(['schemaVersion','studentId','noticeId','readerUid','noticeRevision','revision','updatedBy','updatedAt','eventId']) && validMeta(d) &&
+        historyAllowed(d) && d.readerUid == request.auth.uid && notice.studentId == d.studentId && notice.active == true && d.noticeRevision == notice.revision &&
+        id == d.noticeId + '~' + string(d.noticeRevision) + '~' + d.readerUid && d.revision == 1 && audited('katatib_notice_acks',id,d);
+    }
+    match /katatib_notice_acks/{id} {
+      allow get: if member() && (!exists(/databases/$(database)/documents/katatib_notice_acks/$(id)) || resource.data.readerUid == request.auth.uid && historyAllowed(resource.data));
+      allow list: if member() && request.query.limit <= 100 && resource.data.readerUid == request.auth.uid && historyAllowed(resource.data);
+      allow create: if validNoticeAck(request.resource.data,id);
+      allow update, delete: if false;
+    }
+    function validConsent(d,id) {
+      return d.keys().hasOnly(['schemaVersion','studentId','guardianUid','purpose','approved','policyVersion','revision','updatedBy','updatedAt','eventId']) && validMeta(d) && member() &&
+        access().role == 'parent' && linkedStudent(d.studentId) && d.guardianUid == request.auth.uid &&
+        d.purpose in ['audio','ranking'] && d.approved is bool && d.policyVersion == 'katatib-test-2026-10-19' &&
+        id == d.guardianUid + '~' + d.studentId + '~' + d.purpose && audited('katatib_consents',id,d);
+    }
+    match /katatib_consents/{id} {
+      allow get: if member() && (!exists(/databases/$(database)/documents/katatib_consents/$(id)) || historyAllowed(resource.data));
+      allow list: if request.query.limit <= 100 && historyAllowed(resource.data);
+      allow create: if validConsent(request.resource.data,id) && request.resource.data.revision == 1;
+      allow update: if validConsent(request.resource.data,id) && workspaceRevision() && request.resource.data.studentId == resource.data.studentId && request.resource.data.guardianUid == resource.data.guardianUid && request.resource.data.purpose == resource.data.purpose;
+      allow delete: if false;
+    }
+
+    // Encoded immutable tables avoid evaluating hundreds of numeric literal expressions per write.
+    function warshPageStart(page) {
+      return int('1,8,12,23,31,36,44,55,64,68,76,83,90,95,100,108,112,119,126,133,141,148,152,160,170,176,183,188,193,197,203,208,216,221,225,230,236,239,243,251,254,258,263,266,271,276,281,288,289,293,302,308,315,322,330,338,344,353,362,369,375,383,393,401,408,414,425,433,441,446,450,458,466,473,479,487,493,499,504,507,512,516,519,526,530,537,543,551,557,566,571,578,583,586,593,597,605,613,619,626,632,639,646,654,662,667,671,674,678,682,687,693,701,706,711,715,720,727,734,740,747,753,760,765,773,778,783,790,799,809,818,826,835,843,850,858,864,872,881,885,892,901,909,915,921,928,933,937,942,948,957,967,978,985,992,999,1007,1013,1023,1029,1037,1043,1051,1060,1076,1086,1094,1100,1106,1112,1116,1120,1127,1135,1144,1152,1163,1171,1179,1188,1196,1203,1209,1216,1225,1233,1239,1245,1252,1259,1265,1270,1275,1279,1286,1293,1300,1307,1312,1319,1326,1333,1339,1346,1351,1357,1362,1369,1375,1383,1389,1394,1402,1411,1422,1430,1439,1447,1457,1466,1475,1483,1490,1497,1506,1515,1523,1531,1539,1548,1558,1566,1575,1586,1595,1603,1613,1621,1629,1636,1642,1651,1662,1668,1677,1685,1694,1702,1710,1716,1724,1730,1739,1745,1753,1761,1767,1775,1780,1789,1798,1808,1823,1839,1859,1878,1898,1913,1921,1933,1941,1949,1961,1971,1979,1986,1994,2000,2009,2017,2025,2035,2042,2052,2062,2073,2084,2093,2101,2110,2121,2131,2139,2149,2160,2165,2172,2179,2189,2197,2205,2218,2227,2238,2250,2260,2274,2287,2301,2314,2327,2346,2360,2385,2399,2412,2424,2435,2445,2459,2472,2483,2493,2507,2518,2527,2540,2554,2563,2572,2583,2594,2599,2609,2615,2622,2630,2638,2647,2656,2664,2670,2687,2697,2712,2730,2745,2760,2775,2789,2799,2809,2816,2820,2825,2831,2840,2845,2848,2853,2862,2871,2883,2894,2906,2918,2928,2946,2966,2988,3011,3039,3064,3087,3111,3134,3154,3167,3176,3190,3200,3211,3219,3232,3244,3253,3261,3269,3277,3284,3292,3299,3308,3319,3326,3333,3342,3350,3359,3367,3375,3382,3389,3400,3410,3420,3429,3437,3446,3455,3465,3475,3483,3492,3498,3509,3518,3528,3534,3543,3550,3558,3563,3571,3578,3582,3590,3601,3608,3615,3623,3632,3640,3649,3658,3666,3673,3685,3693,3700,3712,3727,3740,3754,3770,3783,3807,3834,3859,3885,3909,3936,3965,3980,3990,4006,4025,4047,4057,4062,4071,4081,4088,4095,4104,4115,4122,4129,4138,4148,4156,4163,4172,4181,4189,4199,4207,4217,4226,4235,4244,4252,4260,4268,4273,4280,4289,4301,4308,4319,4331,4342,4356,4370,4383,4399,4416,4436,4455,4467,4476,4486,4495,4504,4510,4518,4525,4537,4545,4555,4564,4573,4579,4587,4592,4597,4604,4611,4626,4646,4662,4686,4707,4728,4745,4763,4789,4806,4830,4851,4873,4895,4919,4947,4974,5009,5035,5058,5066,5072,5078,5083,5089,5094,5103,5107,5113,5120,5128,5133,5139,5146,5155,5163,5170,5177,5186,5195,5200,5207,5214,5219,5232,5246,5266,5292,5309,5337,5364,5394,5408,5428,5441,5456,5473,5492,5520,5547,5573,5593,5618,5649,5679,5705,5734,5774,5805,5828,5857,5884,5907,5934,5965,5993,6019,6045,6070,6096,6114,6131,6155,6172,6186,6200,6215'.split(',')[page-1]);
+    }
+    function warshSurah(surah) {
+      return '0:7,7:285,292:200,492:175,667:122,789:167,956:206,1162:76,1238:130,1368:109,1477:121,1598:111,1709:44,1753:54,1807:99,1906:128,2034:110,2144:105,2249:99,2348:134,2482:111,2593:76,2669:119,2788:62,2850:77,2927:226,3153:95,3248:88,3336:69,3405:59,3464:33,3497:30,3527:73,3600:54,3654:46,3700:82,3782:182,3964:86,4050:72,4122:84,4206:53,4259:50,4309:89,4398:56,4454:36,4490:34,4524:39,4563:29,4592:18,4610:45,4655:60,4715:47,4762:61,4823:55,4878:77,4955:99,5054:28,5082:21,5103:24,5127:13,5140:14,5154:11,5165:11,5176:18,5194:12,5206:12,5218:31,5249:52,5301:52,5353:44,5397:30,5427:28,5455:18,5473:55,5528:39,5567:31,5598:50,5648:40,5688:45,5733:42,5775:29,5804:19,5823:36,5859:25,5884:22,5906:17,5923:19,5942:26,5968:32,6000:20,6020:15,6035:21,6056:11,6067:8,6075:8,6083:20,6103:5,6108:8,6116:9,6125:11,6136:10,6146:8,6154:3,6157:9,6166:5,6171:5,6176:6,6182:3,6185:6,6191:3,6194:5,6199:4,6203:5,6208:6'.split(',')[surah-1].split(':');
+    }
+    function validWarshVerse(d) {
+      let book=warshSurah(d.surah);
+      return d.edition == 'warsh-kfqc-1442' && d.sourceVersion == 'b4155f07e4aea087d2c458069acff9f7c7e749f6' &&
+        d.surah is int && d.surah >= 1 && d.surah <= 114 && d.ayah is int && d.ayah >= 1 && d.ayah <= int(book[1]) &&
+        d.page is int && d.page >= 1 && d.page <= 604 && int(book[0]) + d.ayah >= warshPageStart(d.page) && int(book[0]) + d.ayah < warshPageStart(d.page+1);
+    }
+    function learningBoundary(cell) { return int('10000,230000,320000,400000,480000,600000,660000,730000,820000,910151,980000,1070000,1120000,1200000,1300000,1390000,1480000,1540000,1640000,1720000,1830000,1910000,1950000,2020393,2080000,2180000,2240000,2320000,2380000,2400242,2480000,2530000,2580000,2640000,2690000,2730000,2780000,2860000,2890000,2970000,3070000,3150000,3250000,3340000,3430000,3550000,3660000,3720187,3830000,3950000,4050000,4130000,4250000,4360000,4450000,4520000,4630000,4730000,4780000,4880000,4980000,5030000,5050000,5110209,5160000,5210000,5280000,5370000,5490000,5560000,5650000,5700000,5780000,5830415,5910000,5960000,6050000,6150000,6210000,6310000,6390000,6480089,6570000,6650000,6710000,6740000,6800000,6860000,6920000,7010235,7100000,7140000,7180000,7270000,7360000,7420000,7510000,7590000,7660000,7750000,7800000,7900000,8030000,8160000,8260000,8380000,8490000,8590000,8700000,8810000,8850000,8930000,9010000,9100000,9170000,9250000,9300000,9350000,9410000,9480000,9600000,9760000,9860000,9940000,10020000,10120000,10240000,10320000,10430000,10550000,10720000,10870000,10980000,11050000,11120000,11190000,11270000,11350000,11440000,11550000,11670000,11770000,11840000,11930000,12030000,12110000,12230000,12340000,12430000,12500000,12570000,12660000,12720000,12780000,12840000,12930000,12990000,13080000,13140000,13240000,13320000,13400000,13500000,13560000,13620000,13710000,13790000,13870000,13940000,14050000,14170000,14290000,14390000,14510000,14610000,14720000,14830000,14920000,15010000,15090000,15180000,15300000,15380000,15490000,15600000,15700000,15820000,15940000,16080000,16210000,16310000,16400000,16510000,16640000,16750000,16860000,16990000,17090000,17140000,17240000,17300000,17400000,17450000,17540000,17660000,17750000,17830000,17940000,18080000,18290000,18560000,18850000,19070000,19210000,19360000,19440000,19570000,19690000,19770000,19850000,19960000,20040000,20170000,20260000,20350000,20450000,20570000,20700000,20840000,20950000,21040000,21190000,21330000,21450000,21610000,21670000,21740000,21850000,21930000,22020000,22180000,22290000,22420000,22550000,22700000,22890000,23080000,23240000,23490000,23830000,24020000,24190000,24290000,24430000,24560000,24720000,24830000,24970000,25120000,25240000,25330000,25540000,25680000,25820000,25940000,26040000,26120000,26210000,26290000,26400000,26510000,26630000,26700000,26930000,27080000,27270000,27450000,27630000,27850000,27990000,28090000,28180000,28230000,28300000,28390000,28460000,28490000,28600000,28710000,28850000,28950000,29110000,29280000,29510000,29770000,30090000,30380000,30730000,31080000,31370000,31590000,31700000,31800000,31950000,32110000,32210000,32370000,32490000,32590000,32690000,32770000,32870000,32990000,33110000,33240000,33310000,33430000,33520000,33610000,33720000,33820000,33960000,34130000,34260000,34340000,34450000,34580000,34740000,34850000,34960000,35080000,35180000,35280000,35360000,35450000,35520000,35580000,35640222,35760000,35800000,35870000,36010000,36100000,36180000,36240000,36370000,36460000,36620000,36690000,36850000,36950000,37060000,37270000,37450000,37590000,37790000,38040000,38330000,38650000,38960000,39270000,39650000,39840000,39940000,40150000,40470000,40590000,40700000,40810000,40900000,41010000,41140000,41230000,41320000,41430000,41520000,41630000,41750000,41880000,42000000,42140000,42220000,42300000,42430000,42520000,42620000,42700000,42770000,42840000,42980000,43070000,43190000,43320000,43510000,43720000,43940000,44220000,44550000,44670000,44780000,44910000,45040000,45100000,45220000,45350000,45450000,45580000,45710000,45810000,45890000,45930000,46010000,46060000,46190000,46370000,46560000,46860000,47110000,47370000,47570000,47880000,48080000,48330000,48600000,48790000,49180000,49560000,50070000,50330000,50610000,50690000,50750000,50830000,50900000,50960000,51050262,51140000,51280000,51340000,51410000,51550000,51660000,51740000,51830000,51950000,52000279,52070000,52140000,52190000,52380000,52680000,52970000,53190000,53540000,53930000,54120000,54280000,54500050,54730000,55040000,55290000,55680000,55860000,56140000,56490000,56890000,57290000,57760000,58050000,58370000,58750000,58960000,59240000,59590000,60010000,60360000,60680000,61090000,61340000,61720000,62150000'.split(',')[cell]); }
+    function validMarkRecitation(d) {
+      let r=get(/databases/$(database)/documents/katatib_learning/$(d.recitationId)).data;
+      let n=(int(warshSurah(d.surah)[0])+d.ayah)*10000;
+      return r.studentId == d.studentId &&
+        (('passage' in r) ? (r.passage.start < n+10000 && r.passage.end > n) :
+         (learningBoundary((r.hizb-1)*8+r.fromEighth-1) < n+10000 && learningBoundary((r.hizb-1)*8+r.toEighth) > n));
+    }
+    match /katatib_verse_marks/{id} {
+      allow get: if member() && (!exists(/databases/$(database)/documents/katatib_verse_marks/$(id)) || historyAllowed(resource.data));
+      allow list: if request.query.limit <= 100 && historyAllowed(resource.data);
+      allow create: if staff() && historyAllowed(request.resource.data) && id.matches('[A-Za-z0-9-]{16,80}') &&
+        request.resource.data.keys().hasOnly(['schemaVersion','studentId','edition','sourceVersion','page','surah','ayah','mark','note','createdBy','createdAt','recitationId']) &&
+        (!('recitationId' in request.resource.data) || (request.resource.data.recitationId is string && validMarkRecitation(request.resource.data))) &&
+        request.resource.data.schemaVersion == 1 && validWarshVerse(request.resource.data) && request.resource.data.mark in ['forgot','hesitated','error','correct'] &&
+        request.resource.data.note is string && request.resource.data.note.size() <= 500 && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+
+    match /{document=**} { allow read, write: if false; }
+  }
+}

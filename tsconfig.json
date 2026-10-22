@@ -21,6 +21,7 @@
   "exclude": [
     "node_modules",
     "dist",
-    "recitation-lab"
+    "recitation-lab",
+    "supabase/functions"
   ]
 }
