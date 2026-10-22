@@ -38,3 +38,27 @@
 .mushaf-assignment-permission{display:flex;align-items:flex-start;gap:.6rem;line-height:1.6}
 .mushaf-assignment-permission input{width:auto;flex-shrink:0;margin-block-start:.4rem}
 .mushaf-assignment-family{margin-block-end:0;font-size:.875rem;color:var(--muted)}
+.mushaf-mode-tabs{display:flex;gap:.5rem;flex-wrap:wrap;margin-block-end:1rem;padding:.35rem;background:var(--surface);border:1px solid var(--line);border-radius:1rem}
+.mushaf-mode-tabs button{flex:1;min-height:44px;white-space:normal;border-radius:.7rem}
+.mushaf-mode-tabs button[aria-pressed=true]{background:var(--green);color:#fff;border-color:var(--green)}
+.mushaf-mode-notice:empty,.mushaf-personal [data-personal-status]:empty{display:none}
+.mushaf-mode-notice{color:var(--ink);line-height:1.7}
+.mushaf-personal-edition{display:grid;gap:.5rem;font-weight:700}
+.mushaf-personal-edition select{width:100%;min-width:0;max-width:100%;white-space:normal}
+.mushaf-personal-hint,.mushaf-personal-publisher p{line-height:1.7;color:var(--muted)}
+.mushaf-personal .mushaf-navigation label{display:flex;align-items:center;gap:.5rem}
+.mushaf-personal [data-personal-page]{width:5rem;min-height:44px}
+.mushaf-personal .mushaf-controls{grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr)}
+.mushaf-personal-settings{margin-block:1rem}
+.mushaf-personal-settings summary{cursor:pointer;font-weight:600}
+@media(max-width:700px){.mushaf-personal .mushaf-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.mushaf-personal .mushaf-controls label:first-child{grid-column:1/-1}}
+.mushaf-paper #personal-mushaf-art{width:100%;height:100%;min-height:0}
+.mushaf-personal .mushaf-navigation{gap:.4rem;align-items:center}
+.mushaf-personal .mushaf-navigation button{min-width:44px;min-height:44px;padding:.4rem .65rem;font-size:1.1rem}
+.mushaf-personal .mushaf-navigation label{font-size:.85rem;gap:.3rem;white-space:nowrap}
+.mushaf-personal .mushaf-navigation bdi{font-size:.8rem}
+.mushaf-personal [data-personal-page]{width:4rem}
+.mushaf-personal:fullscreen .mushaf-personal-edition,.mushaf-personal:fullscreen .mushaf-personal-hint,.mushaf-personal:fullscreen .mushaf-personal-settings,.mushaf-personal:fullscreen .full-mushaf-options{display:none}
+.mushaf-reader.mushaf-personal .mushaf-navigation{flex-wrap:nowrap;justify-content:space-between}
+.mushaf-reader.mushaf-personal .mushaf-navigation button.secondary-button{flex:0 0 44px;width:44px;min-width:44px;max-width:44px}
+.mushaf-reader.mushaf-personal .mushaf-navigation label{flex:0 1 auto;min-width:0}

@@ -118,8 +118,16 @@
       "sha256": "46bb696e86a1c9c67f4db586b411f26c495a52ebba4eef3530c1f4919b629aad"
     },
     {
+      "path": "/live/mushaf-modes.mjs",
+      "sha256": "117d2585ff34b2ae21b4b7e70427150059985fc645a15204e696de18c4ec57aa"
+    },
+    {
       "path": "/live/mushaf-pages.mjs",
       "sha256": "502bf87eee458b84fa248c548012d7b0a9f4b53366e46270cebf066e5a1ae9f4"
+    },
+    {
+      "path": "/live/mushaf-personal.mjs",
+      "sha256": "9ad7d47a8219830a5a95679f186de3b882bcf0d8b9b1674d35dc16af8776b8ee"
     },
     {
       "path": "/live/mushaf-swipe.mjs",
@@ -127,7 +135,7 @@
     },
     {
       "path": "/live/mushaf-ui.mjs",
-      "sha256": "24907ab3590680a55b8a33a4cb072636de8f9172a1ea5a298313eda4886c5871"
+      "sha256": "f19dbf93759ca1e582b62e2603d71fbfc9ff06e351b42e8290c2a8b733af4e44"
     },
     {
       "path": "/live/navigation.mjs",
@@ -215,7 +223,7 @@
     },
     {
       "path": "/live/tajweed-reference.mjs",
-      "sha256": "aec520b86512ac4781c6db6d1a7c8dc05ea23edd9e49e75efec7341a78a52e73"
+      "sha256": "1ed58e8cc79f21ccf740dd399c27fe15e3dff59cbadb30771f7677c5febb008c"
     },
     {
       "path": "/live/teacher-attendance-ui.mjs",
@@ -243,7 +251,7 @@
     },
     {
       "path": "/live/mushaf.css",
-      "sha256": "de55ea967c1547ea8937c8d2c685ad22b676a7115ff760c617f3475dfb44a297"
+      "sha256": "62001fb18ccd5b8533bf8e132cd73aae45e94e715f947018ad41800fadc88d49"
     }
   ]
 }

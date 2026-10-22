@@ -34,6 +34,12 @@ The verified current edition remains the only renderer. If its assignment metada
 
 A new colour edition still needs a separately versioned manifest, licensed assets, complete verified ayah geometry, download/resume/integrity tests and edition-specific assessment handling before it can be enabled. Existing marks already retain edition/source version; no assessment records are rewritten by assignment saves. Cross-edition alignment and physical Android/iPhone acceptance remain future release checks, not results of the desktop Chromium tests.
 
+## Admin reading versus student sessions
+
+The same screen now separates **Personal reading** (admin-only) from **Student session**. Personal edition choices are local, account-specific reading preferences; they never write school/group policy or student assessments. Selecting a student or opening a recitation link uses their group's assigned edition. No personal edition selector or publisher reference appears in a student session. Assignment editing remains a distinct confirmed settings action inside that session, with the existing delegation, audit and active-work checks.
+
+The colour edition remains an online publisher reference for admin personal reading only. It is not a second released teaching edition and cannot be assigned to a student. Native colour rendering, verified marking and offline redistribution remain pending.
+
 ## Deployment
 
 Deploy both V2 rules and Hosting together using `scripts/deploy-katatib-connected.sh` for `katatib-64049`. Original `hifd-kouttab` production configuration is unchanged. Until that deployment runs, these controls are not live.
