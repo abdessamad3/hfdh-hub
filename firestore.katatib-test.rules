@@ -206,6 +206,51 @@ service cloud.firestore {
         getAfter(/databases/$(database)/documents/katatib_audit/$(d.eventId)).data == {'collection':c,'recordId':id,'snapshot':d};
     }
     function manage() { return member() && access().role in ['admin','manager']; }
+    // Assignment documents contain edition configuration only, never rosters or learning data.
+    // Active members may get a known configuration; enumeration is restricted to admins.
+    function mushafKey(value) { return value.replace('%','%25').replace('/','%2F').replace('~','%7E'); }
+    function mushafSchoolId(name) { return 'school~' + mushafKey(name); }
+    function mushafGroupId(d) { return 'group~' + mushafKey(d.kuttabName) + '~' + mushafKey(d.group) + '~' + mushafKey(d.teacherId); }
+    function validMushafPolicy(d,id) {
+      return member() && access().role == 'admin' &&
+        d.keys().hasOnly(['schemaVersion','kuttabName','defaultEdition','teacherCanAssign','revision','updatedBy','updatedAt','eventId']) && validMeta(d) &&
+        d.kuttabName is string && d.kuttabName.size() > 0 && d.kuttabName.size() <= 120 && id == mushafSchoolId(d.kuttabName) &&
+        d.defaultEdition == 'warsh-kfqc-1442' && d.teacherCanAssign is bool;
+    }
+    function mushafAnchor(d) {
+      return exists(/databases/$(database)/documents/students/$(d.studentId)) ?
+        get(/databases/$(database)/documents/students/$(d.studentId)).data :
+        get(/databases/$(database)/documents/katatib_students/$(d.studentId)).data;
+    }
+    function mushafProfile(d) {
+      return exists(/databases/$(database)/documents/katatib_students/$(d.studentId)) ?
+        get(/databases/$(database)/documents/katatib_students/$(d.studentId)).data : {};
+    }
+    function mushafEditor(d) {
+      return staff() && studentIdAllowed(d.studentId) && (access().role == 'admin' ||
+        exists(/databases/$(database)/documents/katatib_mushaf_policies/$(mushafSchoolId(d.kuttabName))) &&
+        get(/databases/$(database)/documents/katatib_mushaf_policies/$(mushafSchoolId(d.kuttabName))).data.teacherCanAssign == true);
+    }
+    function validMushafAssignment(d,id) {
+      return d.keys().hasOnly(['schemaVersion','studentId','kuttabName','group','teacherId','edition','revision','updatedBy','updatedAt','eventId']) && validMeta(d) &&
+        d.studentId is string && d.studentId.size() > 0 && d.studentId.size() <= 128 && !d.studentId.matches('.*[~/].*') &&
+        d.kuttabName is string && d.kuttabName.size() > 0 && d.kuttabName.size() <= 120 && d.group is string && d.group.size() <= 80 &&
+        d.teacherId is string && d.teacherId.size() <= 128 && id == mushafGroupId(d) && d.edition in ['inherit','warsh-kfqc-1442'] &&
+        mushafEditor(d) && d.kuttabName == mushafAnchor(d).get('kuttabName','') && d.group == mushafProfile(d).get('group','') &&
+        d.teacherId == (d.group == '' ? mushafAnchor(d).get('teacherId','') : '') && mushafProfile(d).get('status','active') != 'archived';
+    }
+    match /katatib_mushaf_policies/{id} {
+      allow get: if member();
+      allow list: if member() && access().role == 'admin' && request.query.limit <= 100;
+      allow create, update: if validMushafPolicy(request.resource.data,id) && workspaceRevision() && audited('katatib_mushaf_policies',id,request.resource.data);
+      allow delete: if false;
+    }
+    match /katatib_mushaf_assignments/{id} {
+      allow get: if member();
+      allow list: if member() && access().role == 'admin' && request.query.limit <= 100;
+      allow create, update: if validMushafAssignment(request.resource.data,id) && workspaceRevision() && audited('katatib_mushaf_assignments',id,request.resource.data);
+      allow delete: if false;
+    }
     function validProfile(d,id) {
       return d.keys().hasOnly(['schemaVersion','name','kuttabName','teacherId','group','age','status','source','revision','updatedBy','updatedAt','eventId']) && validMeta(d) &&
         d.name is string && d.name.size() > 0 && d.name.size() <= 120 && d.kuttabName is string && d.kuttabName.size() > 0 && d.kuttabName.size() <= 120 &&
@@ -269,7 +314,7 @@ service cloud.firestore {
     match /katatib_audit/{id} {
       allow get, list: if member() && (access().role == 'admin' || resource.data.collection in ['katatib_legacy_corrections','katatib_legacy_task_states'] && historyAllowed(resource.data.snapshot)) && (request.method == 'get' || request.query.limit <= 100);
       allow create: if member() && request.resource.data.keys().hasOnly(['collection','recordId','snapshot']) &&
-        request.resource.data.collection in ['katatib_students','katatib_tasks','katatib_access','katatib_schedules','katatib_legacy_corrections','katatib_questions','katatib_challenge_attempts','katatib_legacy_task_states','katatib_student_credentials','katatib_notices','katatib_notice_acks','katatib_consents'] &&
+        request.resource.data.collection in ['katatib_mushaf_policies','katatib_mushaf_assignments','katatib_students','katatib_tasks','katatib_access','katatib_schedules','katatib_legacy_corrections','katatib_questions','katatib_challenge_attempts','katatib_legacy_task_states','katatib_student_credentials','katatib_notices','katatib_notice_acks','katatib_consents'] &&
         request.resource.data.recordId is string && request.resource.data.snapshot.eventId == id &&
         request.resource.data.snapshot.updatedBy == request.auth.uid && request.resource.data.snapshot.updatedAt == request.time &&
         getAfter(/databases/$(database)/documents/$(request.resource.data.collection)/$(request.resource.data.recordId)).data == request.resource.data.snapshot;

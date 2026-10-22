@@ -22,3 +22,19 @@
 .mushaf-page-viewport[data-zoomed=false]{touch-action:pan-y pinch-zoom}.mushaf-page-viewport[data-zoomed=true]{touch-action:pan-x pan-y pinch-zoom}.mushaf-swipe-hint{font-size:12px;color:var(--muted);line-height:1.8;margin-block:0 16px}
 
 .mushaf-page-viewport[data-native-zoomed=true]{touch-action:pan-x pan-y pinch-zoom}
+
+.tajweed-reference{margin-block:1rem;padding:1rem;border:1px solid var(--line);border-radius:1rem;background:var(--surface);overflow-wrap:anywhere}
+.tajweed-reference summary{font-weight:700;cursor:pointer}
+.tajweed-reference p{max-width:70ch;line-height:1.7}
+.tajweed-reference a{display:inline-flex;white-space:normal;max-width:100%;text-decoration:none}
+.tajweed-reference small{display:block;margin-block-start:.75rem;color:var(--muted)}
+.mushaf-assignment{margin-block:1rem;padding:1rem;border:1px solid var(--line);border-radius:1rem;background:var(--surface);overflow-wrap:anywhere}
+.mushaf-assigned{display:grid;gap:.4rem;margin-block:0 .5rem}
+.mushaf-assigned span,.mushaf-assignment small{color:var(--muted);font-size:.875rem}
+.mushaf-assignment details{margin-block-start:.75rem}
+.mushaf-assignment summary{cursor:pointer;font-weight:700}
+.mushaf-assignment select{width:100%;max-width:100%;margin-block:.5rem}
+.mushaf-assignment fieldset{min-width:0;margin-block:1rem;border:1px solid var(--line);border-radius:.75rem}
+.mushaf-assignment-permission{display:flex;align-items:flex-start;gap:.6rem;line-height:1.6}
+.mushaf-assignment-permission input{width:auto;flex-shrink:0;margin-block-start:.4rem}
+.mushaf-assignment-family{margin-block-end:0;font-size:.875rem;color:var(--muted)}

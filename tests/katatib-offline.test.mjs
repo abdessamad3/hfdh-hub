@@ -119,3 +119,16 @@ test('revision preflight blocks the batch before any upload if a later record co
  const f=fixture();await f.init();f.offline();await f.api.saveAttendance('a',context,{status:'present',note:'First edit'},0);const evening={...context,session:'evening'};await f.api.saveAttendance('a',evening,{status:'absent',note:'My evening edit'},0);
  f.remote.set('a'+evening.date+evening.session,{status:'late',note:'Another teacher',revision:1});f.online();await f.api.offline.sync();assert.equal(f.writes,0);assert.equal(f.api.offlinePending(),2);const blocked=f.api.offline.status().queue.find(r=>r.status==='blocked');assert.equal(blocked.error,'conflict');assert.equal(blocked.serverVersion.note,'Another teacher');
 });
+
+test('group Mushaf assignment is prepared per student, available offline, and configuration edits never queue',async()=>{
+ const f=fixture();const edition='warsh-kfqc-1442';let allowed=false,saves=0;
+ f.raw.mushafAssignment=async id=>({studentId:id,scope:{kuttabName:'One',group:'A',teacherId:''},effectiveEdition:edition,policy:{teacherCanAssign:allowed},assignment:null});
+ f.raw.saveMushafPolicy=async(input,revision,eventId)=>{saves++;allowed=input.teacherCanAssign;return {...input,revision:revision+1,eventId};};
+ await f.init();f.offline();assert.equal((await f.api.mushafAssignment('a')).effectiveEdition,edition);
+ await assert.rejects(f.api.mushafAssignment('b'),/no-access/);
+ await assert.rejects(f.api.saveMushafPolicy({kuttabName:'One',teacherCanAssign:true},0,'policy-first'),/online-only/);assert.equal(saves,0);assert.equal(f.api.offlinePending(),0);
+ f.online();await f.api.saveMushafPolicy({kuttabName:'One',teacherCanAssign:true},0,'policy-first');assert.equal(saves,1);
+ f.offline();await assert.rejects(f.api.mushafAssignment('a'),/not-prepared/);assert.equal(f.api.offline.status().preparedAt,null);
+ f.online();await f.api.offline.prepare({date:context.date,students:['a']});f.offline();assert.equal((await f.api.mushafAssignment('a')).policy.teacherCanAssign,true);
+ assert.equal(f.api.offlinePending(),0);
+});

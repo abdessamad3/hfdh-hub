@@ -13,6 +13,7 @@ node tests/katatib-offline.test.mjs
 node tests/katatib-domain.test.mjs
 node tests/katatib-audio-clips.test.mjs
 node tests/katatib-mushaf.test.mjs
+node tests/katatib-mushaf-assignment.test.mjs
 node tests/katatib-family.test.mjs
 node tests/katatib-student-login.test.mjs
 node tests/katatib-live-model.test.mjs

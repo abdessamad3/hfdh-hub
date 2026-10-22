@@ -1,3 +1,4 @@
+import {groupMushafScope,groupMushafId,schoolMushafId,resolveMushafAssignment} from './mushaf-assignment.mjs';
 import {createRecordingLibrary} from './recording-library.mjs';
 import { commitVerseMark } from './mushaf-model.mjs';
 import { applyLegacyCorrections, applyLegacyTaskStates } from './advanced-model.mjs';
@@ -177,6 +178,23 @@ export async function connect() {
       }
       return results;
 
+    },
+    async mushafAssignment(studentId) {
+      const [source,profile]=await Promise.all(['students','katatib_students'].map(name=>getDocFromServer(doc(db,name,studentId))));
+      if(!source.exists()&&!profile.exists())throw Error('no-access');
+      const raw=source.exists()?source.data():profile.data(),overlay=profile.exists()?profile.data():{};
+      const student={id:studentId,kuttab:raw.kuttabName||'',teacherId:raw.teacherId||'',group:overlay.group||''};
+      const scope=groupMushafScope(student);
+      const [policy,assignment]=await Promise.all([getDocFromServer(doc(db,'katatib_mushaf_policies',schoolMushafId(scope.kuttabName))),getDocFromServer(doc(db,'katatib_mushaf_assignments',groupMushafId(scope)))]);
+      return resolveMushafAssignment(student,policy.exists()?policy.data():null,assignment.exists()?assignment.data():null);
+    },
+    async saveMushafPolicy(input,revision,eventId) {
+      if(!auth.currentUser)throw Error('no-access');
+      return commitWorkspace(db,{doc,runTransaction,serverTimestamp},auth.currentUser.uid,'katatib_mushaf_policies',schoolMushafId(input.kuttabName),input,revision,eventId);
+    },
+    async saveMushafAssignment(input,revision,eventId) {
+      if(!auth.currentUser)throw Error('no-access');
+      return commitWorkspace(db,{doc,runTransaction,serverTimestamp},auth.currentUser.uid,'katatib_mushaf_assignments',groupMushafId(input),input,revision,eventId);
     },
     async studentVerseMarks(studentId) {
       return readPages(async after=>{const snapshot=await getDocsFromServer(query(collection(db,'katatib_verse_marks'),where('studentId','==',studentId),orderBy(documentId()),...(after?[startAfter(after)]:[]),limit(100)));return snapshot.docs.map(d=>({...d.data(),id:d.id}));});
